@@ -43,7 +43,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
                     <td className="small">
                       {ds.kind === "sheets" ? <a href={`https://docs.google.com/spreadsheets/d/${m.spreadsheetId}`} target="_blank" rel="noreferrer" className="badge info">buka ↗</a> : m.spreadsheetId}
                     </td>
-                    <td className="small muted">{m.updatedAt ? new Date(m.updatedAt).toLocaleDateString("id-ID") : ""} {m.updatedBy}</td>
+                    <td className="small muted">{m.updatedAt ? new Date(m.updatedAt).toLocaleDateString("id-ID", { timeZone: cfg.timeZone }) : ""} {m.updatedBy}</td>
                   </tr>
                 ))}
                 {months.length === 0 && <tr><td colSpan={4} className="muted">Belum ada.</td></tr>}
