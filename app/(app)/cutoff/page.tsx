@@ -1,3 +1,4 @@
+import { appConfig } from "@/config/app";
 import { Alert, Card } from "@/components/ui";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { Topbar } from "@/components/layout/Topbar";
@@ -24,7 +25,7 @@ export default async function CutoffPage({ searchParams }: { searchParams: Searc
             <tbody>
               <tr><td className="muted">File</td><td>{s.sourceTitle}</td></tr>
               <tr><td className="muted">Data s/d</td><td>{s.lastDataDate ?? "–"}</td></tr>
-              <tr><td className="muted">Dibaca</td><td>{new Date(s.loadedAt).toLocaleString("id-ID")} ({timeAgo(s.loadedAt)})</td></tr>
+              <tr><td className="muted">Dibaca</td><td>{new Date(s.loadedAt).toLocaleString("id-ID", { timeZone: appConfig().timeZone })} ({timeAgo(s.loadedAt)})</td></tr>
               <tr><td className="muted">Baris</td><td>{num(s.lines.length)} Sales Person · {num(s.merch.length)} Merchandise Report{s.skippedOtherMonth ? ` · ${num(s.skippedOtherMonth)} baris bulan lain dilewati` : ""}</td></tr>
               <tr><td className="muted">Target</td><td>{s.target ? rp(s.target.total) : "tidak terbaca"}</td></tr>
             </tbody>
