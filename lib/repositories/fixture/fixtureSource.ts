@@ -1,0 +1,95 @@
+import "server-only";
+import { appConfig } from "@/config/app";
+import type { BusinessRules } from "@/config/business";
+import { monthEnd, prevMonth, todayIn, addDays } from "@/lib/domain/period";
+import { parseControlSheet } from "@/lib/parsers/controlSheet";
+import { parseTargetStore } from "@/lib/parsers/targetStore";
+import type { MonthKey, TrafficEntry } from "@/types/domain";
+import type { AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, SourceCheck } from "../types";
+import { generateMonth } from "./generate";
+
+/**
+ * In-memory data source with synthetic data — local development only.
+ * Writes live until the dev server restarts.
+ */
+interface Store {
+  months: MonthEntry[];
+  rules: Partial<BusinessRules>;
+  traffic: TrafficEntry[];
+  users: AppUser[];
+  audit: AuditEntry[];
+}
+
+const g = globalThis as unknown as { __fixtureStore?: Store };
+
+function store(): Store {
+  if (g.__fixtureStore) return g.__fixtureStore;
+  const today = todayIn(appConfig().timeZone);
+  const cur = today.slice(0, 7);
+  const months = [prevMonth(cur), cur].map((m) => ({
+    month: m,
+    spreadsheetId: `fixture-${m}`,
+    label: `Synthetic ${m}`,
+    active: true,
+    updatedAt: new Date().toISOString(),
+    updatedBy: "fixture",
+  }));
+  // synthetic traffic: ~ 4–6× invoices
+  const traffic: TrafficEntry[] = [];
+  for (const m of months) {
+    const end = m.month === cur ? addDays(today, -1) : monthEnd(m.month);
+    for (let d = `${m.month}-01`; d <= end; d = addDays(d, 1)) traffic.push({ date: d, traffic: 60 + ((Number(d.slice(8)) * 37) % 40) });
+  }
+  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [] };
+  return g.__fixtureStore;
+}
+
+export class FixtureSource implements DataSource {
+  readonly kind = "fixture" as const;
+
+  async listMonths() {
+    return [...store().months].sort((a, b) => b.month.localeCompare(a.month));
+  }
+  async saveMonth(entry: MonthEntry) {
+    const s = store();
+    s.months = [...s.months.filter((m) => m.month !== entry.month), entry];
+  }
+  async checkSource(spreadsheetId: string): Promise<SourceCheck> {
+    return { title: `Synthetic (${spreadsheetId})`, sheets: ["Control MR &SP", "Target Store"], hasSales: true, hasTarget: true };
+  }
+  async loadMonth(entry: MonthEntry): Promise<MonthRaw> {
+    const today = todayIn(appConfig().timeZone);
+    // data imported up to yesterday, like the real monthly file
+    const last = entry.month === today.slice(0, 7) ? addDays(today, -1) : monthEnd(entry.month);
+    const { control, target } = generateMonth(entry.month, last);
+    return {
+      control: parseControlSheet(control, entry.month),
+      target: parseTargetStore(target, entry.month),
+      sourceTitle: `Synthetic data ${entry.month}`,
+      errors: [],
+    };
+  }
+  async getRuleOverrides() {
+    return store().rules;
+  }
+  async saveRuleOverrides(o: Partial<BusinessRules>) {
+    store().rules = o;
+  }
+  async getTraffic(month: MonthKey) {
+    return store().traffic.filter((t) => t.date.startsWith(month));
+  }
+  async saveTraffic(month: MonthKey, entries: TrafficEntry[]) {
+    const s = store();
+    s.traffic = [...s.traffic.filter((t) => !t.date.startsWith(month)), ...entries.filter((e) => e.traffic > 0)];
+  }
+  async listUsers() {
+    return store().users;
+  }
+  async saveUser(user: AppUser) {
+    const s = store();
+    s.users = [...s.users.filter((u) => u.nik !== user.nik), { ...user, role: "viewer" }];
+  }
+  async audit(entry: Omit<AuditEntry, "ts">) {
+    store().audit.push({ ts: new Date().toISOString(), ...entry });
+  }
+}
