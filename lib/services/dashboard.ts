@@ -31,8 +31,15 @@ export async function getRules(force = false): Promise<BusinessRules> {
   return value;
 }
 
+/**
+ * The month registry is tiny and changes from Settings, but Vercel runs several
+ * instances with separate caches — keep it short-lived so a newly registered
+ * month shows up everywhere within ~30 s.
+ */
+const MONTHS_TTL_MS = 30_000;
+
 export async function getMonths(force = false): Promise<MonthEntry[]> {
-  const { value } = await cached("months", appConfig().cacheTtlMs, () => dataSource().listMonths(), force);
+  const { value } = await cached("months", Math.min(appConfig().cacheTtlMs, MONTHS_TTL_MS), () => dataSource().listMonths(), force);
   return value;
 }
 
