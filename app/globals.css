@@ -238,5 +238,18 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; 
 .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 
-.login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
-.login .card { width: 100%; max-width: 380px; padding: 24px; }
+.login-credit { margin: 0; text-align: center; font-size: 12px; color: var(--muted); }
+.login-credit b { color: var(--ink-2); font-weight: 600; }
+/* Login: photo never cropped (contain over a blurred fill of itself) */
+.login { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--page); }
+.login-photo { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 62vh; overflow: hidden; background: #111; flex: none; }
+.login-photo-blur { object-fit: cover; filter: blur(28px) brightness(0.75); transform: scale(1.15); }
+.login-photo-main { object-fit: contain; }
+.login-panel { flex: 1; display: flex; justify-content: center; padding: 0 16px 24px; }
+.login-panel .card { width: 100%; max-width: 400px; padding: 24px; margin-top: -28px; position: relative; z-index: 1; box-shadow: 0 8px 30px rgba(0,0,0,.12); align-self: flex-start; }
+@media (min-width: 900px) {
+  .login { flex-direction: row; }
+  .login-photo { aspect-ratio: auto; max-height: none; height: auto; min-height: 100vh; flex: 1; }
+  .login-panel { flex: 0 0 440px; align-items: center; padding: 32px; border-left: 1px solid var(--border); }
+  .login-panel .card { margin-top: 0; box-shadow: none; border: 0; background: transparent; padding: 8px; align-self: center; }
+}
