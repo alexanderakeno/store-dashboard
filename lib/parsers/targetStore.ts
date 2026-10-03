@@ -72,11 +72,20 @@ export function parseTargetStore(grid: Grid, month: MonthKey): StoreTarget {
     const sectionTotal = totalCol >= 0 ? parseNumber(idrRow[totalCol]) : Object.values(columnTargets).reduce((a, b) => a + b, 0);
     sections[group] = { group, columns, columnTargets, total: sectionTotal };
 
+    let blankRun = 0;
     for (let s = nameRowIdx + 1; s < grid.length; s++) {
       const srow = grid[s] ?? [];
       const name = t(srow[titleCol]);
-      if (!name) break;
+      // Skip empty placeholder rows (often hidden in the sheet) instead of
+      // stopping; stop after a long blank run, at the Total row, or at the
+      // next section title.
+      if (!name) {
+        if (++blankRun > 5) break;
+        continue;
+      }
+      blankRun = 0;
       if (name.toLowerCase() === "total") break;
+      if (SECTION_TITLES[name.toLowerCase()] !== undefined) break;
       const key = name.toLowerCase();
       const st = staffMap.get(key) ?? { name, sharePct: 0, byGroup: emptyGroups(), byColumn: {}, total: 0 };
       st.sharePct = Math.max(st.sharePct, parseNumber(srow[titleCol + 1]) / (t(srow[titleCol + 1]).includes("%") ? 100 : 1));
