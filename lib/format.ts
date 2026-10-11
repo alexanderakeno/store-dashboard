@@ -45,3 +45,20 @@ export function tone(p: number | null | undefined): "good" | "warn" | "bad" | "n
   if (p >= 85) return "warn";
   return "bad";
 }
+
+/** Full rupiah with a space, reference style: "Rp 3.913.258.501" · "-Rp 12.000". */
+export const rpf = (n: number | null | undefined) => (n == null ? "–" : `${n < 0 ? "-" : ""}Rp ${nf0.format(Math.abs(Math.round(n)))}`);
+
+/** Signed percentage with a triangle: "▲ 12,5%" / "▼ 3,0%". */
+export const pctArrow = (n: number | null | undefined, d: 0 | 1 = 1) => (n == null || !Number.isFinite(n) ? "–" : `${n >= 0 ? "▲" : "▼"} ${pct(Math.abs(n), d)}`);
+
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+/** "10 Okt 2026" */
+export const dateShort = (d: string) => `${d.slice(8, 10)} ${MONTHS_SHORT[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
+/** "Okt 2026" */
+export const monthShort = (m: string) => `${MONTHS_SHORT[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
+const DAY_NAMES = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+/** "Jumat" */
+export const dayName = (d: string) => DAY_NAMES[new Date(d + "T00:00:00Z").getUTCDay()];
+/** "02/10/2026" */
+export const dmy = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
