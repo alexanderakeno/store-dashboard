@@ -1,19 +1,15 @@
-import { notFound } from "next/navigation";
-import { Empty } from "@/components/ui";
-import { NAV } from "@/components/layout/nav";
-import { Topbar } from "@/components/layout/Topbar";
-import { loadPage, type SearchParams } from "@/lib/page";
+import { notFound, redirect } from "next/navigation";
 
-/** Modules planned after phase 1 — shown as "coming soon" with the reason. */
-export default async function ModulePlaceholder({ params, searchParams }: { params: Promise<{ module: string }>; searchParams: SearchParams }) {
+/** Old phase-1 placeholder routes now live elsewhere in the menu. */
+const MOVED: Record<string, string> = {
+  compare: "/home?tab=compare",
+  stock: "/soh",
+  checklist: "/checklist/spv",
+};
+
+export default async function LegacyModule({ params }: { params: Promise<{ module: string }> }) {
   const { module } = await params;
-  const item = NAV.find((n) => n.href === `/${module}` && n.soon);
-  if (!item) notFound();
-  const p = await loadPage(searchParams);
-  return (
-    <>
-      <Topbar title={item.label} p={p} />
-      <Empty title={`${item.label} — segera`}>{item.soon}</Empty>
-    </>
-  );
+  const to = MOVED[module];
+  if (!to) notFound();
+  redirect(to);
 }
