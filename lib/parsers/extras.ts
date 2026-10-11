@@ -61,31 +61,33 @@ function readTracker(grid: Grid, hr: number, dc: number, month: MonthKey, title:
  * then free-form rows. A row with only a note continues the previous promo.
  */
 export function parsePromo(grid: Grid): PromoBrand[] {
+  const isHead = (row: number, c: number) => low(grid[row]?.[c]) === "promo" && low(grid[row]?.[c + 1]) === "keterangan";
   const out: PromoBrand[] = [];
   for (let r = 0; r < grid.length; r++) {
     const row = grid[r] ?? [];
     for (let c = 0; c < row.length - 1; c++) {
-      if (low(row[c]) !== "promo" || low(row[c + 1]) !== "keterangan") continue;
-      const brand = t(grid[r - 1]?.[c]) || t(grid[r - 1]?.[c + 1]) || `Promo ${out.length + 1}`;
+      if (!isHead(r, c)) continue;
+      // brand title: nearest text above (hidden / blank rows in between are allowed)
+      let brand = "";
+      for (let up = r - 1; up >= Math.max(0, r - 4) && !brand; up--) brand = t(grid[up]?.[c]) || t(grid[up]?.[c + 1]);
       const items: PromoBrand["items"] = [];
       let blank = 0;
       for (let s = r + 1; s < grid.length; s++) {
+        if (isHead(s, c)) break;
+        // a brand-title row: a header follows within the next few rows
+        if ([1, 2, 3, 4].some((k) => isHead(s + k, c)) && t(grid[s]?.[c]) && !t(grid[s]?.[c + 1])) break;
         const srow = grid[s] ?? [];
-        if (low(srow[c]) === "promo" && low(srow[c + 1]) === "keterangan") break;
-        // next brand header row (brand name directly above a Promo/Keterangan pair)
-        if (low(grid[s + 1]?.[c]) === "promo" && low(grid[s + 1]?.[c + 1]) === "keterangan") break;
         const promo = t(srow[c]);
         const note = t(srow[c + 1]);
         if (!promo && !note) {
-          if (++blank > 2) break;
+          if (++blank > 3) break;
           continue;
         }
         blank = 0;
-        if (promo === "-" && !note) continue;
         if (!promo && items.length) items[items.length - 1].note = [items[items.length - 1].note, note].filter(Boolean).join(" · ");
-        else items.push({ promo: promo === "-" ? note : promo, note: promo === "-" ? "" : note });
+        else items.push({ promo: promo.replace(/^-\s*/, "") || note, note: promo.replace(/^-\s*/, "") ? note : "" });
       }
-      out.push({ brand, items });
+      out.push({ brand: brand || `Promo ${out.length + 1}`, items });
     }
   }
   return out.filter((b) => b.items.length);
