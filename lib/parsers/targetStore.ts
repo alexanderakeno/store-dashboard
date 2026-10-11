@@ -22,7 +22,7 @@ function emptyGroups(): Record<Group, number> {
  * Parse the `Target Store` tab by labels:
  * - `Total Target` header row → per-group totals on the next row
  * - sections titled Apple / Android / Accessories / VAS, each with
- *   `Target (IDR)` and a `Name | Target | …cols | Total` table of staff rows.
+ * `Target (IDR)` and a `Name | Target | …cols | Total` table of staff rows.
  */
 export function parseTargetStore(grid: Grid, month: MonthKey): StoreTarget {
   const byGroup = emptyGroups();
@@ -97,8 +97,9 @@ export function parseTargetStore(grid: Grid, month: MonthKey): StoreTarget {
     r = nameRowIdx;
   }
 
-  // Fallback when the Total Target block is missing
-  for (const g of GROUPS) if (!byGroup[g] && sections[g]) byGroup[g] = sections[g]!.total;
+  // Group targets = section totals (what staff targets add up to and what the sheet's
+  // own Data - Akeno uses); the Total Target header row is only a fallback.
+  for (const g of GROUPS) if (sections[g] && sections[g]!.total > 0) byGroup[g] = sections[g]!.total;
   if (!total) total = GROUPS.reduce((a, g) => a + byGroup[g], 0);
 
   return { month, total, byGroup, sections, staff: [...staffMap.values()] };

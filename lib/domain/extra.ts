@@ -53,7 +53,13 @@ export function perfCards(h: HomeView): PerfCard[] {
       variance: target - actual,
     };
   };
-  return [card("total", "Total Sales", [...GROUPS]), card("device", "Device", ["Apple", "Android"]), card("acc", "Accessories", ["ACC"]), card("vas", "VAS", ["VAS"])];
+  // Total card uses the store total target (Total Target in Target Store), same as Month Progress.
+  const total = card("total", "Total Sales", [...GROUPS]);
+  const storeTarget = h.achievement.target || total.target;
+  total.target = storeTarget;
+  total.achievementPct = ratio(total.actual * 100, storeTarget);
+  total.variance = storeTarget - total.actual;
+  return [total, card("device", "Device", ["Apple", "Android"]), card("acc", "Accessories", ["ACC"]), card("vas", "VAS", ["VAS"])];
 }
 
 export type StaffStatus = "Productive" | "Need Push";
@@ -191,19 +197,33 @@ export function rangeConversion(m: MonthInput, from: ISODate, to: ISODate) {
  * "IPHONE 17 PRO MAX 256GB DEEP BLUE" → "iPhone 17 Pro Max".
  */
 export function productType(l: Pick<SalesLine, "description" | "lob" | "article">): string {
-  const d = (l.description || l.article).toUpperCase();
+  const d = (l.description || l.article).toUpperCase().replace(/\s+/g, " ").trim();
+  const chip = d.match(/\bM(\d)\b/)?.[0];
+  // Mac: MBA / MBP / MBN abbreviations
+  const mac = d.match(/^(MBA|MBP|MBN|MACBOOK AIR|MACBOOK PRO|MACBOOK NEO|MACBOOK)\b\s*(\d{2})?/);
+  if (mac) {
+    const kind = { MBA: "MacBook Air", MBP: "MacBook Pro", MBN: "MacBook Neo", "MACBOOK AIR": "MacBook Air", "MACBOOK PRO": "MacBook Pro", "MACBOOK NEO": "MacBook Neo", MACBOOK: "MacBook" }[mac[1]];
+    return [kind, mac[2], chip].filter(Boolean).join(" ");
+  }
+  // Apple Watch: SE n / Ultra n / Series n
+  const aw = d.match(/^APPLE WATCH\s+(SE\s*\d*|ULTRA\s*\d*|SERIES\s*\d+|S?\d{1,2}\b)/);
+  if (aw) {
+    const v = aw[1].replace(/\s+/g, "");
+    if (v.startsWith("SE")) return `Apple Watch SE ${v.slice(2)}`.trim();
+    if (v.startsWith("ULTRA")) return `Apple Watch Ultra ${v.slice(5)}`.trim();
+    return `Apple Watch Series ${v.replace(/^(SERIES|S)/, "")}`;
+  }
+  // iPad: "IPAD 11TH" → iPad 11; keep Air / Pro / Mini + size + chip
+  const ipad = d.match(/^IPAD\s*(AIR|PRO|MINI)?\s*(\d{1,2})?(?:TH|ND|RD|ST)?\b/);
+  if (ipad) return ["iPad", ipad[1] ? ipad[1].charAt(0) + ipad[1].slice(1).toLowerCase() : "", ipad[2], ipad[1] ? chip : ""].filter(Boolean).join(" ").replace("iPad Mini", "iPad mini");
   const cut = d.split(/\s(?:\d+\s?(?:GB|TB)|WI-?FI|WIFI|CELL|CELLULAR|GPS|\d{2}MM|\(|M\d\s?\d+C|\d+-CORE)/)[0];
   const words = cut.split(/\s+/).slice(0, 5).join(" ");
   const nice = words
     .toLowerCase()
     .replace(/\b([a-z])([a-z]*)/g, (_m, x: string, y: string) => x.toUpperCase() + y)
     .replace(/\bIphone\b/g, "iPhone")
-    .replace(/\bIpad\b/g, "iPad")
-    .replace(/\bImac\b/g, "iMac")
-    .replace(/\bMacbook\b/g, "MacBook")
     .replace(/\bAirpods\b/g, "AirPods")
-    .replace(/\bSe\b/g, "SE")
-    .replace(/\b(M\d)\b/gi, (x) => x.toUpperCase());
+    .replace(/\bSe\b/g, "SE");
   return nice.trim() || (l.lob ?? "Lainnya");
 }
 
