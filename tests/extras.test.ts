@@ -29,11 +29,13 @@ test("CX & GR tracker blocks", () => {
 test("Rekap Promo blocks", () => {
   const g = [
     ["UNIVERSAL", "", "Apple", "", "Samsung", ""],
+    [],
     ["Promo", "Keterangan", "Promo", "Keterangan", "Promo", "Keterangan"],
     ["-", "BNPL sampai 30 Sep", "True Zero", "iPhone 15 Plus", "Potongan Fold", "Up to 3,5 jt"],
     ["", "Min 5Jt", "AW", "Free Ugreen 30W", "", "persediaan masih ada"],
     [],
     ["Infinix", "", "Motorola", ""],
+    [],
     ["Promo", "Keterangan", "Promo", "Keterangan"],
     ["Promo Mandiri", "CC 0%", "", ""],
   ];
@@ -41,6 +43,7 @@ test("Rekap Promo blocks", () => {
   assert.deepEqual(p.map((b) => b.brand), ["UNIVERSAL", "Apple", "Samsung", "Infinix"]);
   assert.equal(p[0].items[0].promo, "BNPL sampai 30 Sep");
   assert.equal(p[0].items[0].note, "Min 5Jt");
+  assert.equal(p[2].items.some((i) => i.promo === "Infinix"), false);
   assert.equal(p[2].items[0].note, "Up to 3,5 jt · persediaan masih ada");
   assert.equal(p[3].items.length, 1);
 });
