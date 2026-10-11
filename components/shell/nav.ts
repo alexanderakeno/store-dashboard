@@ -68,7 +68,7 @@ export const NAV: NavEntry[] = [
     color: "text-emerald-400",
     items: [
       { href: "/feedback", label: "Feedback", icon: "message", color: "text-rose-400" },
-      { href: "/cx", label: "NPS/CX & Member", icon: "cloud", color: "text-sky-400" },
+      { href: "/cx", label: "NPS/CX & GR", icon: "cloud", color: "text-sky-400" },
       { href: "/weekly", label: "Weekly Report", icon: "chart", color: "text-emerald-400" },
       { href: "/weekly-reason", label: "Weekly Reason", icon: "sparkles", color: "text-amber-400" },
     ],

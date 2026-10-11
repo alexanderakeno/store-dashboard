@@ -68,7 +68,7 @@ export default async function DailySummaryPage({ searchParams }: { searchParams:
         <Box label="Transaction" value={num(t.invoices)} />
         <Box label="UPT" value={dec(t.upt, 1).replace(",", ".")} />
         <Box label="ATV" value={rpf(t.atv)} />
-        <Box label="Traffic" value={conv.daysWithTraffic ? num(conv.traffic) : <NeedData />} sub={conv.daysWithTraffic ? `${conv.daysWithTraffic} hari diinput` : "Input di Settings"} />
+        <Box label="Traffic" value={conv.daysWithTraffic ? num(conv.traffic) : <NeedData />} sub={conv.daysWithTraffic ? `${conv.daysWithTraffic} hari ada traffic` : "Tab Traffic / Settings"} />
         <Box label="CVR" value={conv.cvr == null ? <NeedData /> : pct(conv.cvr)} />
         <Box label="VS Previous" value={prev == null ? <NeedData /> : <Trend value={prev ? ((t.sales - prev) / prev) * 100 : null} digits={1} />} sub={prev == null ? `${monthLabel(pm)} belum terdaftar` : rpf(prev)} />
       </div>

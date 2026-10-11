@@ -5,8 +5,9 @@ import { monthEnd, prevMonth, todayIn, addDays } from "@/lib/domain/period";
 import { parseControlSheet } from "@/lib/parsers/controlSheet";
 import { parseTargetStore } from "@/lib/parsers/targetStore";
 import type { MonthKey, TrafficEntry } from "@/types/domain";
-import type { AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, SourceCheck } from "../types";
-import { generateMonth } from "./generate";
+import type { AppRecord, AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
+import { parsePromo, parseTracker } from "@/lib/parsers/extras";
+import { generateExtras, generateMonth } from "./generate";
 
 /**
  * In-memory data source with synthetic data — local development only.
@@ -18,6 +19,7 @@ interface Store {
   traffic: TrafficEntry[];
   users: AppUser[];
   audit: AuditEntry[];
+  records: AppRecord[];
 }
 
 const g = globalThis as unknown as { __fixtureStore?: Store };
@@ -40,7 +42,7 @@ function store(): Store {
     const end = m.month === cur ? addDays(today, -1) : monthEnd(m.month);
     for (let d = `${m.month}-01`; d <= end; d = addDays(d, 1)) traffic.push({ date: d, traffic: 60 + ((Number(d.slice(8)) * 37) % 40) });
   }
-  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [] };
+  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], records: [] };
   return g.__fixtureStore;
 }
 
@@ -62,11 +64,20 @@ export class FixtureSource implements DataSource {
     // data imported up to yesterday, like the real monthly file
     const last = entry.month === today.slice(0, 7) ? addDays(today, -1) : monthEnd(entry.month);
     const { control, target } = generateMonth(entry.month, last);
+    const x = generateExtras(entry.month, last);
     return {
       control: parseControlSheet(control, entry.month),
       target: parseTargetStore(target, entry.month),
       sourceTitle: `Synthetic data ${entry.month}`,
       errors: [],
+      extras: {
+        cx: parseTracker(x.tracker, entry.month, "CX"),
+        gr: parseTracker(x.tracker, entry.month, "GR"),
+        promo: parsePromo(x.promo),
+        sheetTraffic: [],
+        tabs: ["CX&GR Tracker", "Rekap Promo"],
+        warnings: [],
+      },
     };
   }
   async getRuleOverrides() {
@@ -88,6 +99,14 @@ export class FixtureSource implements DataSource {
   async saveUser(user: AppUser) {
     const s = store();
     s.users = [...s.users.filter((u) => u.nik !== user.nik), { ...user, role: "viewer" }];
+  }
+  async listRecords(kind: RecordKind, prefix: string) {
+    return store().records.filter((r) => r.kind === kind && r.date.startsWith(prefix));
+  }
+  async saveRecords(kind: RecordKind, date: string, rows: Array<Pick<AppRecord, "key" | "data">>, by: string) {
+    const s = store();
+    const now = new Date().toISOString();
+    s.records = [...s.records.filter((r) => !(r.kind === kind && r.date === date)), ...rows.map((x) => ({ kind, date, key: x.key, data: x.data, updatedAt: now, updatedBy: by }))];
   }
   async audit(entry: Omit<AuditEntry, "ts">) {
     store().audit.push({ ts: new Date().toISOString(), ...entry });

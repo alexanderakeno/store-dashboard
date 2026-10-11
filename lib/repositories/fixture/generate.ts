@@ -60,7 +60,6 @@ function rng(seed: number) {
   };
 }
 
-
 const ddmmyyyy = (d: ISODate) => `${d.slice(8, 10)}-${d.slice(5, 7)}-${d.slice(0, 4)}`;
 const ID_MON = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 const shortDate = (d: ISODate) => `${Number(d.slice(8, 10))}/${ID_MON[Number(d.slice(5, 7)) - 1]}/${d.slice(2, 4)}`;
@@ -168,3 +167,33 @@ export function generateMonth(month: MonthKey, lastDay: ISODate): { control: Gri
   return { control, target };
 }
 
+/** Synthetic `CX&GR Tracker` and `Rekap Promo` grids (same layout as the real tabs). */
+export function generateExtras(month: MonthKey, lastDay: ISODate): { tracker: Grid; promo: Grid } {
+  const r = rng(Number(month.replace("-", "")) + 7);
+  const names = FIXTURE_STAFF.map((s) => s.name.split(" ")[1].charAt(0) + s.name.split(" ")[1].slice(1).toLowerCase());
+  const days = lastDay < monthStart(month) ? [] : eachDay(monthStart(month), lastDay).filter((d) => d.startsWith(month));
+  const mdy = (d: ISODate) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}/${d.slice(0, 4)}`;
+  const block = () => days.map((d) => {
+    const vals = names.map(() => (r() < 0.3 ? 1 + Math.floor(r() * 2) : ""));
+    const total = vals.reduce<number>((a, v) => a + (Number(v) || 0), 0);
+    return [mdy(d), "Hari", ...vals, total || "", 10 + Math.floor(r() * 10)];
+  });
+  const cx = block();
+  const gr = block();
+  const width = names.length + 4;
+  const tracker: Grid = [
+    ["CX", ...Array(width).fill(""), "GR"],
+    ["Customer Experience", ...Array(width).fill(""), "Google Review"],
+    [],
+    [...["Date", "Day", ...names, "Total CX", "Total Invoice"], "", ...["Date", "Day", ...names, "Total GR", "Total Invoice"]],
+    ...cx.map((row, i) => [...row, "", ...gr[i]]),
+    ["Total"],
+  ];
+  const promo: Grid = [
+    ["UNIVERSAL", "", "Apple", "", "Samsung", ""],
+    ["Promo", "Keterangan", "Promo", "Keterangan", "Promo", "Keterangan"],
+    ["BNPL 0% Demo", "Min 5 jt", "iPhone Demo", "Free adapter", "Galaxy Demo", "Cashback 500rb"],
+    ["", "", "", "selama persediaan ada", "Trade In Demo", "Up to 1 jt"],
+  ];
+  return { tracker, promo };
+}

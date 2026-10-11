@@ -10,17 +10,18 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
   if (p.state !== "ok") return <PageStatus title="Data Upload" p={p} />;
   const s = p.snap;
   const isAdmin = p.session.role === "admin";
+  const x = s.extras;
   const sources = [
     { name: "Control MR & SP (sales)", ok: true, detail: `${s.lines.length} baris SP · ${s.merch.length} baris MR · data s/d ${s.lastDataDate ?? "–"}` },
     { name: "Target Store", ok: !!s.target, detail: s.target ? `${s.target.staff.length} staff · ${Object.keys(s.target.sections).length} section` : "Tab Target Store belum terbaca" },
-    { name: "Traffic (CVR)", ok: s.traffic.length > 0, detail: s.traffic.length ? `${s.traffic.length} hari diinput` : "Input di Settings → Traffic" },
+    { name: "Traffic (CVR)", ok: s.traffic.length > 0, detail: s.traffic.length ? `${s.traffic.length} hari (${s.trafficFromApp} input aplikasi, sisanya tab Traffic)` : "Tab Traffic belum berisi bulan ini — input di Settings → Traffic" },
+    { name: "CX & Google Review", ok: !!(x.cx || x.gr), detail: x.cx || x.gr ? `Tab CX&GR Tracker · ${x.cx?.days.length ?? 0} hari · ${(x.cx?.staff ?? []).length} staff` : "Tab CX&GR Tracker tidak ditemukan" },
+    { name: "Promo", ok: !!x.promo?.length, detail: x.promo?.length ? `Tab Rekap Promo · ${x.promo.length} brand · ${x.promo.reduce((a, b) => a + b.items.length, 0)} promo` : "Tab Rekap Promo tidak ditemukan / kosong" },
+    { name: "BNPL & Trade-In · Feedback · Weekly Reason · Checklist", ok: true, detail: "Input di aplikasi (admin) → tersimpan di master sheet tab APP_Records" },
     { name: "SOH / Stock On Hand", ok: false, detail: "Format file SOH belum ada" },
     { name: "Stokan Aksesoris", ok: false, detail: "Format file stokan belum ada" },
     { name: "Jadwal / Shift Staff", ok: false, detail: "Untuk status Masuk Shift di Daily Sales" },
     { name: "Master Staff (jabatan)", ok: false, detail: "Cashier / Sales Assistant / Store Trainer" },
-    { name: "Promo", ok: false, detail: "Tab 'Rekap Promo' ada di sheet bulanan — belum dihubungkan" },
-    { name: "CX & New Member", ok: false, detail: "Tab 'CX&GR Tracker' ada di sheet bulanan — belum dihubungkan" },
-    { name: "BNPL & Trade-In", ok: false, detail: "Belum ada sumber" },
     { name: "Skema Incentive", ok: false, detail: "Untuk Est. Incentive" },
     { name: `Data ${Number(p.month.slice(0, 4)) - 1} (LFL / YTD / Compare)`, ok: p.months.some((m) => m.month.startsWith(String(Number(p.month.slice(0, 4)) - 1))), detail: "Daftarkan file bulanan tahun lalu di Settings" },
   ];

@@ -1,6 +1,7 @@
 import type { BusinessRules } from "@/config/business";
 import type { ControlSheetData } from "@/lib/parsers/controlSheet";
 import type { ISODate, MonthKey, StoreTarget, TrafficEntry } from "@/types/domain";
+import type { MonthExtras } from "@/types/extras";
 
 /** A monthly spreadsheet registered in the app (master sheet `APP_Months`). */
 export interface MonthEntry {
@@ -35,6 +36,22 @@ export interface MonthRaw {
   target: StoreTarget | null;
   sourceTitle: string;
   errors: string[];
+  /** Optional tabs (CX&GR Tracker, Rekap Promo, Traffic). */
+  extras?: MonthExtras;
+}
+
+/** App inputs (BNPL, feedback, weekly reason, checklist…) stored in master sheet `APP_Records`. */
+export type RecordKind = "bnpl" | "feedback" | "reason" | "checklist-spv" | "checklist-staff";
+export const RECORD_KINDS: readonly RecordKind[] = ["bnpl", "feedback", "reason", "checklist-spv", "checklist-staff"];
+
+export interface AppRecord {
+  kind: RecordKind;
+  /** ISO date (or week start for weekly reason). */
+  date: ISODate;
+  key: string;
+  data: Record<string, string | number | boolean>;
+  updatedAt: string;
+  updatedBy: string;
 }
 
 export interface SourceCheck {
@@ -65,6 +82,11 @@ export interface DataSource {
   saveUser(user: AppUser): Promise<void>;
 
   audit(entry: Omit<AuditEntry, "ts">): Promise<void>;
+
+  /** Records of one kind whose date starts with `prefix` (e.g. a month `2026-10`). */
+  listRecords(kind: RecordKind, prefix: string): Promise<AppRecord[]>;
+  /** Replace all records of `kind` on `date` with `rows`. */
+  saveRecords(kind: RecordKind, date: ISODate, rows: Array<Pick<AppRecord, "key" | "data">>, by: string): Promise<void>;
 }
 
 export type { ISODate };

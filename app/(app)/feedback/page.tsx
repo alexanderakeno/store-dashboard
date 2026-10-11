@@ -1,19 +1,26 @@
-import { NeedData, PageIntro, Panel } from "@/components/kit";
+import { PageIntro, Panel } from "@/components/kit";
 import { ParamDate } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
+import { NoteEditor } from "@/components/modules/RecordForms";
 import { byStaff } from "@/lib/domain/kpi";
 import { displayName } from "@/lib/domain/normalize";
 import { daysInMonth, monthStart } from "@/lib/domain/period";
 import { dateLong, pct, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
+import { records } from "@/lib/records";
 
 export default async function FeedbackPage({ searchParams }: { searchParams: SearchParams }) {
   const p = await loadPage(searchParams);
   if (p.state !== "ok") return <PageStatus title="Feedback" p={p} />;
   const s = p.snap;
   const day = p.asOf;
+  const isAdmin = p.session.role === "admin";
   const { staff } = byStaff(s.lines.filter((l) => l.date === day), s.target, 1 / daysInMonth(p.month));
   const below = staff.filter((r) => r.target > 0 && r.totals.sales < r.target);
+  const rec = await records("feedback", day);
+  const rows = rec.map((r) => ({ key: r.key, data: r.data }));
+  const noteOf = (name: string) => String(rec.find((r) => r.key === displayName(name))?.data.text ?? "");
+  const filled = below.filter((r) => noteOf(r.name)).length;
   return (
     <div className="sd-content">
       <PageIntro title="Feedback" desc="Pilih Isi Feedback langsung di samping nama staff yang belum mencapai target." />
@@ -21,20 +28,25 @@ export default async function FeedbackPage({ searchParams }: { searchParams: Sea
         <ParamDate param="d" label="Tanggal" value={day} min={monthStart(p.month)} max={s.lastDataDate ?? day} />
         <p className="text-sm text-slate-500">Target dan pencapaian tersimpan sesuai tanggal ({dateLong(day)}).</p>
       </section>
-      <Panel title="Status Feedback Staff" desc={`${below.length} staff perlu mengisi feedback`} right={<NeedData label="Penyimpanan feedback: Need Data" />}>
+      <Panel title="Status Feedback Staff" desc={`${below.length - filled} dari ${below.length} staff belum mengisi feedback`}>
         <ul className="divide-y divide-slate-200 dark:divide-slate-700">
           {below.map((r) => (
-            <li key={r.key} className="flex flex-wrap items-center justify-between gap-3 py-3">
-              <div>
-                <p className="font-bold text-slate-950">{displayName(r.name)}</p>
+            <li key={r.key} className="flex flex-wrap items-start justify-between gap-3 py-3">
+              <div className="min-w-48">
+                <p className="font-bold text-slate-950">{displayName(r.name)} {noteOf(r.name) && <span className="sd-badge green ml-1">Sudah isi</span>}</p>
                 <p className="text-sm text-slate-500">{pct((r.totals.sales / r.target) * 100, 0)} achievement • {rpf(r.totals.sales)} / {rpf(r.target)}</p>
               </div>
-              <button type="button" className="sd-btn" disabled title="Butuh tab penyimpanan feedback di master sheet">Isi Feedback</button>
+              <div className="min-w-0 flex-1 sm:max-w-xl">
+                {isAdmin ? (
+                  <NoteEditor kind="feedback" date={day} keyName={displayName(r.name)} initial={noteOf(r.name)} others={rows} label="Isi Feedback" placeholder="Kendala hari ini & rencana besok…" />
+                ) : (
+                  <p className="text-sm text-slate-600">{noteOf(r.name) ? `“${noteOf(r.name)}”` : "Belum ada feedback."}</p>
+                )}
+              </div>
             </li>
           ))}
           {!below.length && <li className="py-3 text-sm text-slate-500">{s.target ? "Semua staff mencapai target harian." : "Target staff belum terbaca dari Target Store."}</li>}
         </ul>
-        <p className="mt-3 text-xs text-slate-500">Daftar staff dihitung otomatis dari data penjualan. Form isi feedback aktif setelah tab penyimpanan (mis. <code>APP_Feedback</code>) disiapkan.</p>
       </Panel>
     </div>
   );
