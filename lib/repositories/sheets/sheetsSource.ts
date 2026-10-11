@@ -5,7 +5,12 @@ import { normalizeText, parseDate, parseNumber } from "@/lib/domain/normalize";
 import { parseControlSheet, type Grid } from "@/lib/parsers/controlSheet";
 import { parseTargetStore } from "@/lib/parsers/targetStore";
 import type { MonthKey, TrafficEntry } from "@/types/domain";
-import type { AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, SourceCheck } from "../types";
+import type { AppRecord, AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
+import { parsePromo, parseTracker, parseTrafficTab } from "@/lib/parsers/extras";
+import type { MonthExtras } from "@/types/extras";
+
+/** Optional tabs of the monthly sheet. */
+export const EXTRA_TABS = { tracker: "CX&GR Tracker", promo: "Rekap Promo", traffic: "Traffic" } as const;
 import { addTab, appendRows, clearRange, getSpreadsheetMeta, readTab, readTabs, writeRange } from "./client";
 
 /** Master-sheet tabs owned by the app. Header order = column order. */
@@ -15,6 +20,7 @@ export const MASTER_TABS = {
   users: { name: "APP_Users", header: ["nik", "name", "role", "passwordHash", "active"] },
   traffic: { name: "APP_Traffic", header: ["date", "traffic", "updatedAt", "updatedBy"] },
   audit: { name: "APP_Audit", header: ["ts", "nik", "action", "detail"] },
+  records: { name: "APP_Records", header: ["kind", "date", "key", "data", "updatedAt", "updatedBy"] },
 } as const;
 
 type TabKey = keyof typeof MASTER_TABS;
@@ -96,7 +102,8 @@ export class SheetsSource implements DataSource {
     const cfg = appConfig();
     const meta = await this.checkSource(entry.spreadsheetId);
     if (!meta.hasSales) throw new Error(`Tab '${cfg.salesSheetName}' tidak ada di file "${meta.title}"`);
-    const tabs = meta.hasTarget ? [cfg.salesSheetName, cfg.targetSheetName] : [cfg.salesSheetName];
+    const optional = Object.values(EXTRA_TABS).filter((x) => meta.sheets.includes(x));
+    const tabs = [...(meta.hasTarget ? [cfg.salesSheetName, cfg.targetSheetName] : [cfg.salesSheetName]), ...optional];
     const grids = await readTabs(entry.spreadsheetId, tabs);
     const errors: string[] = [];
     const control = parseControlSheet(grids[cfg.salesSheetName], entry.month);
@@ -108,7 +115,18 @@ export class SheetsSource implements DataSource {
         errors.push(`Target Store gagal dibaca: ${(e as Error).message}`);
       }
     } else errors.push(`Tab '${cfg.targetSheetName}' tidak ada — target dianggap 0`);
-    return { control, target, sourceTitle: meta.title, errors };
+    const extras: MonthExtras = { cx: null, gr: null, promo: null, sheetTraffic: [], tabs: optional, warnings: [] };
+    try {
+      if (grids[EXTRA_TABS.tracker]) {
+        extras.cx = parseTracker(grids[EXTRA_TABS.tracker], entry.month, "CX");
+        extras.gr = parseTracker(grids[EXTRA_TABS.tracker], entry.month, "GR");
+      }
+      if (grids[EXTRA_TABS.promo]) extras.promo = parsePromo(grids[EXTRA_TABS.promo]);
+      if (grids[EXTRA_TABS.traffic]) extras.sheetTraffic = parseTrafficTab(grids[EXTRA_TABS.traffic], entry.month);
+    } catch (e) {
+      extras.warnings.push(`Tab tambahan gagal dibaca: ${(e as Error).message}`);
+    }
+    return { control, target, sourceTitle: meta.title, errors, extras };
   }
 
   async getRuleOverrides(): Promise<Partial<BusinessRules>> {
@@ -161,8 +179,32 @@ export class SheetsSource implements DataSource {
     await this.rewrite("users", all.map((u) => [u.nik, u.name, "viewer", u.passwordHash, u.active]));
   }
 
+  async listRecords(kind: RecordKind, prefix: string): Promise<AppRecord[]> {
+    return (await this.rows("records")).map(toRecord).filter((r): r is AppRecord => !!r && r.kind === kind && r.date.startsWith(prefix));
+  }
+
+  async saveRecords(kind: RecordKind, date: string, rows: Array<Pick<AppRecord, "key" | "data">>, by: string): Promise<void> {
+    const now = new Date().toISOString();
+    const keep = (await this.rows("records")).filter((r) => !(normalizeText(r.kind) === kind && normalizeText(r.date) === date));
+    const out: unknown[][] = keep.map((r) => [r.kind, r.date, r.key, r.data, r.updatedAt, r.updatedBy]);
+    for (const x of rows) out.push([kind, date, x.key, JSON.stringify(x.data), now, by]);
+    out.sort((a, b) => String(a[1]).localeCompare(String(b[1])) || String(a[0]).localeCompare(String(b[0])));
+    await this.rewrite("records", out);
+  }
+
   async audit(entry: Omit<AuditEntry, "ts">): Promise<void> {
     await this.ensureTabs();
     await appendRows(this.master, MASTER_TABS.audit.name, [[new Date().toISOString(), entry.nik, entry.action, entry.detail]]);
   }
+}
+
+function toRecord(r: Record<string, unknown>): AppRecord | null {
+  const kind = normalizeText(r.kind) as RecordKind;
+  const date = normalizeText(r.date);
+  if (!kind || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  let data: AppRecord["data"] = {};
+  try {
+    data = JSON.parse(String(r.data || "{}"));
+  } catch {}
+  return { kind, date, key: normalizeText(r.key), data, updatedAt: normalizeText(r.updatedAt), updatedBy: normalizeText(r.updatedBy) };
 }

@@ -1,5 +1,7 @@
 import { appConfig } from "@/config/app";
-import { EmptyBlock, NeedData, PageIntro, Panel } from "@/components/kit";
+import { EmptyBlock, PageIntro, Panel } from "@/components/kit";
+import { NoteEditor } from "@/components/modules/RecordForms";
+import { records } from "@/lib/records";
 import { ParamSelect } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { staffStats, typeQty } from "@/lib/domain/extra";
@@ -23,6 +25,10 @@ export default async function WeeklyReasonPage({ searchParams }: { searchParams:
   const target = (s.target?.total ?? 0) * scale;
   const staff = staffStats(ls, s.target, tg, { targetScale: scale });
   const moves = typeQty(ls).sort((a, b) => b.qty - a.qty).slice(0, 10);
+  const isAdmin = p.session.role === "admin";
+  const rec = await records("reason", wk.start);
+  const rows = rec.map((r) => ({ key: r.key, data: r.data }));
+  const noteOf = (name: string) => String(rec.find((r) => r.key === name)?.data.text ?? "");
   return (
     <div className="sd-content">
       <PageIntro eyebrow={`${appConfig().storeCode || "STORE"} Reporting`} title="Weekly Reason" desc="Weekly sales actual, reason staff, product movement dan kondisi SOH." />
@@ -30,13 +36,13 @@ export default async function WeeklyReasonPage({ searchParams }: { searchParams:
         <ParamSelect param="wk" label="Pilih Week" value={String(wk.index)} options={weeks.map((w) => ({ value: String(w.index), label: `${w.label} · ${dateShort(w.start)}–${dateShort(w.end)}` }))} />
         <div className="self-end text-sm text-slate-500">Sales {rpf(t.sales)} / target {rpf(target)} · <b>{pct(target ? (t.sales / target) * 100 : null, 0)}</b> · time gone week {pct(tg, 0)}</div>
       </section>
-      <Panel title="Weekly Sales & Reason Staff" right={<NeedData label="Reason: Need Data" />}>
+      <Panel title="Weekly Sales & Reason Staff" desc="Reason disimpan per staff per week.">
         <div className="sd-table-wrap"><table className="sd-table">
           <thead><tr><th>Staff</th><th className="n">Target Week</th><th className="n">Actual</th><th className="n">%</th><th>Status</th><th>Reason</th></tr></thead>
           <tbody>{staff.map((r) => (
             <tr key={r.key}><td className="font-bold">{r.name}</td><td className="n">{rpf(r.target)}</td><td className="n">{rpf(r.totals.sales)}</td><td className="n">{pct(r.achievementPct ?? 0, 0)}</td>
               <td><span className={`sd-badge ${r.onPace ? "green" : "red"}`}>{r.onPace ? "On Track" : "Behind"}</span></td>
-              <td><input className="sd-input !min-h-8 text-sm" disabled placeholder="Isi alasan…" aria-label={`Reason ${r.name}`} /></td></tr>
+              <td className="min-w-72 !whitespace-normal">{isAdmin ? <NoteEditor kind="reason" date={wk.start} keyName={r.name} initial={noteOf(r.name)} others={rows} label="Isi Reason" placeholder="Alasan pencapaian minggu ini…" /> : <span className="text-sm text-slate-600">{noteOf(r.name) || "—"}</span>}</td></tr>
           ))}</tbody>
         </table></div>
       </Panel>

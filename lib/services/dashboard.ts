@@ -8,7 +8,8 @@ import { reconcile } from "@/lib/domain/reconcile";
 import { lastDataDate, type MonthInput } from "@/lib/domain/views";
 import type { ControlSheetData } from "@/lib/parsers/controlSheet";
 import { dataSource, type MonthEntry } from "@/lib/repositories";
-import type { ISODate, MerchLine, MonthKey, ReconcileIssue } from "@/types/domain";
+import type { ISODate, MerchLine, MonthKey, ReconcileIssue, TrafficEntry } from "@/types/domain";
+import { EMPTY_EXTRAS, type MonthExtras } from "@/types/extras";
 
 export interface MonthSnapshot extends MonthInput {
   entry: MonthEntry;
@@ -20,6 +21,16 @@ export interface MonthSnapshot extends MonthInput {
   issues: ReconcileIssue[];
   lastDataDate: ISODate | null;
   loadedAt: number;
+  extras: MonthExtras;
+  /** Days whose traffic came from the app input (others from the sheet's Traffic tab). */
+  trafficFromApp: number;
+}
+
+/** App-entered traffic wins over the sheet's Traffic tab for the same date. */
+function mergeTraffic(app: TrafficEntry[], sheet: TrafficEntry[]): TrafficEntry[] {
+  const m = new Map(sheet.map((t) => [t.date, t.traffic]));
+  for (const t of app) if (t.traffic > 0) m.set(t.date, t.traffic);
+  return [...m.entries()].map(([date, traffic]) => ({ date, traffic })).sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export function mergeRules(o: Partial<BusinessRules>): BusinessRules {
@@ -52,6 +63,7 @@ export async function getMonthSnapshot(month: MonthKey, force = false): Promise<
   const raw = await cached(`month:${month}:raw`, ttl, () => dataSource().loadMonth(entry), force);
   const traffic = await cached(`month:${month}:traffic`, ttl, () => dataSource().getTraffic(month), force);
   const { control, target, sourceTitle, errors } = raw.value;
+  const extras = raw.value.extras ?? EMPTY_EXTRAS;
   const lines = enrichSales(control.sales, control.merch, rules);
   return {
     month,
@@ -62,9 +74,11 @@ export async function getMonthSnapshot(month: MonthKey, force = false): Promise<
     merch: control.merch,
     daily: control.daily,
     target,
-    traffic: traffic.value,
+    traffic: mergeTraffic(traffic.value, extras.sheetTraffic),
+    trafficFromApp: traffic.value.filter((t) => t.traffic > 0).length,
+    extras,
     skippedOtherMonth: control.skippedOtherMonth,
-    warnings: [...errors, ...control.warnings],
+    warnings: [...errors, ...control.warnings, ...extras.warnings],
     issues: reconcile(lines, control.merch),
     lastDataDate: lastDataDate(lines),
     loadedAt: raw.loadedAt,
