@@ -102,7 +102,7 @@ const cards = [pc[0], grpCard("apple", "Apple", grp.Apple), grpCard("android", "
               <p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{rpf(c.actual)}</p>
               <div className="mt-4 space-y-2 border-t border-slate-200 pt-3 text-[13px] dark:border-slate-700">
                 <div className="flex justify-between gap-2"><span className="text-slate-500">Target {rpf(c.target)}</span><b className={c.achievementPct != null && c.achievementPct < tg ? "text-rose-600" : "text-slate-900"}>{c.achievementPct == null ? "▲ 0%" : `${c.achievementPct >= tg ? "▲" : "▼"} ${pct(c.achievementPct, 0)}`}</b></div>
-                <div className="flex justify-between gap-2"><span className="font-semibold whitespace-nowrap text-blue-600">Est. {rpf(c.estimate)}</span><b className="whitespace-nowrap text-slate-900">{dec(c.points, 1).replace(",0", "")}/{c.pointsMax} pts</b></div>
+                <div className="flex justify-between gap-2"><span className="font-semibold whitespace-nowrap text-blue-600">Est. {rpf(c.estimate)}{c.target > 0 && <span className="ml-1">({pct((c.estimate / c.target) * 100, 0)})</span>}</span><b className="whitespace-nowrap text-slate-900">{dec(c.points, 1).replace(",0", "")}/{c.pointsMax} pts</b></div>
                 <div className="flex justify-between gap-2"><span className="text-slate-500">Variance</span><b className={c.variance <= 0 ? "text-emerald-600" : "text-rose-600"}>{rpf(c.variance)}</b></div>
 {details[c.key] && <p className="pt-1 text-xs font-semibold text-blue-600">Klik untuk rincian ›</p>}
               </div>
