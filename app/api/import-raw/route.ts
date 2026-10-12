@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     const sp = rows(b.sp, "Sales Person");
     if (!mr && !sp) throw new BadRequest("Pilih minimal satu file");
 
-    const entry = (await getMonths(true)).find((m) => m.month === month);
+    const entry = (await getMonths()).find((m) => m.month === month) ?? (await getMonths(true)).find((m) => m.month === month);
     if (!entry) throw new BadRequest(`Bulan ${month} belum terdaftar di Settings`);
 
     const { message } = await forwardImportRaw(entry.spreadsheetId, mr, sp);
