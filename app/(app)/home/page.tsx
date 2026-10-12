@@ -3,7 +3,7 @@ import { appConfig } from "@/config/app";
 import { EmptyBlock, NeedData, Panel, Progress, SectionHead, Trend, achColor } from "@/components/kit";
 import { CopyButton, LineChart, ParamSelect, PrintButton, WhatsAppButton } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
-import { APPLE_LOBS, linesIn, lobQty, lobValue, perfCards, staffStats, timeGonePct } from "@/lib/domain/extra";
+import { APPLE_LOBS, VAS_PROVIDERS, linesIn, lobQty, lobValue, perfCards, staffStats, timeGonePct, vasSplit } from "@/lib/domain/extra";
 import { totals } from "@/lib/domain/kpi";
 import { sameMonthLastYear } from "@/lib/domain/period";
 import { shareText } from "@/lib/domain/share";
@@ -15,6 +15,8 @@ import { getMonthSnapshot, type MonthSnapshot } from "@/lib/services/dashboard";
 import type { MonthEntry } from "@/lib/repositories";
 
 const TONES = ["blue", "violet", "green", "amber"] as const;
+
+type DetailRow = { label: string; actual: number; target: number | null; qty: number };
 
 export default async function OverviewPage({ searchParams }: { searchParams: SearchParams }) {
   const p = await loadPage(searchParams);
@@ -48,6 +50,12 @@ async function Monthly({ p }: { p: Ok }) {
   const tg = timeGonePct(p.month, p.asOf);
   const cards = perfCards(h);
   const mtd = linesIn(p.snap, `${p.month}-01`, p.asOf);
+const vs = vasSplit(mtd);
+const grp = Object.fromEntries(h.groups.map((x) => [x.group, x]));
+const details: Partial<Record<string, DetailRow[]>> = {
+  device: (["Apple", "Android"] as const).map((k) => ({ label: k, actual: grp[k]?.actual ?? 0, target: grp[k]?.target ?? 0, qty: grp[k]?.qty ?? 0 })),
+  vas: VAS_PROVIDERS.map((k) => ({ label: k, actual: vs[k].value, target: null, qty: vs[k].qty })),
+};
   const staff = staffStats(mtd, p.snap.target, tg, { includeChannels: true });
   const people = staff.filter((s) => !s.isChannel);
   const needPush = people.filter((s) => s.status === "Need Push");
@@ -87,13 +95,15 @@ async function Monthly({ p }: { p: Ok }) {
         <SectionHead title="Store Performance" desc="Actual vs target bulan terpilih." />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {cards.map((c, i) => (
-            <article key={c.key} className="sd-block-card p-5" data-tone={TONES[i]}>
+            <article key={c.key} className="sd-block-card relative p-5" data-tone={TONES[i]}>
+{details[c.key] && <CardDetail id={`detail-${c.key}`} title={c.label} rows={details[c.key]!} total={c.actual} tg={tg} />}
               <p className="text-xs font-black tracking-[.08em] text-slate-500 uppercase">{c.label}</p>
               <p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{rpf(c.actual)}</p>
               <div className="mt-4 space-y-2 border-t border-slate-200 pt-3 text-[13px] dark:border-slate-700">
                 <div className="flex justify-between gap-2"><span className="text-slate-500">Target {rpf(c.target)}</span><b className={c.achievementPct != null && c.achievementPct < tg ? "text-rose-600" : "text-slate-900"}>{c.achievementPct == null ? "▲ 0%" : `${c.achievementPct >= tg ? "▲" : "▼"} ${pct(c.achievementPct, 0)}`}</b></div>
                 <div className="flex justify-between gap-2"><span className="font-semibold whitespace-nowrap text-blue-600">Est. {rpf(c.estimate)}</span><b className="whitespace-nowrap text-slate-900">{dec(c.points, 1).replace(",0", "")}/{c.pointsMax} pts</b></div>
                 <div className="flex justify-between gap-2"><span className="text-slate-500">Variance</span><b className={c.variance <= 0 ? "text-emerald-600" : "text-rose-600"}>{rpf(c.variance)}</b></div>
+{details[c.key] && <p className="pt-1 text-xs font-semibold text-blue-600">Klik untuk rincian ›</p>}
               </div>
             </article>
           ))}
@@ -255,6 +265,46 @@ async function Monthly({ p }: { p: Ok }) {
       <Panel title="Share Daily" desc="Ringkasan harian untuk WhatsApp." right={<div className="flex gap-2"><CopyButton text={shareText(h, cfg.storeName)} label="Salin teks" /><WhatsAppButton text={shareText(h, cfg.storeName)} /></div>}>
         <pre className="m-0 rounded-2xl bg-slate-50 p-4 font-[inherit] text-sm whitespace-pre-wrap text-slate-700">{shareText(h, cfg.storeName)}</pre>
       </Panel>
+    </>
+  );
+}
+
+function CardDetail({ id, title, rows, total, tg }: { id: string; title: string; rows: DetailRow[]; total: number; tg: number }) {
+  const hasTarget = rows.some((r) => r.target != null);
+  const other = total - rows.reduce((a, r) => a + r.actual, 0);
+  return (
+    <>
+      <button type="button" popoverTarget={id} className="absolute inset-0 z-10 cursor-pointer rounded-[inherit]" aria-label={`Rincian ${title}`} />
+      <div id={id} popover="auto" className="m-auto w-[min(92vw,480px)] rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="text-base font-black">Rincian {title}</p>
+          <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>
+        </div>
+        <div className="sd-table-wrap">
+          <table className="sd-table">
+            <thead>
+              <tr><th>{hasTarget ? "Grup" : "Provider"}</th><th className="n">Actual</th>{hasTarget ? <><th className="n">Target</th><th className="n">Ach</th></> : <th className="n">Share</th>}<th className="n">Qty</th></tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const ach = r.target ? (r.actual / r.target) * 100 : null;
+                return (
+                  <tr key={r.label}>
+                    <td className="font-bold">{r.label}</td>
+                    <td className="n">{rpf(r.actual)}</td>
+                    {hasTarget ? <><td className="n">{rpf(r.target ?? 0)}</td><td className={`n font-semibold ${ach != null && ach >= tg ? "text-emerald-600" : "text-rose-600"}`}>{ach == null ? "—" : pct(ach, 0)}</td></> : <td className="n">{total ? pct((r.actual / total) * 100, 0) : "—"}</td>}
+                    <td className="n">{num(r.qty)}</td>
+                  </tr>
+                );
+              })}
+              {Math.abs(other) >= 1 && <tr><td className="text-slate-500">Lainnya</td><td className="n">{rpf(other)}</td>{hasTarget ? <><td /><td /></> : <td className="n">{total ? pct((other / total) * 100, 0) : "—"}</td>}<td /></tr>}
+            </tbody>
+            <tfoot>
+              <tr><td>Total</td><td className="n">{rpf(total)}</td>{hasTarget ? <><td /><td /></> : <td />}<td className="n">{num(rows.reduce((a, r) => a + r.qty, 0))}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
     </>
   );
 }
