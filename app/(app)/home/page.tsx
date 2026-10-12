@@ -14,7 +14,7 @@ import { withQuery } from "@/lib/qs";
 import { getMonthSnapshot, type MonthSnapshot } from "@/lib/services/dashboard";
 import type { MonthEntry } from "@/lib/repositories";
 
-const TONES = ["blue", "violet", "green", "amber"] as const;
+const TONES = ["blue", "violet", "violet", "green", "amber"] as const;
 
 type DetailRow = { label: string; actual: number; target: number | null; qty: number };
 
@@ -48,14 +48,15 @@ type Ok = Extract<Awaited<ReturnType<typeof loadPage>>, { state: "ok" }>;
 async function Monthly({ p }: { p: Ok }) {
   const h = homeView(p.snap, p.asOf);
   const tg = timeGonePct(p.month, p.asOf);
-  const cards = perfCards(h);
+  const pc = perfCards(h);
   const mtd = linesIn(p.snap, `${p.month}-01`, p.asOf);
 const vs = vasSplit(mtd);
 const grp = Object.fromEntries(h.groups.map((x) => [x.group, x]));
 const details: Partial<Record<string, DetailRow[]>> = {
-  device: (["Apple", "Android"] as const).map((k) => ({ label: k, actual: grp[k]?.actual ?? 0, target: grp[k]?.target ?? 0, qty: grp[k]?.qty ?? 0 })),
   vas: VAS_PROVIDERS.map((k) => ({ label: k, actual: vs[k].value, target: null, qty: vs[k].qty })),
 };
+const grpCard = (key: string, label: string, x: (typeof h.groups)[number]) => ({ key, label, actual: x.actual, target: x.target, achievementPct: x.target ? (x.actual * 100) / x.target : null, estimate: x.estimate, points: x.point, pointsMax: x.pointCap, variance: x.target - x.actual });
+const cards = [pc[0], grpCard("apple", "Apple", grp.Apple), grpCard("android", "Android", grp.Android), pc[2], pc[3]];
   const staff = staffStats(mtd, p.snap.target, tg, { includeChannels: true });
   const people = staff.filter((s) => !s.isChannel);
   const needPush = people.filter((s) => s.status === "Need Push");
@@ -95,7 +96,7 @@ const details: Partial<Record<string, DetailRow[]>> = {
         <SectionHead title="Store Performance" desc="Actual vs target bulan terpilih." />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {cards.map((c, i) => (
-            <article key={c.key} className="sd-block-card relative p-5" data-tone={TONES[i]}>
+            <article key={c.key} className={`sd-block-card relative p-5 ${c.key === "total" ? "sm:col-span-2 xl:col-span-4" : ""}`} data-tone={TONES[i]}>
 {details[c.key] && <CardDetail id={`detail-${c.key}`} title={c.label} rows={details[c.key]!} total={c.actual} tg={tg} />}
               <p className="text-xs font-black tracking-[.08em] text-slate-500 uppercase">{c.label}</p>
               <p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{rpf(c.actual)}</p>
