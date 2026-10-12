@@ -28,6 +28,7 @@ export default async function StaffPage({ searchParams }: { searchParams: Search
   const teamTarget = (s.target?.total ?? 0) * scale;
   const teamAch = teamTarget ? (team.sales / teamTarget) * 100 : null;
   const onTrack = (teamAch ?? 0) >= tg;
+const teamGapTg = team.sales - (teamTarget * tg) / 100;
   const byKey = linesByStaff(ls);
   const lobTotal = lobQty(ls);
 
@@ -59,6 +60,7 @@ export default async function StaffPage({ searchParams }: { searchParams: Search
           <span>{range ? "Range" : "Monthly Pace"} {pct(tg)}</span>
           <span className={`sd-badge ${onTrack ? "green" : "red"}`}>● {onTrack ? "On Track" : "Behind"}</span>
           <span>Gap {rpf(team.sales - teamTarget)}</span>
+<span className={`font-semibold ${teamGapTg >= 0 ? "text-emerald-600" : "text-rose-600"}`}>Gap TG {teamGapTg >= 0 ? "+" : ""}{rpf(teamGapTg)}</span>
         </div>
         <div className="mt-3"><Progress value={teamAch} tick={tg} color={achColor(teamAch, tg)} label="Achievement tim" /></div>
       </section>
@@ -101,8 +103,7 @@ export default async function StaffPage({ searchParams }: { searchParams: Search
                     <td className="font-bold">{r.name}</td>
                     {GROUPS.map((g) => {
                       const tgt = (st?.byGroup[g] ?? 0) * scale;
-const gapTg = r.totals.byGroup[g] - (tgt * tg) / 100;
-                      return <td key={g} className="n">{rpf(r.totals.byGroup[g])}{tgt > 0 && <><div className={`text-xs font-semibold ${(r.totals.byGroup[g] / tgt) * 100 >= tg ? "text-emerald-600" : "text-rose-600"}`}>{pct((r.totals.byGroup[g] / tgt) * 100, 0)} dari {rpf(tgt)}</div><div className={`text-xs ${gapTg >= 0 ? "text-emerald-600" : "text-rose-600"}`}>Gap TG {gapTg >= 0 ? "+" : ""}{rpf(gapTg)}</div></>}</td>;
+                      return <td key={g} className="n">{rpf(r.totals.byGroup[g])}{tgt > 0 && <div className={`text-xs font-semibold ${(r.totals.byGroup[g] / tgt) * 100 >= tg ? "text-emerald-600" : "text-rose-600"}`}>{pct((r.totals.byGroup[g] / tgt) * 100, 0)} dari {rpf(tgt)}</div>}</td>;
                     })}
                     <td className="n font-black">{rpf(r.totals.sales)}</td>
                   </tr>
