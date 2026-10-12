@@ -101,7 +101,8 @@ export default async function StaffPage({ searchParams }: { searchParams: Search
                     <td className="font-bold">{r.name}</td>
                     {GROUPS.map((g) => {
                       const tgt = (st?.byGroup[g] ?? 0) * scale;
-                      return <td key={g} className="n">{rpf(r.totals.byGroup[g])}{tgt > 0 && <div className={`text-xs font-semibold ${(r.totals.byGroup[g] / tgt) * 100 >= tg ? "text-emerald-600" : "text-rose-600"}`}>{pct((r.totals.byGroup[g] / tgt) * 100, 0)} dari {rpf(tgt)}</div>}</td>;
+const gapTg = r.totals.byGroup[g] - (tgt * tg) / 100;
+                      return <td key={g} className="n">{rpf(r.totals.byGroup[g])}{tgt > 0 && <><div className={`text-xs font-semibold ${(r.totals.byGroup[g] / tgt) * 100 >= tg ? "text-emerald-600" : "text-rose-600"}`}>{pct((r.totals.byGroup[g] / tgt) * 100, 0)} dari {rpf(tgt)}</div><div className={`text-xs ${gapTg >= 0 ? "text-emerald-600" : "text-rose-600"}`}>Gap TG {gapTg >= 0 ? "+" : ""}{rpf(gapTg)}</div></>}</td>;
                     })}
                     <td className="n font-black">{rpf(r.totals.sales)}</td>
                   </tr>
