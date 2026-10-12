@@ -11,7 +11,7 @@ import type { MonthExtras } from "@/types/extras";
 
 /** Optional tabs of the monthly sheet. */
 export const EXTRA_TABS = { tracker: "CX&GR Tracker", promo: "Rekap Promo", traffic: "Traffic" } as const;
-import { addTab, appendRows, clearRange, getSpreadsheetMeta, readTab, readTabs, writeRange } from "./client";
+import { SheetsError, addTab, appendRows, clearRange, getSpreadsheetMeta, readTab, readTabs, writeRange } from "./client";
 
 /** Master-sheet tabs owned by the app. Header order = column order. */
 export const MASTER_TABS = {
@@ -58,9 +58,20 @@ export class SheetsSource implements DataSource {
     return this.ensured;
   }
 
+  /**
+   * Reads a master tab directly; only when the tab is missing (fresh master sheet,
+   * Sheets answers 400) are the APP_* tabs created. Saves a metadata round trip
+   * on every cold start.
+   */
   private async rows(tab: TabKey) {
-    await this.ensureTabs();
-    return toObjects(await readTab(this.master, MASTER_TABS[tab].name));
+    const name = MASTER_TABS[tab].name;
+    try {
+      return toObjects(await readTab(this.master, name));
+    } catch (e) {
+      if (!(e instanceof SheetsError) || e.status !== 400) throw e;
+      await this.ensureTabs();
+      return toObjects(await readTab(this.master, name));
+    }
   }
 
   /** Small tables are rewritten whole (clear + write) — simple and consistent. */

@@ -9,16 +9,26 @@ export type RawRows = Array<Array<string | number | boolean | null>>;
 const AUDIENCE = "store-dashboard-import-raw";
 
 let jwt: JWT | null = null;
+let idCache: { token: string; exp: number } | null = null;
 
 /**
  * Google-signed ID token of the app's service account. Apps Script verifies it
- * (issuer, audience, email), so no shared secret is needed.
+ * (issuer, audience, email), so no shared secret is needed. Reused until ~5 min
+ * before it expires (tokens live 1 h) — saves a Google round trip per import.
  */
 async function idToken(): Promise<string> {
+  if (idCache && idCache.exp - Date.now() > 5 * 60_000) return idCache.token;
   const cfg = appConfig();
   if (!cfg.serviceAccountEmail || !cfg.privateKey) throw new Error("Kredensial service account Google belum diisi");
   jwt ??= new JWT({ email: cfg.serviceAccountEmail, key: cfg.privateKey });
-  return jwt.fetchIdToken(AUDIENCE);
+  const token = await jwt.fetchIdToken(AUDIENCE);
+  let exp = Date.now() + 50 * 60_000;
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8")) as { exp?: number };
+    if (payload.exp) exp = payload.exp * 1000;
+  } catch {}
+  idCache = { token, exp };
+  return token;
 }
 
 /**
@@ -51,6 +61,9 @@ export async function forwardImportRaw(spreadsheetId: string, mr: RawRows | null
   } catch {
     throw new Error(`Respon Apps Script bukan JSON (HTTP ${res.status}). Cek deployment Web App: Execute as "Me", Who has access "Anyone".`);
   }
-  if (!j.ok) throw new Error(j.error || "Import gagal di Apps Script");
+  if (!j.ok) {
+    if (/token/i.test(j.error ?? "")) idCache = null; // force a fresh token next time
+    throw new Error(j.error || "Import gagal di Apps Script");
+  }
   return { message: j.message ?? "Selesai." };
 }

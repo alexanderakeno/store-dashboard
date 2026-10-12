@@ -1,7 +1,7 @@
 import "server-only";
 import { appConfig } from "@/config/app";
 import { DEFAULT_RULES, type BusinessRules } from "@/config/business";
-import { cached, invalidate } from "@/lib/cache";
+import { cached, invalidate, shared } from "@/lib/cache";
 import { enrichSales } from "@/lib/domain/kpi";
 import { monthEnd, monthStart, todayIn } from "@/lib/domain/period";
 import { reconcile } from "@/lib/domain/reconcile";
@@ -37,20 +37,34 @@ export function mergeRules(o: Partial<BusinessRules>): BusinessRules {
   return { ...DEFAULT_RULES, ...o, pointCaps: { ...DEFAULT_RULES.pointCaps, ...(o.pointCaps ?? {}) } };
 }
 
+/** Shared (cross-instance) revalidate window = CACHE_TTL_SECONDS. */
+const sharedSec = () => appConfig().cacheTtlMs / 1000;
+/**
+ * Memory layer in front of the shared cache. Short, so a Refresh/Import done on
+ * another instance shows up here within a minute; a Data Cache hit is cheap.
+ */
+const memTtl = () => Math.min(appConfig().cacheTtlMs, 60_000);
+
 export async function getRules(force = false): Promise<BusinessRules> {
-  const { value } = await cached("rules", appConfig().cacheTtlMs, async () => mergeRules(await dataSource().getRuleOverrides()), force);
+  const { value } = await cached(
+    "rules",
+    memTtl(),
+    () => shared(["rules"], ["rules"], sharedSec(), async () => mergeRules(await dataSource().getRuleOverrides()), force),
+    force,
+  );
   return value;
 }
 
-/**
- * The month registry is tiny and changes from Settings, but Vercel runs several
- * instances with separate caches — keep it short-lived so a newly registered
- * month shows up everywhere within ~30 s.
- */
+/** The month registry is tiny and changes only from Settings (which expires the "months" tag). */
 const MONTHS_TTL_MS = 30_000;
 
 export async function getMonths(force = false): Promise<MonthEntry[]> {
-  const { value } = await cached("months", Math.min(appConfig().cacheTtlMs, MONTHS_TTL_MS), () => dataSource().listMonths(), force);
+  const { value } = await cached(
+    "months",
+    Math.min(appConfig().cacheTtlMs, MONTHS_TTL_MS),
+    () => shared(["months"], ["months"], sharedSec(), () => dataSource().listMonths(), force),
+    force,
+  );
   return value;
 }
 
@@ -58,12 +72,31 @@ export async function getMonths(force = false): Promise<MonthEntry[]> {
 export async function getMonthSnapshot(month: MonthKey, force = false): Promise<MonthSnapshot> {
   const entry = (await getMonths(force)).find((m) => m.month === month);
   if (!entry) throw new Error(`Bulan ${month} belum didaftarkan. Admin: daftarkan link sheet di Settings.`);
-  const rules = await getRules(force);
-  const ttl = appConfig().cacheTtlMs;
-  const raw = await cached(`month:${month}:raw`, ttl, () => dataSource().loadMonth(entry), force);
-  const traffic = await cached(`month:${month}:traffic`, ttl, () => dataSource().getTraffic(month), force);
-  const { control, target, sourceTitle, errors } = raw.value;
-  const extras = raw.value.extras ?? EMPTY_EXTRAS;
+  // Independent reads run in parallel (was: one after another).
+  const [rules, raw, traffic] = await Promise.all([
+    getRules(force),
+    cached(
+      `month:${month}:raw`,
+      memTtl(),
+      () =>
+        shared(
+          ["month-raw", month, entry.spreadsheetId],
+          [`month:${month}`, `month:${month}:raw`],
+          sharedSec(),
+          async () => ({ raw: await dataSource().loadMonth(entry), readAt: Date.now() }),
+          force,
+        ),
+      force,
+    ),
+    cached(
+      `month:${month}:traffic`,
+      memTtl(),
+      () => shared(["traffic", month], [`month:${month}`, `month:${month}:traffic`], sharedSec(), () => dataSource().getTraffic(month), force),
+      force,
+    ),
+  ]);
+  const { control, target, sourceTitle, errors } = raw.value.raw;
+  const extras = raw.value.raw.extras ?? EMPTY_EXTRAS;
   const lines = enrichSales(control.sales, control.merch, rules);
   return {
     month,
@@ -81,7 +114,8 @@ export async function getMonthSnapshot(month: MonthKey, force = false): Promise<
     warnings: [...errors, ...control.warnings, ...extras.warnings],
     issues: reconcile(lines, control.merch),
     lastDataDate: lastDataDate(lines),
-    loadedAt: raw.loadedAt,
+    // when the spreadsheet was actually read (not when the cache was hit)
+    loadedAt: raw.value.readAt,
   };
 }
 
@@ -106,6 +140,7 @@ export function resolveAsOf(s: MonthSnapshot, requested?: string | null): ISODat
   return today < start ? start : today > end ? end : today;
 }
 
+/** Drops every cache layer on every instance (admin ↻ Perbarui). */
 export function refreshAll(): void {
   invalidate();
 }

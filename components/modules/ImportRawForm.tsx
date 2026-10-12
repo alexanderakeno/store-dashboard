@@ -1,18 +1,25 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, Upload, X } from "lucide-react";
 
-type Rows = Array<Array<string | number | boolean | null>>;
+type Row = Array<string | number | boolean | null>;
+type Rows = Row[];
 type Slot = "mr" | "sp";
+interface Picked {
+  file: File;
+  rows: Rows | null;
+  error: string | null;
+}
 
 const ACCEPT = ".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 /** Vercel rejects request bodies above ~4.5 MB. */
 const MAX_BODY = 4_300_000;
 
-const SLOTS: Array<{ key: Slot; title: string; hint: string }> = [
-  { key: "mr", title: "Merchandise Report", hint: "Menimpa kolom G:O mulai baris 7" },
-  { key: "sp", title: "Sales Person", hint: "Menimpa kolom Q:Y mulai baris 7" },
+/** Columns the Apps Script parsers read: MR uses A..I, Sales Person A..C. Everything else is dropped before upload. */
+const SLOTS: Array<{ key: Slot; title: string; hint: string; cols: number }> = [
+  { key: "mr", title: "Merchandise Report", hint: "Menimpa kolom G:O mulai baris 7", cols: 9 },
+  { key: "sp", title: "Sales Person", hint: "Menimpa kolom Q:Y mulai baris 7", cols: 3 },
 ];
 
 /** Same SheetJS build as the Apps Script dialog (ImportDialog.html), loaded only on this page. */
@@ -42,8 +49,10 @@ function loadSheetJS(): Promise<SheetJS> {
   return sheetjs;
 }
 
-/** Reads the first sheet exactly like the Apps Script dialog (header:1, raw, blank rows kept). */
-async function readRows(file: File): Promise<Rows> {
+const isEmpty = (v: unknown) => v === null || v === undefined || v === "";
+
+/** Reads the first sheet like the Apps Script dialog (header:1, raw, blank rows kept), trimmed to `cols` columns. */
+async function readRows(file: File, cols: number): Promise<Rows> {
   const XLSX = await loadSheetJS();
   let rows: Rows;
   try {
@@ -52,54 +61,76 @@ async function readRows(file: File): Promise<Rows> {
   } catch (e) {
     throw new Error(`Gagal membaca ${file.name}: ${(e as Error).message}`);
   }
-  // Parsers only look at the first 9 columns; drop the rest and trailing empties to keep the upload small.
-  return rows.map((r) => {
-    const t = (r ?? []).slice(0, 12);
-    while (t.length && (t[t.length - 1] === null || t[t.length - 1] === "")) t.pop();
+  const out = rows.map((r) => {
+    const t = (r ?? []).slice(0, cols);
+    while (t.length && isEmpty(t[t.length - 1])) t.pop();
     return t;
   });
+  while (out.length && !out[out.length - 1].length) out.pop(); // trailing blank rows
+  return out;
 }
 
 const looksLikeMR = (rows: Rows) => String(rows[0]?.[0] ?? "").trim().toLowerCase() === "brand name";
 const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
+function check(slot: Slot, rows: Rows): string | null {
+  if (slot === "mr" && !looksLikeMR(rows)) return 'Bukan Merchandise Report (header "Brand Name" tidak ditemukan).';
+  if (slot === "sp" && looksLikeMR(rows)) return "Ini file Merchandise Report — pilih file Sales Person.";
+  return null;
+}
+
 export function ImportRawForm({ month, monthLabel, sourceTitle }: { month: string; monthLabel: string; sourceTitle: string }) {
   const router = useRouter();
-  const [files, setFiles] = useState<Record<Slot, File | null>>({ mr: null, sp: null });
+  const [picked, setPicked] = useState<Record<Slot, Picked | null>>({ mr: null, sp: null });
   const [state, setState] = useState<"idle" | "busy" | "ok" | "error">("idle");
-  const [step, setStep] = useState("");
   const [msg, setMsg] = useState("");
   const inputs = { mr: useRef<HTMLInputElement>(null), sp: useRef<HTMLInputElement>(null) };
 
-  const pick = (k: Slot, f: File | null) => {
-    setFiles((s) => ({ ...s, [k]: f }));
+  // Warm the Excel reader while the user looks for the file (browser caches it after the first time).
+  useEffect(() => {
+    const idle = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 1500));
+    idle(() => void loadSheetJS().catch(() => {}));
+  }, []);
+
+  /** Parse right away on selection: wrong files are caught before Import, and Import only uploads. */
+  const pick = async (slot: Slot, file: File | null) => {
     if (state !== "busy") setState("idle");
+    if (!file) return setPicked((s) => ({ ...s, [slot]: null }));
+    setPicked((s) => ({ ...s, [slot]: { file, rows: null, error: null } }));
+    const cols = SLOTS.find((x) => x.key === slot)!.cols;
+    let next: Picked;
+    try {
+      const rows = await readRows(file, cols);
+      next = { file, rows, error: check(slot, rows) };
+    } catch (e) {
+      next = { file, rows: null, error: (e as Error).message };
+    }
+    setPicked((s) => (s[slot]?.file === file ? { ...s, [slot]: next } : s));
   };
-  const clear = (k: Slot) => {
-    pick(k, null);
-    const el = inputs[k].current;
+  const clear = (slot: Slot) => {
+    void pick(slot, null);
+    const el = inputs[slot].current;
     if (el) el.value = "";
   };
 
+  const parsing = SLOTS.some((s) => picked[s.key] && !picked[s.key]!.rows && !picked[s.key]!.error);
+  const hasError = SLOTS.some((s) => picked[s.key]?.error);
+  const ready = SLOTS.some((s) => picked[s.key]?.rows) && !parsing && !hasError;
+  const busy = state === "busy";
+
   const run = async () => {
-    if (!files.mr && !files.sp) return;
+    if (!ready) return;
     setState("busy");
     setMsg("");
     try {
-      setStep("Membaca file…");
-      const mr = files.mr ? await readRows(files.mr) : null;
-      const sp = files.sp ? await readRows(files.sp) : null;
-      if (mr && !looksLikeMR(mr)) throw new Error('File Merchandise Report sepertinya bukan Merchandise Report (header "Brand Name" tidak ditemukan).');
-      if (sp && looksLikeMR(sp)) throw new Error("File di Sales Person ternyata Merchandise Report. Cek lagi urutannya.");
-      const body = JSON.stringify({ month, mr, sp });
+      const body = JSON.stringify({ month, mr: picked.mr?.rows ?? null, sp: picked.sp?.rows ?? null });
       if (body.length > MAX_BODY) throw new Error(`Data terlalu besar (${kb(body.length)}). Import MR dan Sales Person satu per satu.`);
-      setStep("Menulis ke Google Sheet… (bisa 10–40 detik)");
       const r = await fetch("/api/import-raw", { method: "POST", headers: { "Content-Type": "application/json" }, body });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error ?? `Import gagal (HTTP ${r.status})`);
       setMsg(j.message ?? "Selesai.");
       setState("ok");
-      setFiles({ mr: null, sp: null });
+      setPicked({ mr: null, sp: null });
       for (const k of ["mr", "sp"] as const) if (inputs[k].current) inputs[k].current!.value = "";
       router.refresh();
     } catch (e) {
@@ -107,9 +138,6 @@ export function ImportRawForm({ month, monthLabel, sourceTitle }: { month: strin
       setState("error");
     }
   };
-
-  const busy = state === "busy";
-  const ready = !!(files.mr || files.sp);
 
   return (
     <div className="space-y-3">
@@ -119,9 +147,14 @@ export function ImportRawForm({ month, monthLabel, sourceTitle }: { month: strin
 
       <div className="grid gap-3 sm:grid-cols-2">
         {SLOTS.map((s) => {
-          const f = files[s.key];
+          const p = picked[s.key];
+          const bad = !!p?.error;
+          const ok = !!p?.rows && !bad;
           return (
-            <div key={s.key} className={`relative rounded-2xl border-2 border-dashed p-4 transition ${f ? "border-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-slate-300 dark:border-slate-700"}`}>
+            <div
+              key={s.key}
+              className={`relative rounded-2xl border-2 border-dashed p-4 transition ${bad ? "border-rose-400 bg-rose-50/60 dark:bg-rose-950/20" : ok ? "border-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-slate-300 dark:border-slate-700"}`}
+            >
               <label className="flex min-h-[72px] cursor-pointer items-center gap-3">
                 <input
                   ref={inputs[s.key]}
@@ -129,22 +162,25 @@ export function ImportRawForm({ month, monthLabel, sourceTitle }: { month: strin
                   accept={ACCEPT}
                   className="sr-only"
                   disabled={busy}
-                  onChange={(e) => pick(s.key, e.target.files?.[0] ?? null)}
+                  onChange={(e) => void pick(s.key, e.target.files?.[0] ?? null)}
                 />
-                <span className={`grid size-12 shrink-0 place-items-center rounded-xl ${f ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500 dark:bg-slate-800"}`}>
-                  <FileSpreadsheet className="size-6" />
+                <span className={`grid size-12 shrink-0 place-items-center rounded-xl ${bad ? "bg-rose-500 text-white" : ok ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500 dark:bg-slate-800"}`}>
+                  {p && !p.rows && !p.error ? <Loader2 className="size-6 animate-spin" /> : <FileSpreadsheet className="size-6" />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-bold text-slate-950">{s.title}</span>
-                  {f ? (
-                    <span className="block truncate text-sm text-emerald-700 dark:text-emerald-400">{f.name} · {kb(f.size)}</span>
-                  ) : (
-                    <span className="block text-sm text-slate-500">Ketuk untuk pilih file .xls</span>
+                  {!p && <span className="block text-sm text-slate-500">Ketuk untuk pilih file .xls</span>}
+                  {p && (
+                    <span className={`block truncate text-sm ${bad ? "text-rose-700 dark:text-rose-300" : "text-emerald-700 dark:text-emerald-400"}`}>
+                      {p.file.name} · {kb(p.file.size)}
+                      {p.rows && !bad ? ` · ${p.rows.length} baris` : ""}
+                      {!p.rows && !p.error ? " · membaca…" : ""}
+                    </span>
                   )}
-                  <span className="block text-xs text-slate-400">{s.hint}</span>
+                  {bad ? <span className="block text-xs font-semibold text-rose-700 dark:text-rose-300">{p!.error}</span> : <span className="block text-xs text-slate-400">{s.hint}</span>}
                 </span>
               </label>
-              {f && !busy && (
+              {p && !busy && (
                 <button type="button" onClick={() => clear(s.key)} className="absolute top-2 right-2 grid size-8 place-items-center rounded-full text-slate-500 hover:bg-slate-200/70" aria-label={`Hapus file ${s.title}`}>
                   <X className="size-4" />
                 </button>
@@ -156,7 +192,7 @@ export function ImportRawForm({ month, monthLabel, sourceTitle }: { month: strin
 
       <button type="button" className="sd-btn primary w-full justify-center !py-3 !text-base" onClick={run} disabled={!ready || busy}>
         {busy ? <Loader2 className="size-5 animate-spin" /> : <Upload className="size-5" />}
-        {busy ? step : "Import ke Google Sheet"}
+        {busy ? "Menulis ke Google Sheet… (bisa 10–40 detik)" : "Import ke Google Sheet"}
       </button>
 
       {state === "ok" && (
