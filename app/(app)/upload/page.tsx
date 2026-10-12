@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CheckCircle2, CircleDashed } from "lucide-react";
 import { NeedData, PageIntro, Panel } from "@/components/kit";
 import { PageStatus } from "@/components/layout/PageStatus";
+import { ImportRawForm } from "@/components/modules/ImportRawForm";
 import { monthLabel, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 
@@ -28,6 +29,15 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
   return (
     <div className="sd-content">
       <PageIntro title="Data Upload" desc={`Status sumber data ${monthLabel(p.month)} · file: ${s.sourceTitle} · dibaca ${timeAgo(s.loadedAt)}.`} actions={isAdmin ? <Link href="/settings" className="sd-btn primary">Kelola di Settings</Link> : undefined} />
+      <div id="import" className="scroll-mt-20">
+        <Panel title="Import Raw MR & Sales Person" desc="Sama seperti menu Import Raw → Upload MR & Sales Person di Google Sheet. Bisa dari HP.">
+          {isAdmin ? (
+            <ImportRawForm month={p.month} monthLabel={monthLabel(p.month)} sourceTitle={s.sourceTitle} />
+          ) : (
+            <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>
+          )}
+        </Panel>
+      </div>
       <Panel title="Sumber Data">
         <ul className="divide-y divide-slate-200 dark:divide-slate-700">
           {sources.map((x) => (
@@ -40,9 +50,6 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
             </li>
           ))}
         </ul>
-      </Panel>
-      <Panel title="Upload File" desc="Upload langsung dari aplikasi (xls/xlsx) akan aktif setelah format tiap file disepakati." right={<NeedData />}>
-        <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700">Drag & drop file di sini — belum aktif</div>
       </Panel>
     </div>
   );
