@@ -19,6 +19,7 @@ export interface AppConfig {
   adminPasswordHash: string;
   adminName: string;
   cacheTtlMs: number;
+  importWebAppUrl: string;
 }
 
 const env = (k: string, d = "") => (process.env[k] ?? d).trim();
@@ -46,6 +47,7 @@ export function appConfig(): AppConfig {
     adminPasswordHash: env("ADMIN_PASSWORD_HASH"),
     adminName: env("ADMIN_NAME", "Admin"),
     cacheTtlMs: Number(env("CACHE_TTL_SECONDS", "300")) * 1000 || 300_000,
+    importWebAppUrl: env("IMPORT_WEBAPP_URL", "https://script.google.com/macros/s/AKfycbywTzsBtldn7KyN3Mhsnc9N72y7nAA9Q4UKj7TYCKYTjCrI_QaBVzvQDeDRaq5DyP9C9A/exec"),
   };
   cached = cfg;
   return cfg;
