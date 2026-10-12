@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, Moon, RefreshCw, Sun } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, Moon, RefreshCw, Sun, Upload } from "lucide-react";
 import { NAV, isGroup, titleFor, type NavLink } from "./nav";
 import { NavIcon } from "./Icon";
 
@@ -181,6 +181,12 @@ function Header({ storeCode, userName, isAdmin, fixture, onMenu, collapsed, onEx
           <button type="button" className="sd-hbtn icon" onClick={toggleTheme} aria-label={dark ? "Mode terang" : "Mode gelap"} title={dark ? "Mode terang" : "Mode gelap"}>
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
+          {isAdmin && (
+            <Link href={sp.get("m") ? `/upload?m=${sp.get("m")}#import` : "/upload#import"} className="sd-hbtn" title="Import Raw MR & Sales Person">
+              <Upload className="size-4" />
+              <span className="max-sm:hidden">Import</span>
+            </Link>
+          )}
           <button type="button" className="sd-hbtn" onClick={refresh} disabled={busy} title={isAdmin ? "Baca ulang data dari Google Sheet" : "Muat ulang tampilan"}>
             <RefreshCw className={`size-4 ${busy ? "animate-spin" : ""}`} />
             <span className="max-sm:hidden">Perbarui</span>
