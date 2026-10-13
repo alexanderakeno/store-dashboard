@@ -142,6 +142,7 @@ DATA_SOURCE=sheets            # "fixture" only for local development
 | Compare / YTD / LFL | waiting for historical import |
 | Traffic / CVR | **built** — input in Settings |
 | Promo, Feedback, Checklist, BNPL & Trade-In, Mading | app input (M238-style) |
-| SOH / Stokan / Stock Request + email | waiting for SOH file sample |
+| SOH | **built** — PDF "Sales Dashboard V6 → Stock On Hand" imported in Data Upload (parsed in browser with pdf.js) → master tab `APP_SOH` (latest snapshot); SOH tab joins Qty Sold from Sales Person by article |
+| Stokan / Stock Request + email | waiting for file sample |
 | Est. Incentive | waiting for incentive scheme |
 | CX & Member | later (user decision) |

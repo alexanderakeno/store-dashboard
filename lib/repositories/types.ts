@@ -2,6 +2,7 @@ import type { BusinessRules } from "@/config/business";
 import type { ControlSheetData } from "@/lib/parsers/controlSheet";
 import type { ISODate, MonthKey, StoreTarget, TrafficEntry } from "@/types/domain";
 import type { MonthExtras } from "@/types/extras";
+import type { SohSnapshot } from "@/types/soh";
 
 /** A monthly spreadsheet registered in the app (master sheet `APP_Months`). */
 export interface MonthEntry {
@@ -87,6 +88,11 @@ export interface DataSource {
   listRecords(kind: RecordKind, prefix: string): Promise<AppRecord[]>;
   /** Replace all records of `kind` on `date` with `rows`. */
   saveRecords(kind: RecordKind, date: ISODate, rows: Array<Pick<AppRecord, "key" | "data">>, by: string): Promise<void>;
+
+  /** Latest imported stock on hand (null = never imported). */
+  getSoh(): Promise<SohSnapshot | null>;
+  /** Replaces the stored SOH with `snap`. */
+  saveSoh(snap: Omit<SohSnapshot, "updatedAt" | "updatedBy">, by: string): Promise<void>;
 }
 
 export type { ISODate };

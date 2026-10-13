@@ -3,8 +3,10 @@ import { CheckCircle2, CircleDashed } from "lucide-react";
 import { NeedData, PageIntro, Panel } from "@/components/kit";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { ImportRawForm } from "@/components/modules/ImportRawForm";
-import { monthLabel, timeAgo } from "@/lib/format";
+import { SohImportForm } from "@/components/modules/SohImportForm";
+import { dmy, monthLabel, num, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
+import { getSoh } from "@/lib/soh";
 
 export default async function UploadPage({ searchParams }: { searchParams: SearchParams }) {
   const p = await loadPage(searchParams);
@@ -12,6 +14,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
   const s = p.snap;
   const isAdmin = p.session.role === "admin";
   const x = s.extras;
+  const soh = await getSoh();
   const sources = [
     { name: "Control MR & SP (sales)", ok: true, detail: `${s.lines.length} baris SP · ${s.merch.length} baris MR · data s/d ${s.lastDataDate ?? "–"}` },
     { name: "Target Store", ok: !!s.target, detail: s.target ? `${s.target.staff.length} staff · ${Object.keys(s.target.sections).length} section` : "Tab Target Store belum terbaca" },
@@ -19,7 +22,13 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
     { name: "CX & Google Review", ok: !!(x.cx || x.gr), detail: x.cx || x.gr ? `Tab CX&GR Tracker · ${x.cx?.days.length ?? 0} hari · ${(x.cx?.staff ?? []).length} staff` : "Tab CX&GR Tracker tidak ditemukan" },
     { name: "Promo", ok: !!x.promo?.length, detail: x.promo?.length ? `Tab Rekap Promo · ${x.promo.length} brand · ${x.promo.reduce((a, b) => a + b.items.length, 0)} promo` : "Tab Rekap Promo tidak ditemukan / kosong" },
     { name: "BNPL & Trade-In · Feedback · Weekly Reason · Checklist", ok: true, detail: "Input di aplikasi (admin) → tersimpan di master sheet tab APP_Records" },
-    { name: "SOH / Stock On Hand", ok: false, detail: "Format file SOH belum ada" },
+    {
+      name: "SOH / Stock On Hand",
+      ok: !!soh,
+      detail: soh
+        ? `Import PDF · update ${soh.date ? dmy(soh.date) : "–"} · ${soh.items.length} artikel · qty ${num(soh.items.reduce((a, i) => a + i.qty, 0))} · ${soh.categories.length} kategori`
+        : "Belum ada — import PDF Stock On Hand di atas",
+    },
     { name: "Stokan Aksesoris", ok: false, detail: "Format file stokan belum ada" },
     { name: "Jadwal / Shift Staff", ok: false, detail: "Untuk status Masuk Shift di Daily Sales" },
     { name: "Master Staff (jabatan)", ok: false, detail: "Cashier / Sales Assistant / Store Trainer" },
@@ -36,6 +45,11 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
           ) : (
             <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>
           )}
+        </Panel>
+      </div>
+      <div id="soh" className="scroll-mt-20">
+        <Panel title="Import SOH (Stock On Hand)" desc="Upload PDF Sales Dashboard V6 → halaman Stock On Hand. Hasilnya tampil di tab SOH." right={soh ? <Link href="/soh" className="sd-btn">Lihat SOH</Link> : undefined}>
+          {isAdmin ? <SohImportForm current={soh?.date ?? null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
         </Panel>
       </div>
       <Panel title="Sumber Data">

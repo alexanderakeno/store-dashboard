@@ -8,6 +8,7 @@ import type { MonthKey, TrafficEntry } from "@/types/domain";
 import type { AppRecord, AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
 import { parsePromo, parseTracker } from "@/lib/parsers/extras";
 import { generateExtras, generateMonth } from "./generate";
+import type { SohSnapshot } from "@/types/soh";
 
 /**
  * In-memory data source with synthetic data — local development only.
@@ -20,6 +21,7 @@ interface Store {
   users: AppUser[];
   audit: AuditEntry[];
   records: AppRecord[];
+  soh: SohSnapshot | null;
 }
 
 const g = globalThis as unknown as { __fixtureStore?: Store };
@@ -42,7 +44,7 @@ function store(): Store {
     const end = m.month === cur ? addDays(today, -1) : monthEnd(m.month);
     for (let d = `${m.month}-01`; d <= end; d = addDays(d, 1)) traffic.push({ date: d, traffic: 60 + ((Number(d.slice(8)) * 37) % 40) });
   }
-  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], records: [] };
+  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], records: [], soh: null };
   return g.__fixtureStore;
 }
 
@@ -107,6 +109,12 @@ export class FixtureSource implements DataSource {
     const s = store();
     const now = new Date().toISOString();
     s.records = [...s.records.filter((r) => !(r.kind === kind && r.date === date)), ...rows.map((x) => ({ kind, date, key: x.key, data: x.data, updatedAt: now, updatedBy: by }))];
+  }
+  async getSoh() {
+    return store().soh;
+  }
+  async saveSoh(snap: Omit<SohSnapshot, "updatedAt" | "updatedBy">, by: string) {
+    store().soh = { ...snap, updatedAt: new Date().toISOString(), updatedBy: by };
   }
   async audit(entry: Omit<AuditEntry, "ts">) {
     store().audit.push({ ts: new Date().toISOString(), ...entry });

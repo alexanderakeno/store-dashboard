@@ -8,6 +8,7 @@ import type { MonthKey, TrafficEntry } from "@/types/domain";
 import type { AppRecord, AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
 import { parsePromo, parseTracker, parseTrafficTab } from "@/lib/parsers/extras";
 import type { MonthExtras } from "@/types/extras";
+import type { SohSnapshot } from "@/types/soh";
 
 /** Optional tabs of the monthly sheet. */
 export const EXTRA_TABS = { tracker: "CX&GR Tracker", promo: "Rekap Promo", traffic: "Traffic" } as const;
@@ -21,6 +22,7 @@ export const MASTER_TABS = {
   traffic: { name: "APP_Traffic", header: ["date", "traffic", "updatedAt", "updatedBy"] },
   audit: { name: "APP_Audit", header: ["ts", "nik", "action", "detail"] },
   records: { name: "APP_Records", header: ["kind", "date", "key", "data", "updatedAt", "updatedBy"] },
+  soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy"] },
 } as const;
 
 type TabKey = keyof typeof MASTER_TABS;
@@ -201,6 +203,26 @@ export class SheetsSource implements DataSource {
     for (const x of rows) out.push([kind, date, x.key, JSON.stringify(x.data), now, by]);
     out.sort((a, b) => String(a[1]).localeCompare(String(b[1])) || String(a[0]).localeCompare(String(b[0])));
     await this.rewrite("records", out);
+  }
+
+  async getSoh(): Promise<SohSnapshot | null> {
+    const rows = (await this.rows("soh")).filter((r) => normalizeText(r.article));
+    if (!rows.length) return null;
+    const first = rows[0];
+    const items = rows.map((r) => ({ category: normalizeText(r.category), article: normalizeText(r.article), description: normalizeText(r.description), qty: parseNumber(r.qty) }));
+    return {
+      date: parseDate(first.date),
+      categories: [...new Set(items.map((x) => x.category))],
+      items,
+      source: normalizeText(first.source),
+      updatedAt: normalizeText(first.updatedAt),
+      updatedBy: normalizeText(first.updatedBy),
+    };
+  }
+
+  async saveSoh(snap: Omit<SohSnapshot, "updatedAt" | "updatedBy">, by: string): Promise<void> {
+    const now = new Date().toISOString();
+    await this.rewrite("soh", snap.items.map((x) => [x.category, x.article, x.description, x.qty, snap.date ?? "", snap.source, now, by]));
   }
 
   async audit(entry: Omit<AuditEntry, "ts">): Promise<void> {
