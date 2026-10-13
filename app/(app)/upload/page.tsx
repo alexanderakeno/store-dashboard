@@ -14,7 +14,13 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
   const s = p.snap;
   const isAdmin = p.session.role === "admin";
   const x = s.extras;
-  const soh = await getSoh();
+  let soh: Awaited<ReturnType<typeof getSoh>> = null;
+  let sohError: string | null = null;
+  try {
+    soh = await getSoh();
+  } catch (e) {
+    sohError = (e as Error).message;
+  }
   const sources = [
     { name: "Control MR & SP (sales)", ok: true, detail: `${s.lines.length} baris SP · ${s.merch.length} baris MR · data s/d ${s.lastDataDate ?? "–"}` },
     { name: "Target Store", ok: !!s.target, detail: s.target ? `${s.target.staff.length} staff · ${Object.keys(s.target.sections).length} section` : "Tab Target Store belum terbaca" },
@@ -27,7 +33,9 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
       ok: !!soh,
       detail: soh
         ? `Import PDF · update ${soh.date ? dmy(soh.date) : "–"} · ${soh.items.length} artikel · qty ${num(soh.items.reduce((a, i) => a + i.qty, 0))} · ${soh.categories.length} kategori`
-        : "Belum ada — import PDF Stock On Hand di atas",
+        : sohError
+          ? `Gagal membaca APP_SOH: ${sohError}`
+          : "Belum ada — import PDF Stock On Hand di atas",
     },
     { name: "Stokan Aksesoris", ok: false, detail: "Format file stokan belum ada" },
     { name: "Jadwal / Shift Staff", ok: false, detail: "Untuk status Masuk Shift di Daily Sales" },
@@ -37,7 +45,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
   ];
   return (
     <div className="sd-content">
-      <PageIntro title="Data Upload" desc={`Status sumber data ${monthLabel(p.month)} · file: ${s.sourceTitle} · dibaca ${timeAgo(s.loadedAt)}.`} actions={isAdmin ? <Link href="/settings" className="sd-btn primary">Kelola di Settings</Link> : undefined} />
+      <PageIntro title="Data Upload" desc={`Status sumber data ${monthLabel(p.month)} · file: ${s.sourceTitle} · dibaca ${timeAgo(s.loadedAt)}.`} actions={isAdmin ? <Link href="/settings" prefetch={false} className="sd-btn primary">Kelola di Settings</Link> : undefined} />
       <div id="import" className="scroll-mt-20">
         <Panel title="Import Raw MR & Sales Person" desc="Sama seperti menu Import Raw → Upload MR & Sales Person di Google Sheet. Bisa dari HP.">
           {isAdmin ? (
@@ -48,7 +56,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
         </Panel>
       </div>
       <div id="soh" className="scroll-mt-20">
-        <Panel title="Import SOH (Stock On Hand)" desc="Upload PDF Sales Dashboard V6 → halaman Stock On Hand. Hasilnya tampil di tab SOH." right={soh ? <Link href="/soh" className="sd-btn">Lihat SOH</Link> : undefined}>
+        <Panel title="Import SOH (Stock On Hand)" desc="Upload PDF Sales Dashboard V6 → halaman Stock On Hand. Hasilnya tampil di tab SOH." right={soh ? <Link href="/soh" prefetch={false} className="sd-btn">Lihat SOH</Link> : undefined}>
           {isAdmin ? <SohImportForm current={soh?.date ?? null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
         </Panel>
       </div>

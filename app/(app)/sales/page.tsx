@@ -47,7 +47,7 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
         actions={
           <>
             <ParamDate param="d" value={day} min={monthStart(p.month)} max={s.lastDataDate ?? monthEnd(p.month)} className="w-44" />
-            <Link href="/upload" className="sd-btn">Kelola Data <ChevronDown className="size-4" /></Link>
+            <Link href="/upload" prefetch={false} className="sd-btn">Kelola Data <ChevronDown className="size-4" /></Link>
           </>
         }
       />

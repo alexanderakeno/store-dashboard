@@ -82,7 +82,7 @@ function Sidebar({ open, onClose, onCollapse, storeCode, storeName, isAdmin }: {
             if (!isGroup(entry)) {
               if (!visible(entry)) return null;
               return (
-                <Link key={entry.href} href={href(entry.href)} className="sd-nav-item !pl-4 !text-sm !font-bold" aria-current={isActive(path, entry.href) ? "page" : undefined}>
+                <Link key={entry.href} href={href(entry.href)} prefetch={false} className="sd-nav-item !pl-4 !text-sm !font-bold" aria-current={isActive(path, entry.href) ? "page" : undefined}>
                   <NavIcon name={entry.icon} className={`size-4 shrink-0 ${entry.color}`} />
                   <span>{entry.label}</span>
                 </Link>
@@ -101,7 +101,7 @@ function Sidebar({ open, onClose, onCollapse, storeCode, storeName, isAdmin }: {
                 {isOpen && (
                   <div className="mt-2 ml-4 space-y-1 border-l border-white/10 pl-3 lg:mt-1 lg:ml-0 lg:border-l-0 lg:pl-0">
                     {items.map((l) => (
-                      <Link key={l.href} href={href(l.href)} className="sd-nav-item" aria-current={isActive(path, l.href) ? "page" : undefined}>
+                      <Link key={l.href} href={href(l.href)} prefetch={false} className="sd-nav-item" aria-current={isActive(path, l.href) ? "page" : undefined}>
                         <NavIcon name={l.icon} className={`size-3.5 shrink-0 ${l.color}`} />
                         <span>{l.label}</span>
                       </Link>
@@ -182,7 +182,7 @@ function Header({ storeCode, userName, isAdmin, fixture, onMenu, collapsed, onEx
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
           {isAdmin && (
-            <Link href={sp.get("m") ? `/upload?m=${sp.get("m")}#import` : "/upload#import"} className="sd-hbtn" title="Import Raw MR & Sales Person">
+            <Link prefetch={false} href={sp.get("m") ? `/upload?m=${sp.get("m")}#import` : "/upload#import"} className="sd-hbtn" title="Import Raw MR & Sales Person">
               <Upload className="size-4" />
               <span className="max-sm:hidden">Import</span>
             </Link>

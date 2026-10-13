@@ -2,6 +2,7 @@ import "server-only";
 import { JWT } from "google-auth-library";
 import { appConfig } from "@/config/app";
 import type { Grid } from "@/lib/parsers/controlSheet";
+import { RETRIES, backoff, retryable, sleep } from "./retry";
 
 /**
  * Minimal Google Sheets v4 REST client (service account).
@@ -27,13 +28,29 @@ export class SheetsError extends Error {
 }
 
 async function call<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const { token } = await auth().getAccessToken();
-  const res = await fetch(url, {
-    ...init,
-    cache: "no-store",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
-  });
-  if (!res.ok) {
+  const method = (init.method ?? "GET").toUpperCase();
+  for (let attempt = 0; ; attempt++) {
+    const { token } = await auth().getAccessToken();
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        ...init,
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
+      });
+    } catch (e) {
+      if (attempt < RETRIES && retryable(url, method, null)) {
+        await sleep(backoff(attempt, null));
+        continue;
+      }
+      throw new SheetsError(`Google Sheets tidak bisa dihubungi: ${(e as Error).message}`, 503);
+    }
+    if (res.ok) return (await res.json()) as T;
+    if (attempt < RETRIES && retryable(url, method, res.status)) {
+      await res.body?.cancel().catch(() => {});
+      await sleep(backoff(attempt, res.headers.get("retry-after")));
+      continue;
+    }
     let msg = `${res.status} ${res.statusText}`;
     try {
       const body = (await res.json()) as { error?: { message?: string } };
@@ -41,9 +58,9 @@ async function call<T>(url: string, init: RequestInit = {}): Promise<T> {
     } catch {}
     if (res.status === 403) msg = `Akses ditolak — bagikan sheet ke ${appConfig().serviceAccountEmail}. (${msg})`;
     if (res.status === 404) msg = `Spreadsheet tidak ditemukan. (${msg})`;
+    if (res.status === 429) msg = `Kuota Google Sheets habis sementara — coba lagi sebentar. (${msg})`;
     throw new SheetsError(msg, res.status);
   }
-  return (await res.json()) as T;
 }
 
 const q = (s: string) => `'${s.replace(/'/g, "''")}'`;

@@ -19,13 +19,13 @@ export function Sidebar({ isAdmin, brand }: { isAdmin: boolean; brand: React.Rea
     <nav className="sidebar" aria-label="Menu utama">
       <div className="brand">{brand}</div>
       {items.filter((n) => !n.soon).map((n) => (
-        <Link key={n.href} href={href(n.href)} aria-current={path.startsWith(n.href) ? "page" : undefined}>
+        <Link key={n.href} href={href(n.href)} prefetch={false} aria-current={path.startsWith(n.href) ? "page" : undefined}>
           <Icon name={n.icon} /> {n.label}
         </Link>
       ))}
       <div className="sep">Segera</div>
       {items.filter((n) => n.soon).map((n) => (
-        <Link key={n.href} href={href(n.href)} aria-current={path.startsWith(n.href) ? "page" : undefined}>
+        <Link key={n.href} href={href(n.href)} prefetch={false} aria-current={path.startsWith(n.href) ? "page" : undefined}>
           <Icon name={n.icon} /> {n.label}
         </Link>
       ))}
@@ -51,7 +51,7 @@ export function BottomNav({ isAdmin }: { isAdmin: boolean }) {
     <>
       <nav className="bottomnav" aria-label="Menu utama">
         {primary.map((n) => (
-          <Link key={n.href} href={href(n.href)} aria-current={path.startsWith(n.href) ? "page" : undefined}>
+          <Link key={n.href} href={href(n.href)} prefetch={false} aria-current={path.startsWith(n.href) ? "page" : undefined}>
             <Icon name={n.icon} />
             {n.label}
           </Link>
@@ -67,7 +67,7 @@ export function BottomNav({ isAdmin }: { isAdmin: boolean }) {
           <div className="sheet" role="dialog" aria-label="Menu lainnya">
             <div className="handle" />
             {rest.map((n) => (
-              <Link key={n.href} href={href(n.href)}>
+              <Link key={n.href} href={href(n.href)} prefetch={false}>
                 <Icon name={n.icon} />
                 {n.label}
                 {n.soon && <span className="muted small">segera</span>}

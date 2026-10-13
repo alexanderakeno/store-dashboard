@@ -58,3 +58,19 @@ test("SOH rows: month-to-date sold by article and balance", () => {
   assert.equal(a3.balance, "low");
   assert.equal(sohRows([{ ...items[0], article: "ZZ" }], lines, "2026-10-10")[0].balance, "unsold");
 });
+
+test("Sheets retry policy: 429 always, 5xx only for idempotent calls", async () => {
+  const { retryable, backoff } = await import("@/lib/repositories/sheets/retry");
+  const url = "https://sheets.googleapis.com/v4/spreadsheets/x/values/A";
+  assert.equal(retryable(url, "GET", 429), true);
+  assert.equal(retryable(url, "POST", 429), true);
+  assert.equal(retryable(url, "GET", 503), true);
+  assert.equal(retryable(url, "GET", null), true); // network error on a read
+  assert.equal(retryable(`${url}:append`, "POST", 503), false); // could duplicate rows
+  assert.equal(retryable(`${url}:clear`, "POST", 500), true);
+  assert.equal(retryable(url, "GET", 400), false);
+  assert.equal(retryable(url, "GET", 403), false);
+  assert.equal(backoff(0, "2"), 2000);
+  const d = backoff(2, null);
+  assert.ok(d >= 1600 && d < 2000);
+});
