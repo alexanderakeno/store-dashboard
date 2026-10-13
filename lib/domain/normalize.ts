@@ -101,7 +101,7 @@ export function nameKey(value: unknown): string {
 export function displayName(value: unknown): string {
   return normalizeText(value)
     .toLowerCase()
-    .replace(/(^|[\s'-])([a-z])/g, (_, p: string, c: string) => p + c.toUpperCase());
+    .replace(/(^|[\s-])([a-z])/g, (_, p: string, c: string) => p + c.toUpperCase());
 }
 
 /** `"APPMD3J4ZA/A / 20W USB-C POWER ADAPTER"` → article + description. */

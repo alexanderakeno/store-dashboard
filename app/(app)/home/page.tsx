@@ -8,7 +8,7 @@ import { totals } from "@/lib/domain/kpi";
 import { sameMonthLastYear } from "@/lib/domain/period";
 import { shareText } from "@/lib/domain/share";
 import { homeView } from "@/lib/domain/views";
-import { dec, monthLabel, monthShort, num, pct, pctArrow, rpf } from "@/lib/format";
+import { dec, monthLabel, monthShort, num, pct, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 import { getMonthSnapshot, type MonthSnapshot } from "@/lib/services/dashboard";
@@ -114,7 +114,7 @@ const cards = [pc[0], grpCard("apple", "Apple", grp.Apple), grpCard("android", "
       <Panel title="Month Progress" desc="Progress target dan produktivitas transaksi." right={noTarget ? <span className="sd-badge red">Target belum ada</span> : <span className={`sd-badge ${(h.achievement.achievementPct ?? 0) >= tg ? "green" : "red"}`}>{(h.achievement.achievementPct ?? 0) >= tg ? "On Track" : "Behind"}</span>}>
         <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-4">
           <Kv label="Target" value={rpf(h.achievement.target)} />
-          <Kv label="Achievement" value={<>{rpf(h.totals.sales)} • {pctArrow(h.achievement.achievementPct ?? 0, 0)}</>} />
+          <Kv label="Achievement" value={<>{rpf(h.totals.sales)} • <span className={(h.achievement.achievementPct ?? 0) >= tg ? "text-emerald-600" : "text-rose-600"}>{(h.achievement.achievementPct ?? 0) >= tg ? "▲" : "▼"} {pct(h.achievement.achievementPct ?? 0, 0)}</span></>} />
           <Kv label="Gap" value={<span className={h.achievement.gap >= 0 ? "text-emerald-600" : "text-rose-600"}>{rpf(h.achievement.gap)}</span>} />
           <Kv label="Month Pace (Time Gone)" value={`▲ ${pct(tg)}`} />
           <Kv label="UPT" value={dec(h.totals.upt, 1).replace(",", ".")} />
@@ -241,7 +241,7 @@ const cards = [pc[0], grpCard("apple", "Apple", grp.Apple), grpCard("android", "
                   <td className="n">{rpf(s.vas)}</td>
                   <td className="n">{dec(s.totals.upt, 1).replace(",", ".")}</td>
                   <td className="n">{rpf(s.totals.atv)}</td>
-                  <td><span className={`sd-badge ${s.status === "Productive" ? "green" : "red"}`}>{s.status}</span></td>
+                  <td>{s.isChannel ? <span className="sd-badge slate">Online</span> : <span className={`sd-badge ${s.status === "Productive" ? "green" : "red"}`}>{s.status}</span>}</td>
                 </tr>
               ))}
             </tbody>
