@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# env files (secrets) — set these in Vercel instead
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel
+
+# OS / editor
+.DS_Store
+*.log
