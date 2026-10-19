@@ -50,7 +50,7 @@ export function perfCards(h: HomeView): PerfCard[] {
       estimate: groups.reduce((a, k) => a + g[k].estimate, 0),
       points: groups.reduce((a, k) => a + g[k].point, 0),
       pointsMax: groups.reduce((a, k) => a + g[k].pointCap, 0),
-      variance: target - actual,
+      variance: actual - target, // Gap = Actual − Target (DECISIONS.md)
     };
   };
   return [card("total", "Total Sales", [...GROUPS]), card("device", "Device", ["Apple", "Android"]), card("acc", "Accessories", ["ACC"]), card("vas", "VAS", ["VAS"])];
