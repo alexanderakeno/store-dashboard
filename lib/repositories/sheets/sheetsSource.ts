@@ -9,6 +9,8 @@ import type { AppRecord, AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, 
 import { parsePromo, parseTracker, parseTrafficTab } from "@/lib/parsers/extras";
 import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
+import type { PriceKind, PriceList } from "@/types/pricelist";
+import type { PriceListInput } from "../types";
 
 /** Optional tabs of the monthly sheet. */
 export const EXTRA_TABS = { tracker: "CX&GR Tracker", promo: "Rekap Promo", traffic: "Traffic" } as const;
@@ -23,6 +25,7 @@ export const MASTER_TABS = {
   audit: { name: "APP_Audit", header: ["ts", "nik", "action", "detail"] },
   records: { name: "APP_Records", header: ["kind", "date", "key", "data", "updatedAt", "updatedBy"] },
   soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy"] },
+  priceList: { name: "APP_PriceList", header: ["kind", "brand", "series", "name", "normal", "promo", "status", "extra", "date", "source", "updatedAt", "updatedBy"] },
 } as const;
 
 type TabKey = keyof typeof MASTER_TABS;
@@ -223,6 +226,43 @@ export class SheetsSource implements DataSource {
   async saveSoh(snap: Omit<SohSnapshot, "updatedAt" | "updatedBy">, by: string): Promise<void> {
     const now = new Date().toISOString();
     await this.rewrite("soh", snap.items.map((x) => [x.category, x.article, x.description, x.qty, snap.date ?? "", snap.source, now, by]));
+  }
+
+  async getPriceList(): Promise<PriceList | null> {
+    const rows = await this.rows("priceList");
+    if (!rows.length) return null;
+    const out: PriceList = { dates: {}, items: [], qoala: [], source: {}, updatedAt: {} };
+    for (const r of rows) {
+      const kind = normalizeText(r.kind);
+      if (kind === "qoala") {
+        let fees: Record<string, number> = {};
+        try {
+          fees = JSON.parse(String(r.extra || "{}"));
+        } catch {}
+        out.qoala.push({ tier: normalizeText(r.brand), range: normalizeText(r.series), fees });
+        continue;
+      }
+      if (kind !== "apple" && kind !== "android") continue;
+      const k = kind as PriceKind;
+      out.items.push({ kind: k, brand: normalizeText(r.brand), series: normalizeText(r.series), name: normalizeText(r.name), normal: parseNumber(r.normal), promo: parseNumber(r.promo), status: normalizeText(r.status) || "ACTIVE" });
+      out.dates[k] ??= parseDate(r.date);
+      out.source[k] ??= normalizeText(r.source);
+      out.updatedAt[k] ??= normalizeText(r.updatedAt);
+    }
+    return out.items.length || out.qoala.length ? out : null;
+  }
+
+  async savePriceList(input: PriceListInput, by: string): Promise<void> {
+    const now = new Date().toISOString();
+    const replaceQoala = input.qoala.length > 0;
+    const keep = (await this.rows("priceList")).filter((r) => {
+      const k = normalizeText(r.kind);
+      return k === "qoala" ? !replaceQoala : !input.kinds.includes(k as PriceKind);
+    });
+    const out: unknown[][] = keep.map((r) => MASTER_TABS.priceList.header.map((h) => r[h] ?? ""));
+    for (const x of input.items) out.push([x.kind, x.brand, x.series, x.name, x.normal, x.promo, x.status, "", input.date ?? "", input.source, now, by]);
+    for (const q of input.qoala) out.push(["qoala", q.tier, q.range, "", "", "", "", JSON.stringify(q.fees), input.date ?? "", input.source, now, by]);
+    await this.rewrite("priceList", out);
   }
 
   async audit(entry: Omit<AuditEntry, "ts">): Promise<void> {
