@@ -307,32 +307,36 @@ function CardDetail({ id, title, detail, total, tg }: { id: string; title: strin
   return (
     <>
       <button type="button" popoverTarget={id} className="absolute inset-0 z-10 cursor-pointer rounded-[inherit]" aria-label={`Rincian ${title}`} />
-      <div id={id} popover="auto" className="m-auto w-[min(92vw,480px)] rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+      <div id={id} popover="auto" className="m-auto w-[min(94vw,480px)] rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
         <div className="mb-3 flex items-center justify-between gap-3">
           <p className="text-base font-black">Rincian {title}</p>
           <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>
         </div>
         <div className="sd-table-wrap">
-          <table className="sd-table">
+          <table className="sd-table sd-table-compact">
             <thead>
-              <tr><th>{itemLabel}</th><th className="n">Actual</th>{hasTarget ? <><th className="n">Target</th><th className="n">Ach</th></> : <th className="n">Share</th>}<th className="n">Qty</th></tr>
+              <tr><th>{itemLabel}</th><th className="n">Actual</th>{hasTarget ? <><th className="n">Target</th><th className="n">Ach</th></> : <th className="n max-sm:hidden">Share</th>}<th className="n">Qty</th></tr>
             </thead>
             <tbody>
               {rows.map((r) => {
                 const ach = r.target ? (r.actual / r.target) * 100 : null;
+                const share = total && !r.excluded ? pct((r.actual / total) * 100, 0) : "—";
                 return (
                   <tr key={r.label} className={r.excluded ? "text-slate-500" : undefined}>
-                    <td className="font-bold">{r.label}{r.note && <span className="ml-1.5 text-[11px] font-semibold text-slate-400">({r.note})</span>}</td>
+                    <td className="font-bold">
+                      {r.label}{r.note && <span className="ml-1.5 text-[11px] font-semibold text-slate-400">({r.note})</span>}
+                      {!hasTarget && <span className="block text-[11px] font-semibold text-slate-400 sm:hidden">{share === "—" ? "tidak dihitung" : `share ${share}`}</span>}
+                    </td>
                     <td className="n">{rpf(r.actual)}</td>
-                    {hasTarget ? <><td className="n">{rpf(r.target ?? 0)}</td><td className={`n font-semibold ${ach != null && ach >= tg ? "text-emerald-600" : "text-rose-600"}`}>{ach == null ? "—" : pct(ach, 0)}</td></> : <td className="n">{total && !r.excluded ? pct((r.actual / total) * 100, 0) : "—"}</td>}
+                    {hasTarget ? <><td className="n">{rpf(r.target ?? 0)}</td><td className={`n font-semibold ${ach != null && ach >= tg ? "text-emerald-600" : "text-rose-600"}`}>{ach == null ? "—" : pct(ach, 0)}</td></> : <td className="n max-sm:hidden">{share}</td>}
                     <td className="n">{num(r.qty)}</td>
                   </tr>
                 );
               })}
-              {Math.abs(other) >= 1 && <tr><td className="text-slate-500">Lainnya</td><td className="n">{rpf(other)}</td>{hasTarget ? <><td /><td /></> : <td className="n">{total ? pct((other / total) * 100, 0) : "—"}</td>}<td /></tr>}
+              {Math.abs(other) >= 1 && <tr><td className="text-slate-500">Lainnya</td><td className="n">{rpf(other)}</td>{hasTarget ? <><td /><td /></> : <td className="n max-sm:hidden">{total ? pct((other / total) * 100, 0) : "—"}</td>}<td /></tr>}
             </tbody>
             <tfoot>
-              <tr><td>Total</td><td className="n">{rpf(total)}</td>{hasTarget ? <><td /><td /></> : <td />}<td className="n">{num(counted.reduce((a, r) => a + r.qty, 0))}</td></tr>
+              <tr><td>Total</td><td className="n">{rpf(total)}</td>{hasTarget ? <><td /><td /></> : <td className="max-sm:hidden" />}<td className="n">{num(counted.reduce((a, r) => a + r.qty, 0))}</td></tr>
             </tfoot>
           </table>
         </div>
