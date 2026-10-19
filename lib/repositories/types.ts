@@ -3,6 +3,7 @@ import type { ControlSheetData } from "@/lib/parsers/controlSheet";
 import type { ISODate, MonthKey, StoreTarget, TrafficEntry } from "@/types/domain";
 import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
+import type { PriceItem, PriceKind, PriceList, QoalaTier } from "@/types/pricelist";
 
 /** A monthly spreadsheet registered in the app (master sheet `APP_Months`). */
 export interface MonthEntry {
@@ -93,6 +94,22 @@ export interface DataSource {
   getSoh(): Promise<SohSnapshot | null>;
   /** Replaces the stored SOH with `snap`. */
   saveSoh(snap: Omit<SohSnapshot, "updatedAt" | "updatedBy">, by: string): Promise<void>;
+
+  /** Latest imported price list (null = never imported). */
+  getPriceList(): Promise<PriceList | null>;
+  /**
+   * Replaces the rows of `kinds` (Apple and Android are imported from separate PDFs, so one
+   * import never wipes the other). `qoala` replaces the Qoala tiers when non-empty.
+   */
+  savePriceList(input: PriceListInput, by: string): Promise<void>;
+}
+
+export interface PriceListInput {
+  kinds: PriceKind[];
+  date: string | null;
+  source: string;
+  items: PriceItem[];
+  qoala: QoalaTier[];
 }
 
 export type { ISODate };
