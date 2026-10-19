@@ -8,10 +8,11 @@ import { totals } from "@/lib/domain/kpi";
 import { sameMonthLastYear } from "@/lib/domain/period";
 import { shareText } from "@/lib/domain/share";
 import { homeView } from "@/lib/domain/views";
-import { dec, monthLabel, monthShort, num, pct, pctArrow, rp, rpc, rpf } from "@/lib/format";
+import { dec, monthLabel, monthShort, num, pct, pctArrow, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 import { Mtm } from "./Mtm";
+import { ProductDrill } from "@/components/modules/ProductDrill";
 import { getMonthSnapshot, type MonthSnapshot } from "@/lib/services/dashboard";
 import type { MonthEntry } from "@/lib/repositories";
 import type { SalesLine } from "@/types/domain";
@@ -25,35 +26,10 @@ type DetailRow = {
   qty: number;
   note?: string;
   excluded?: boolean;
-  /** Sales lines behind this row — drives the per-product popup (articles → sales person). */
-  lines?: SalesLine[];
-  /** Count every line's qty (VAS) instead of only qty-counted types (devices/accessories). */
-  qtyAll?: boolean;
+  /** Key for the per-product popup (articles → sales person), fetched from /api/drill on open. */
+  drill?: string;
 };
 
-type ArticleSale = { article: string; description: string; qty: number; value: number; staff: Array<{ name: string; qty: number; value: number }> };
-
-/** Articles sold in `lines`, best sellers first, each with the sales people who sold it. */
-function articleSales(lines: SalesLine[], qtyAll = false): ArticleSale[] {
-  const map = new Map<string, ArticleSale & { by: Map<string, { name: string; qty: number; value: number }> }>();
-  for (const l of lines) {
-    const key = l.article || l.description;
-    const a = map.get(key) ?? { article: l.article, description: l.description, qty: 0, value: 0, staff: [], by: new Map() };
-    const q = qtyAll || l.countsInQty ? l.qty : 0;
-    a.qty += q;
-    a.value += l.amount;
-    const sk = l.nik || l.staffName;
-    const st = a.by.get(sk) ?? { name: l.staffName || "—", qty: 0, value: 0 };
-    st.qty += q;
-    st.value += l.amount;
-    a.by.set(sk, st);
-    map.set(key, a);
-  }
-  return [...map.values()]
-    .map(({ by, ...a }) => ({ ...a, staff: [...by.values()].filter((x) => x.qty || x.value).sort((x, y) => y.qty - x.qty || y.value - x.value) }))
-    .filter((a) => a.qty || a.value)
-    .sort((x, y) => y.qty - x.qty || y.value - x.value);
-}
 type Detail = { itemLabel: string; rows: DetailRow[]; footnote?: string };
 
 const APPLE_LABELS: Record<(typeof APPLE_LOBS)[number], string> = { iPhone: "iPhone", Mac: "MacBook", iPad: "iPad", "Apple Watch": "Apple Watch", AirPods: "AirPods" };
@@ -64,10 +40,9 @@ function androidBrands(lines: SalesLine[]): DetailRow[] {
   for (const l of lines) {
     if (l.group !== "Android") continue;
     const label = l.lob ?? "Lainnya";
-    const r = map.get(label) ?? { label, actual: 0, target: null, qty: 0, lines: [] };
+    const r = map.get(label) ?? { label, actual: 0, target: null, qty: 0, drill: label };
     r.actual += l.amount;
     if (l.countsInQty) r.qty += l.qty;
-    r.lines!.push(l);
     map.set(label, r);
   }
   return [...map.values()].filter((r) => r.actual !== 0 || r.qty !== 0).sort((a, b) => b.actual - a.actual);
@@ -114,11 +89,11 @@ const av = lobValue(mtd);
 const details: Partial<Record<string, Detail>> = {
   apple: {
     itemLabel: "Produk",
-    rows: APPLE_LOBS.map((k) => ({ label: APPLE_LABELS[k], actual: av[k], target: null, qty: aq[k], lines: mtd.filter((l) => l.lob === k), ...(k === "AirPods" ? { excluded: true, note: "ACC" } : {}) })),
+    rows: APPLE_LOBS.map((k) => ({ label: APPLE_LABELS[k], actual: av[k], target: null, qty: aq[k], drill: k, ...(k === "AirPods" ? { excluded: true, note: "ACC" } : {}) })),
     footnote: "AirPods ditampilkan untuk info saja — value-nya dihitung di ACC, bukan achievement Apple device.",
   },
   android: { itemLabel: "Brand", rows: androidBrands(mtd), footnote: "Device only, per brand." },
-  vas: { itemLabel: "Provider", rows: VAS_PROVIDERS.map((k) => ({ label: k, actual: vs[k].value, target: null, qty: vs[k].qty, lines: mtd.filter((l) => l.vasProvider === k), qtyAll: true })) },
+  vas: { itemLabel: "Provider", rows: VAS_PROVIDERS.map((k) => ({ label: k, actual: vs[k].value, target: null, qty: vs[k].qty, drill: k })) },
 };
 const grpCard = (key: string, label: string, x: (typeof h.groups)[number]) => ({ key, label, actual: x.actual, target: x.target, achievementPct: x.target ? (x.actual * 100) / x.target : null, estimate: x.estimate, points: x.point, pointsMax: x.pointCap, variance: x.actual - x.target });
 const tt = h.achievement.target;
@@ -164,7 +139,7 @@ const cards = [total, grpCard("apple", "Apple", grp.Apple), grpCard("android", "
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {cards.map((c, i) => (
             <article key={c.key} className={`sd-block-card relative p-5 ${c.key === "total" ? "sm:col-span-2 xl:col-span-4" : ""}`} data-tone={TONES[i]}>
-{details[c.key] && <CardDetail id={`detail-${c.key}`} title={c.label} detail={details[c.key]!} total={c.actual} tg={tg} />}
+{details[c.key] && <CardDetail id={`detail-${c.key}`} title={c.label} detail={details[c.key]!} total={c.actual} tg={tg} drillQuery={`m=${p.month}&d=${p.asOf}&g=${c.key}`} />}
               <p className="text-xs font-black tracking-[.08em] text-slate-500 uppercase">{c.label}</p>
               <p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{rpf(c.actual)}</p>
               <div className="mt-4 space-y-2 border-t border-slate-200 pt-3 text-[13px] dark:border-slate-700">
@@ -338,7 +313,7 @@ const cards = [total, grpCard("apple", "Apple", grp.Apple), grpCard("android", "
   );
 }
 
-function CardDetail({ id, title, detail, total, tg }: { id: string; title: string; detail: Detail; total: number; tg: number }) {
+function CardDetail({ id, title, detail, total, tg, drillQuery }: { id: string; title: string; detail: Detail; total: number; tg: number; drillQuery: string }) {
   const { rows, itemLabel, footnote } = detail;
   const counted = rows.filter((r) => !r.excluded);
   const hasTarget = rows.some((r) => r.target != null);
@@ -360,7 +335,7 @@ function CardDetail({ id, title, detail, total, tg }: { id: string; title: strin
               {rows.map((r, i) => {
                 const ach = r.target ? (r.actual / r.target) * 100 : null;
                 const share = total && !r.excluded ? pct((r.actual / total) * 100, 0) : "—";
-                const drill = r.lines?.length ? `${id}-${i}` : null;
+                const drill = r.drill ? `${id}-${i}` : null;
                 return (
                   <tr key={r.label} className={r.excluded ? "text-slate-500" : undefined}>
                     <td className="font-bold">
@@ -386,61 +361,14 @@ function CardDetail({ id, title, detail, total, tg }: { id: string; title: strin
           </table>
         </div>
         {footnote && <p className="mt-3 text-xs text-slate-500">{footnote}</p>}
-        {rows.some((r) => r.lines?.length) && <p className={`${footnote ? "mt-1" : "mt-3"} text-xs text-slate-400`}>Klik nama {itemLabel.toLowerCase()} untuk rincian artikel & sales person.</p>}
+        {rows.some((r) => r.drill) && <p className={`${footnote ? "mt-1" : "mt-3"} text-xs text-slate-400`}>Klik nama {itemLabel.toLowerCase()} untuk rincian artikel & sales person.</p>}
         {rows.map((r, i) =>
-          r.lines?.length ? <ProductDetail key={r.label} id={`${id}-${i}`} group={title} row={r} share={total && !r.excluded ? (r.actual / total) * 100 : null} /> : null,
+          r.drill ? (
+            <ProductDrill key={r.label} id={`${id}-${i}`} group={title} label={r.label} actual={r.actual} qty={r.qty} share={total && !r.excluded ? (r.actual / total) * 100 : null} query={`${drillQuery}&k=${encodeURIComponent(r.drill)}`} />
+          ) : null,
         )}
       </div>
     </>
-  );
-}
-
-/** Second-level popup: one product (LOB / brand / provider) → articles sold → sales person per article. */
-function ProductDetail({ id, group, row, share }: { id: string; group: string; row: DetailRow; share: number | null }) {
-  const items = articleSales(row.lines ?? [], row.qtyAll);
-  return (
-    <div id={id} popover="auto" className="m-auto max-h-[88vh] w-[min(94vw,520px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl backdrop:bg-slate-900/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5 dark:border-slate-700 dark:bg-slate-900">
-        <div className="min-w-0">
-          <p className="text-[11px] font-black tracking-[.12em] text-blue-600 uppercase">{group}</p>
-          <p className="text-base font-black">Rincian {row.label}</p>
-        </div>
-        <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>
-      </div>
-      <div className="grid grid-cols-3 gap-3 border-b border-slate-200 px-4 py-3 sm:px-5 dark:border-slate-700">
-        <div><p className="text-xs text-slate-500">Sales</p><p className="text-lg font-black">{rpc(row.actual)}</p></div>
-        <div><p className="text-xs text-slate-500">Qty</p><p className="text-lg font-black">{num(row.qty)}</p></div>
-        <div><p className="text-xs text-slate-500">Share</p><p className="text-lg font-black">{share == null ? "—" : pct(share, 1)}</p></div>
-      </div>
-      <ul className="divide-y divide-slate-200 dark:divide-slate-700">
-        {items.map((a) => (
-          <li key={a.article || a.description}>
-            <details className="group">
-              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-slate-50 sm:px-5 dark:hover:bg-slate-800/50 [&::-webkit-details-marker]:hidden">
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] leading-snug font-bold">{a.description || a.article}</span>
-                  <span className="block text-[11px] text-slate-500"><span className="font-mono">{a.article}</span> · {row.label}</span>
-                </span>
-                <span className="shrink-0 text-right tabular-nums">
-                  <b className="block text-sm">{num(a.qty)} qty</b>
-                  <span className="block text-[11px] text-slate-500">{rp(a.value)}</span>
-                </span>
-                <span className="shrink-0 text-slate-400 transition group-open:rotate-180" aria-hidden>⌄</span>
-              </summary>
-              <ul className="space-y-1.5 bg-slate-50/70 px-4 pt-1 pb-3 pl-7 sm:px-5 sm:pl-8 dark:bg-slate-800/30">
-                {a.staff.map((st) => (
-                  <li key={st.name} className="flex items-center justify-between gap-3 text-[13px]">
-                    <span className="min-w-0 truncate text-slate-600 dark:text-slate-300">{st.name}</span>
-                    <span className="shrink-0 text-slate-500 tabular-nums">{num(st.qty)} qty · {rp(st.value)}</span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          </li>
-        ))}
-        {!items.length && <li className="px-4 py-6 text-center text-sm text-slate-500">Belum ada penjualan.</li>}
-      </ul>
-    </div>
   );
 }
 
