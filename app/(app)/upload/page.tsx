@@ -7,6 +7,8 @@ import { SohImportForm } from "@/components/modules/SohImportForm";
 import { dmy, monthLabel, num, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { getSoh } from "@/lib/soh";
+import { getPriceList } from "@/lib/pricelist";
+import { PriceListImportForm } from "@/components/modules/PriceListImportForm";
 
 export default async function UploadPage({ searchParams }: { searchParams: SearchParams }) {
   const p = await loadPage(searchParams);
@@ -21,6 +23,14 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
   } catch (e) {
     sohError = (e as Error).message;
   }
+  let price: Awaited<ReturnType<typeof getPriceList>> = null;
+  let priceError: string | null = null;
+  try {
+    price = await getPriceList();
+  } catch (e) {
+    priceError = (e as Error).message;
+  }
+  const priceCount = (k: "apple" | "android") => price?.items.filter((i) => i.kind === k).length ?? 0;
   const sources = [
     { name: "Control MR & SP (sales)", ok: true, detail: `${s.lines.length} baris SP · ${s.merch.length} baris MR · data s/d ${s.lastDataDate ?? "–"}` },
     { name: "Target Store", ok: !!s.target, detail: s.target ? `${s.target.staff.length} staff · ${Object.keys(s.target.sections).length} section` : "Tab Target Store belum terbaca" },
@@ -36,6 +46,15 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
         : sohError
           ? `Gagal membaca APP_SOH: ${sohError}`
           : "Belum ada — import PDF Stock On Hand di atas",
+    },
+    {
+      name: "Price List",
+      ok: !!price,
+      detail: price
+        ? `Android ${priceCount("android")} tipe${price.dates.android ? ` (${dmy(price.dates.android)})` : ""} · Apple ${priceCount("apple") ? `${priceCount("apple")} tipe${price.dates.apple ? ` (${dmy(price.dates.apple)})` : ""}` : "belum ada"} · Qoala ${price.qoala.length} tier`
+        : priceError
+          ? `Gagal membaca APP_PriceList: ${priceError}`
+          : "Belum ada — import PDF price list di atas",
     },
     { name: "Stokan Aksesoris", ok: false, detail: "Format file stokan belum ada" },
     { name: "Jadwal / Shift Staff", ok: false, detail: "Untuk status Masuk Shift di Daily Sales" },
@@ -58,6 +77,11 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
       <div id="soh" className="scroll-mt-20">
         <Panel title="Import SOH (Stock On Hand)" desc="Upload PDF Sales Dashboard V6 → halaman Stock On Hand. Hasilnya tampil di tab SOH." right={soh ? <Link href="/soh" prefetch={false} className="sd-btn">Lihat SOH</Link> : undefined}>
           {isAdmin ? <SohImportForm current={soh?.date ?? null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
+        </Panel>
+      </div>
+      <div id="pricelist" className="scroll-mt-20">
+        <Panel title="Import Price List" desc="Upload PDF price list Android atau Apple → tampil di Dashboard › Price List." right={price ? <Link href="/pricelist" prefetch={false} className="sd-btn">Lihat Price List</Link> : undefined}>
+          {isAdmin ? <PriceListImportForm current={{ apple: price?.dates.apple ?? null, android: price?.dates.android ?? null }} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
         </Panel>
       </div>
       <Panel title="Sumber Data">
