@@ -305,6 +305,9 @@ html.dark .sd-input, html.dark .sd-select { background: var(--dark-input); borde
 .sd-table tfoot td { padding: 12px 14px; font-weight: 800; border-top: 1px solid var(--block-border); background: var(--block-surface-soft); white-space: nowrap; }
 .sd-table .n { text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 639px) {
+  .sd-table { font-size: 13px; }
+  .sd-table th, .sd-table td, .sd-table tfoot td { padding: 9px 10px; }
+  .sd-table td:first-child { white-space: normal; min-width: 72px; }
   .sd-table-compact { font-size: 13px; }
   .sd-table-compact th, .sd-table-compact td, .sd-table-compact tfoot td { padding: 9px 8px; }
   .sd-table-compact th:first-child, .sd-table-compact td:first-child { padding-left: 12px; }
