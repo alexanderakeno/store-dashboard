@@ -55,15 +55,15 @@ export function SohView({ categories, rows, initialCat, initialSearch }: { categ
 
   return (
     <>
-      <form className="sd-panel flex items-center gap-2 p-4" role="search" onSubmit={(e) => e.preventDefault()}>
+      <form className="sd-panel flex items-center gap-2 p-3 sm:p-4" role="search" onSubmit={(e) => e.preventDefault()}>
         <Search className="size-4 shrink-0 text-slate-400" aria-hidden />
         <input value={search} onChange={(e) => onSearch(e.target.value)} className="sd-input flex-1" placeholder="Cari Article atau Description…" aria-label="Cari SOH" />
         {search && <button type="button" className="sd-btn" onClick={() => onSearch("")} aria-label="Hapus pencarian"><X className="size-4" /></button>}
       </form>
       {!searching && (
-        <section className="sd-panel flex flex-wrap gap-2 p-3" role="tablist" aria-label="Kategori SOH">
+        <section className="sd-panel flex flex-wrap gap-1.5 p-2.5 sm:gap-2 sm:p-3" role="tablist" aria-label="Kategori SOH">
           {categories.map((c) => (
-            <button key={c} type="button" role="tab" aria-selected={c === cat} onClick={() => pickCat(c)} className={`rounded-xl px-4 py-2 text-sm font-semibold ${c === cat ? "bg-slate-500 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
+            <button key={c} type="button" role="tab" aria-selected={c === cat} onClick={() => pickCat(c)} className={`rounded-xl px-2.5 py-1.5 text-xs font-semibold sm:px-4 sm:py-2 sm:text-sm ${c === cat ? "bg-slate-500 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
               {c} <span className="opacity-70">{num(totals.get(c) ?? 0)}</span>
             </button>
           ))}
@@ -73,8 +73,28 @@ export function SohView({ categories, rows, initialCat, initialSearch }: { categ
         title={searching ? `Hasil cari "${q.trim()}"` : cat}
         desc={searching ? `${shown.length} artikel di semua kategori.` : `Balance: stok ÷ rata-rata terjual per hari bulan ini (< ${LOW_DAYS} hari = tipis, > ${SLOW_DAYS} hari = lambat).`}
       >
-        <div className="mb-3 flex gap-2"><span className="sd-badge blue">SOH {num(totSoh)}</span><span className="sd-badge slate">Sold {num(totSold)}</span><span className="sd-badge slate">{shown.length} artikel</span></div>
-        <div className="sd-table-wrap"><table className="sd-table">
+        <div className="mb-3 flex flex-wrap gap-2"><span className="sd-badge blue">SOH {num(totSoh)}</span><span className="sd-badge slate">Sold {num(totSold)}</span><span className="sd-badge slate">{shown.length} artikel</span></div>
+        {/* Mobile: just the type name and its stock — no sideways scrolling. */}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 sm:hidden dark:border-slate-700">
+          <div className="flex justify-between bg-slate-50 px-3 py-2 text-[11px] font-extrabold tracking-wider text-slate-500 uppercase dark:bg-slate-800/60"><span>Tipe</span><span>Stok</span></div>
+          {shown.length ? (
+            <ul className="divide-y divide-slate-200 dark:divide-slate-700">
+              {shown.map((r) => (
+                <li key={`${r.category}|${r.article}`} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <span className="min-w-0 text-[13px] leading-snug font-semibold text-slate-800 dark:text-slate-100">
+                    {r.description || r.article}
+                    {searching && <span className="block text-[11px] font-medium text-slate-400">{r.category}</span>}
+                  </span>
+                  <b className={`shrink-0 text-base tabular-nums ${r.balance === "low" ? "text-rose-600" : "text-slate-950 dark:text-white"}`}>{num(r.qty)}</b>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="px-3 py-6 text-center text-sm text-slate-500">{searching ? "Tidak ada Article/Description yang cocok." : "Kategori ini kosong."}</p>
+          )}
+          <div className="flex justify-between border-t border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-extrabold dark:border-slate-700 dark:bg-slate-800/60"><span>TOTAL</span><span className="tabular-nums">{num(totSoh)}</span></div>
+        </div>
+        <div className="sd-table-wrap max-sm:hidden"><table className="sd-table">
           <thead><tr><th>Article</th><th>Description</th>{searching && <th>Kategori</th>}<th className="n">Qty SOH</th><th className="n">Qty Sold</th><th>Balance View</th></tr></thead>
           <tbody>
             {shown.length ? shown.map((r) => (
