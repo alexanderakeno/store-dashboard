@@ -48,7 +48,7 @@ export default async function MadingPage({ searchParams }: { searchParams: Searc
             <div className="mt-4 space-y-2 border-t border-slate-200 pt-3 text-[13px] dark:border-slate-700">
               <div className="flex justify-between"><span className="text-slate-500">Target {rpf(c.target)}</span><b>{pct(c.achievementPct ?? 0, 0)}</b></div>
               <div className="flex justify-between"><span className="whitespace-nowrap text-blue-600">Est. {rpf(c.estimate)}</span><b className="whitespace-nowrap">{dec(c.points, 1)}/{c.pointsMax} pts</b></div>
-              <div className="flex justify-between"><span className="text-slate-500">Variance</span><b className={c.variance <= 0 ? "text-emerald-600" : "text-rose-600"}>{rpf(c.variance)}</b></div>
+              <div className="flex justify-between"><span className="text-slate-500">Variance</span><b className={c.variance >= 0 ? "text-emerald-600" : "text-rose-600"}>{rpf(c.variance)}</b></div>
             </div>
           </article>
         ))}
