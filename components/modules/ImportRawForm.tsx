@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, Upload, X } from "lucide-react";
+import { postJson } from "./postJson";
 
 type Row = Array<string | number | boolean | null>;
 type Rows = Row[];
@@ -13,8 +14,6 @@ interface Picked {
 }
 
 const ACCEPT = ".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-/** Vercel rejects request bodies above ~4.5 MB. */
-const MAX_BODY = 4_300_000;
 
 /** Columns the Apps Script parsers read: MR uses A..I, Sales Person A..C. Everything else is dropped before upload. */
 const SLOTS: Array<{ key: Slot; title: string; hint: string; cols: number }> = [
@@ -123,9 +122,7 @@ export function ImportRawForm({ month, monthLabel, sourceTitle }: { month: strin
     setState("busy");
     setMsg("");
     try {
-      const body = JSON.stringify({ month, mr: picked.mr?.rows ?? null, sp: picked.sp?.rows ?? null });
-      if (body.length > MAX_BODY) throw new Error(`Data terlalu besar (${kb(body.length)}). Import MR dan Sales Person satu per satu.`);
-      const r = await fetch("/api/import-raw", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      const r = await postJson("/api/import-raw", { month, mr: picked.mr?.rows ?? null, sp: picked.sp?.rows ?? null });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error ?? `Import gagal (HTTP ${r.status})`);
       setMsg(j.message ?? "Selesai.");

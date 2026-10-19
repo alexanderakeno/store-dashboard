@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, FileText, Loader2, Upload, X } from "lucide-react";
 import { parseSohPdf, type SohParse } from "@/lib/parsers/soh";
 import { loadPdfJs, readPdfTexts } from "./pdfText";
+import { postJson } from "./postJson";
 
 async function readPdf(file: File): Promise<SohParse> {
   return parseSohPdf(await readPdfTexts(file));
@@ -51,8 +52,7 @@ export function SohImportForm({ current }: { current: string | null }) {
     setState("busy");
     setMsg("");
     try {
-      const body = JSON.stringify({ date: parsed.date, source: [parsed.title, file?.name].filter(Boolean).join(" · "), items: parsed.items });
-      const r = await fetch("/api/soh", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      const r = await postJson("/api/soh", { date: parsed.date, source: [parsed.title, file?.name].filter(Boolean).join(" · "), items: parsed.items });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error ?? `Import gagal (HTTP ${r.status})`);
       setMsg(j.message ?? "Selesai.");

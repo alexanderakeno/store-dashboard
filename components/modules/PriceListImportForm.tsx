@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, FileText, Loader2, Upload, X } from "lucide-react";
 import { parsePriceListPdf, type PriceListParse } from "@/lib/parsers/pricelist";
 import { loadPdfJs, readPdfTexts } from "./pdfText";
+import { postJson } from "./postJson";
 
 const dmy = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
 const kindLabel = (k: string) => (k === "apple" ? "Apple" : "Android");
@@ -47,8 +48,7 @@ export function PriceListImportForm({ current }: { current: { apple: string | nu
     setState("busy");
     setMsg("");
     try {
-      const body = JSON.stringify({ date: parsed.date, source: [parsed.title, file?.name].filter(Boolean).join(" · "), items: parsed.items, qoala: parsed.qoala });
-      const r = await fetch("/api/pricelist", { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      const r = await postJson("/api/pricelist", { date: parsed.date, source: [parsed.title, file?.name].filter(Boolean).join(" · "), items: parsed.items, qoala: parsed.qoala });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error ?? `Import gagal (HTTP ${r.status})`);
       setMsg(j.message ?? "Selesai.");
