@@ -32,11 +32,11 @@ export default async function FeedbackPage({ searchParams }: { searchParams: Sea
         <ul className="divide-y divide-slate-200 dark:divide-slate-700">
           {below.map((r) => (
             <li key={r.key} className="flex flex-wrap items-start justify-between gap-3 py-3">
-              <div className="min-w-48">
+              <div className="min-w-0 sm:min-w-48">
                 <p className="font-bold text-slate-950">{displayName(r.name)} {noteOf(r.name) && <span className="sd-badge green ml-1">Sudah isi</span>}</p>
                 <p className="text-sm text-slate-500">{pct((r.totals.sales / r.target) * 100, 0)} achievement • {rpf(r.totals.sales)} / {rpf(r.target)}</p>
               </div>
-              <div className="min-w-0 flex-1 sm:max-w-xl">
+              <div className="w-full min-w-0 sm:w-auto sm:max-w-xl sm:flex-1">
                 {isAdmin ? (
                   <NoteEditor kind="feedback" date={day} keyName={displayName(r.name)} initial={noteOf(r.name)} others={rows} label="Isi Feedback" placeholder="Kendala hari ini & rencana besok…" />
                 ) : (
