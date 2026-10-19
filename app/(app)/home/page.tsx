@@ -14,10 +14,28 @@ import { withQuery } from "@/lib/qs";
 import { Mtm } from "./Mtm";
 import { getMonthSnapshot, type MonthSnapshot } from "@/lib/services/dashboard";
 import type { MonthEntry } from "@/lib/repositories";
+import type { SalesLine } from "@/types/domain";
 
 const TONES = ["blue", "violet", "violet", "green", "amber"] as const;
 
-type DetailRow = { label: string; actual: number; target: number | null; qty: number };
+type DetailRow = { label: string; actual: number; target: number | null; qty: number; note?: string; excluded?: boolean };
+type Detail = { itemLabel: string; rows: DetailRow[]; footnote?: string };
+
+const APPLE_LABELS: Record<(typeof APPLE_LOBS)[number], string> = { iPhone: "iPhone", Mac: "MacBook", iPad: "iPad", "Apple Watch": "Apple Watch", AirPods: "AirPods" };
+
+/** Android devices per brand (lob = brand), largest value first. */
+function androidBrands(lines: SalesLine[]): DetailRow[] {
+  const map = new Map<string, DetailRow>();
+  for (const l of lines) {
+    if (l.group !== "Android") continue;
+    const label = l.lob ?? "Lainnya";
+    const r = map.get(label) ?? { label, actual: 0, target: null, qty: 0 };
+    r.actual += l.amount;
+    if (l.countsInQty) r.qty += l.qty;
+    map.set(label, r);
+  }
+  return [...map.values()].filter((r) => r.actual !== 0 || r.qty !== 0).sort((a, b) => b.actual - a.actual);
+}
 
 export default async function OverviewPage({ searchParams }: { searchParams: SearchParams }) {
   const p = await loadPage(searchParams);
@@ -55,8 +73,16 @@ async function Monthly({ p }: { p: Ok }) {
   const mtd = linesIn(p.snap, `${p.month}-01`, p.asOf);
 const vs = vasSplit(mtd);
 const grp = Object.fromEntries(h.groups.map((x) => [x.group, x]));
-const details: Partial<Record<string, DetailRow[]>> = {
-  vas: VAS_PROVIDERS.map((k) => ({ label: k, actual: vs[k].value, target: null, qty: vs[k].qty })),
+const aq = lobQty(mtd);
+const av = lobValue(mtd);
+const details: Partial<Record<string, Detail>> = {
+  apple: {
+    itemLabel: "Produk",
+    rows: APPLE_LOBS.map((k) => ({ label: APPLE_LABELS[k], actual: av[k], target: null, qty: aq[k], ...(k === "AirPods" ? { excluded: true, note: "ACC" } : {}) })),
+    footnote: "AirPods ditampilkan untuk info saja — value-nya dihitung di ACC, bukan achievement Apple device.",
+  },
+  android: { itemLabel: "Brand", rows: androidBrands(mtd), footnote: "Device only, per brand." },
+  vas: { itemLabel: "Provider", rows: VAS_PROVIDERS.map((k) => ({ label: k, actual: vs[k].value, target: null, qty: vs[k].qty })) },
 };
 const grpCard = (key: string, label: string, x: (typeof h.groups)[number]) => ({ key, label, actual: x.actual, target: x.target, achievementPct: x.target ? (x.actual * 100) / x.target : null, estimate: x.estimate, points: x.point, pointsMax: x.pointCap, variance: x.target - x.actual });
 const cards = [pc[0], grpCard("apple", "Apple", grp.Apple), grpCard("android", "Android", grp.Android), pc[2], pc[3]];
@@ -100,7 +126,7 @@ const cards = [pc[0], grpCard("apple", "Apple", grp.Apple), grpCard("android", "
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {cards.map((c, i) => (
             <article key={c.key} className={`sd-block-card relative p-5 ${c.key === "total" ? "sm:col-span-2 xl:col-span-4" : ""}`} data-tone={TONES[i]}>
-{details[c.key] && <CardDetail id={`detail-${c.key}`} title={c.label} rows={details[c.key]!} total={c.actual} tg={tg} />}
+{details[c.key] && <CardDetail id={`detail-${c.key}`} title={c.label} detail={details[c.key]!} total={c.actual} tg={tg} />}
               <p className="text-xs font-black tracking-[.08em] text-slate-500 uppercase">{c.label}</p>
               <p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{rpf(c.actual)}</p>
               <div className="mt-4 space-y-2 border-t border-slate-200 pt-3 text-[13px] dark:border-slate-700">
@@ -273,9 +299,11 @@ const cards = [pc[0], grpCard("apple", "Apple", grp.Apple), grpCard("android", "
   );
 }
 
-function CardDetail({ id, title, rows, total, tg }: { id: string; title: string; rows: DetailRow[]; total: number; tg: number }) {
+function CardDetail({ id, title, detail, total, tg }: { id: string; title: string; detail: Detail; total: number; tg: number }) {
+  const { rows, itemLabel, footnote } = detail;
+  const counted = rows.filter((r) => !r.excluded);
   const hasTarget = rows.some((r) => r.target != null);
-  const other = total - rows.reduce((a, r) => a + r.actual, 0);
+  const other = total - counted.reduce((a, r) => a + r.actual, 0);
   return (
     <>
       <button type="button" popoverTarget={id} className="absolute inset-0 z-10 cursor-pointer rounded-[inherit]" aria-label={`Rincian ${title}`} />
@@ -287,16 +315,16 @@ function CardDetail({ id, title, rows, total, tg }: { id: string; title: string;
         <div className="sd-table-wrap">
           <table className="sd-table">
             <thead>
-              <tr><th>{hasTarget ? "Grup" : "Provider"}</th><th className="n">Actual</th>{hasTarget ? <><th className="n">Target</th><th className="n">Ach</th></> : <th className="n">Share</th>}<th className="n">Qty</th></tr>
+              <tr><th>{itemLabel}</th><th className="n">Actual</th>{hasTarget ? <><th className="n">Target</th><th className="n">Ach</th></> : <th className="n">Share</th>}<th className="n">Qty</th></tr>
             </thead>
             <tbody>
               {rows.map((r) => {
                 const ach = r.target ? (r.actual / r.target) * 100 : null;
                 return (
-                  <tr key={r.label}>
-                    <td className="font-bold">{r.label}</td>
+                  <tr key={r.label} className={r.excluded ? "text-slate-500" : undefined}>
+                    <td className="font-bold">{r.label}{r.note && <span className="ml-1.5 text-[11px] font-semibold text-slate-400">({r.note})</span>}</td>
                     <td className="n">{rpf(r.actual)}</td>
-                    {hasTarget ? <><td className="n">{rpf(r.target ?? 0)}</td><td className={`n font-semibold ${ach != null && ach >= tg ? "text-emerald-600" : "text-rose-600"}`}>{ach == null ? "—" : pct(ach, 0)}</td></> : <td className="n">{total ? pct((r.actual / total) * 100, 0) : "—"}</td>}
+                    {hasTarget ? <><td className="n">{rpf(r.target ?? 0)}</td><td className={`n font-semibold ${ach != null && ach >= tg ? "text-emerald-600" : "text-rose-600"}`}>{ach == null ? "—" : pct(ach, 0)}</td></> : <td className="n">{total && !r.excluded ? pct((r.actual / total) * 100, 0) : "—"}</td>}
                     <td className="n">{num(r.qty)}</td>
                   </tr>
                 );
@@ -304,10 +332,11 @@ function CardDetail({ id, title, rows, total, tg }: { id: string; title: string;
               {Math.abs(other) >= 1 && <tr><td className="text-slate-500">Lainnya</td><td className="n">{rpf(other)}</td>{hasTarget ? <><td /><td /></> : <td className="n">{total ? pct((other / total) * 100, 0) : "—"}</td>}<td /></tr>}
             </tbody>
             <tfoot>
-              <tr><td>Total</td><td className="n">{rpf(total)}</td>{hasTarget ? <><td /><td /></> : <td />}<td className="n">{num(rows.reduce((a, r) => a + r.qty, 0))}</td></tr>
+              <tr><td>Total</td><td className="n">{rpf(total)}</td>{hasTarget ? <><td /><td /></> : <td />}<td className="n">{num(counted.reduce((a, r) => a + r.qty, 0))}</td></tr>
             </tfoot>
           </table>
         </div>
+        {footnote && <p className="mt-3 text-xs text-slate-500">{footnote}</p>}
       </div>
     </>
   );
