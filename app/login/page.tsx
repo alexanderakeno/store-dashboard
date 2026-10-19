@@ -16,7 +16,8 @@ export default function LoginPage() {
   return (
     <div className="login">
       <div className="login-photo" aria-hidden>
-        <Image src={team} alt="" fill sizes="(min-width: 900px) calc(100vw - 440px), 100vw" className="login-photo-blur" priority placeholder="blur" />
+        {/* heavily blurred backdrop: a 256px image is enough */}
+        <Image src={team} alt="" fill sizes="256px" className="login-photo-blur" placeholder="blur" />
         <Image src={team} alt="" fill sizes="(min-width: 900px) calc(100vw - 440px), 100vw" className="login-photo-main" priority />
       </div>
       <div className="login-panel">
