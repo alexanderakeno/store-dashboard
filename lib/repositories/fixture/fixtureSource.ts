@@ -9,6 +9,8 @@ import type { AppRecord, AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, 
 import { parsePromo, parseTracker } from "@/lib/parsers/extras";
 import { generateExtras, generateMonth } from "./generate";
 import type { SohSnapshot } from "@/types/soh";
+import type { PriceList } from "@/types/pricelist";
+import type { PriceListInput } from "../types";
 
 /**
  * In-memory data source with synthetic data — local development only.
@@ -22,6 +24,7 @@ interface Store {
   audit: AuditEntry[];
   records: AppRecord[];
   soh: SohSnapshot | null;
+  priceList: PriceList | null;
 }
 
 const g = globalThis as unknown as { __fixtureStore?: Store };
@@ -44,7 +47,7 @@ function store(): Store {
     const end = m.month === cur ? addDays(today, -1) : monthEnd(m.month);
     for (let d = `${m.month}-01`; d <= end; d = addDays(d, 1)) traffic.push({ date: d, traffic: 60 + ((Number(d.slice(8)) * 37) % 40) });
   }
-  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], records: [], soh: null };
+  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], records: [], soh: null, priceList: null };
   return g.__fixtureStore;
 }
 
@@ -115,6 +118,27 @@ export class FixtureSource implements DataSource {
   }
   async saveSoh(snap: Omit<SohSnapshot, "updatedAt" | "updatedBy">, by: string) {
     store().soh = { ...snap, updatedAt: new Date().toISOString(), updatedBy: by };
+  }
+  async getPriceList() {
+    return store().priceList;
+  }
+  async savePriceList(input: PriceListInput, _by: string) {
+    const s = store();
+    const now = new Date().toISOString();
+    const prev = s.priceList ?? { dates: {}, items: [], qoala: [], source: {}, updatedAt: {} };
+    const next: PriceList = {
+      dates: { ...prev.dates },
+      items: [...prev.items.filter((x) => !input.kinds.includes(x.kind)), ...input.items],
+      qoala: input.qoala.length ? input.qoala : prev.qoala,
+      source: { ...prev.source },
+      updatedAt: { ...prev.updatedAt },
+    };
+    for (const k of input.kinds) {
+      next.dates[k] = input.date;
+      next.source[k] = input.source;
+      next.updatedAt[k] = now;
+    }
+    s.priceList = next;
   }
   async audit(entry: Omit<AuditEntry, "ts">) {
     store().audit.push({ ts: new Date().toISOString(), ...entry });
