@@ -142,6 +142,17 @@ const cards = [total, grpCard("apple", "Apple", grp.Apple), grpCard("android", "
         </div>
       </div>
 
+      <Panel title="Team Performance">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <Mini label="Total Staff" value={num(people.length)} />
+          <Mini label="Productive" value={num(productive.length)} />
+          <Mini label="Need Push" value={num(needPush.length)} />
+          <Mini label="Total Transaction" value={num(h.totals.invoices)} />
+          <Mini label="Avg UPT" value={dec(avgUpt, 1).replace(",", ".")} />
+          <Mini label="Avg ATV" value={rpf(h.totals.atv)} />
+        </div>
+      </Panel>
+
       <Panel title="Month Progress" desc="Progress target dan produktivitas transaksi." right={noTarget ? <span className="sd-badge red">Target belum ada</span> : <span className={`sd-badge ${(h.achievement.achievementPct ?? 0) >= tg ? "green" : "red"}`}>{(h.achievement.achievementPct ?? 0) >= tg ? "On Track" : "Behind"}</span>}>
         <div className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-4">
           <Kv label="Target" value={rpf(h.achievement.target)} />
@@ -206,16 +217,6 @@ const cards = [total, grpCard("apple", "Apple", grp.Apple), grpCard("android", "
         <p className="mt-3 text-xs text-slate-500"><span className="sm:hidden">Target, gap, estimasi & qty lengkap tampil di layar lebar. </span>Time gone = tanggal data terupdate ÷ jumlah hari bulan ini × 100. AirPods dihitung di ACC.</p>
       </Panel>
 
-      <Panel title="Team Performance">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <Mini label="Total Staff" value={num(people.length)} />
-          <Mini label="Productive" value={num(productive.length)} />
-          <Mini label="Need Push" value={num(needPush.length)} />
-          <Mini label="Total Transaction" value={num(h.totals.invoices)} />
-          <Mini label="Avg UPT" value={dec(avgUpt, 1).replace(",", ".")} />
-          <Mini label="Avg ATV" value={rpf(h.totals.atv)} />
-        </div>
-      </Panel>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title="Top Performance">
