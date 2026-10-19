@@ -9,5 +9,6 @@ const TTL_SEC = 60;
 /** Cached read of the stored price list. null = never imported; a failed read THROWS. */
 export async function getPriceList(): Promise<PriceList | null> {
   const { value } = await cached("pricelist:latest", TTL_SEC * 1000, () => shared(["pricelist", "latest"], ["pricelist"], TTL_SEC, () => dataSource().getPriceList()));
-  return value;
+  // an empty answer may be a cache from before the first import (another server instance) — re-read it
+  return value ?? (await dataSource().getPriceList());
 }
