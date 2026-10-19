@@ -84,8 +84,10 @@ const details: Partial<Record<string, Detail>> = {
   android: { itemLabel: "Brand", rows: androidBrands(mtd), footnote: "Device only, per brand." },
   vas: { itemLabel: "Provider", rows: VAS_PROVIDERS.map((k) => ({ label: k, actual: vs[k].value, target: null, qty: vs[k].qty })) },
 };
-const grpCard = (key: string, label: string, x: (typeof h.groups)[number]) => ({ key, label, actual: x.actual, target: x.target, achievementPct: x.target ? (x.actual * 100) / x.target : null, estimate: x.estimate, points: x.point, pointsMax: x.pointCap, variance: x.target - x.actual });
-const cards = [pc[0], grpCard("apple", "Apple", grp.Apple), grpCard("android", "Android", grp.Android), pc[2], pc[3]];
+const grpCard = (key: string, label: string, x: (typeof h.groups)[number]) => ({ key, label, actual: x.actual, target: x.target, achievementPct: x.target ? (x.actual * 100) / x.target : null, estimate: x.estimate, points: x.point, pointsMax: x.pointCap, variance: x.actual - x.target });
+const tt = h.achievement.target;
+const total = { ...pc[0], target: tt, achievementPct: tt ? (pc[0].actual * 100) / tt : null, variance: pc[0].actual - tt };
+const cards = [total, grpCard("apple", "Apple", grp.Apple), grpCard("android", "Android", grp.Android), pc[2], pc[3]];
   const staff = staffStats(mtd, p.snap.target, tg, { includeChannels: true });
   const people = staff.filter((s) => !s.isChannel);
   const needPush = people.filter((s) => s.status === "Need Push");
@@ -130,9 +132,9 @@ const cards = [pc[0], grpCard("apple", "Apple", grp.Apple), grpCard("android", "
               <p className="text-xs font-black tracking-[.08em] text-slate-500 uppercase">{c.label}</p>
               <p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{rpf(c.actual)}</p>
               <div className="mt-4 space-y-2 border-t border-slate-200 pt-3 text-[13px] dark:border-slate-700">
-                <div className="flex justify-between gap-2"><span className="text-slate-500">Target {rpf(c.target)}</span><b className={c.achievementPct != null && c.achievementPct < tg ? "text-rose-600" : "text-slate-900"}>{c.achievementPct == null ? "▲ 0%" : `${c.achievementPct >= tg ? "▲" : "▼"} ${pct(c.achievementPct, 0)}`}</b></div>
+                <div className="flex justify-between gap-2"><span className="text-slate-500">Target {rpf(c.target)}</span><b className={c.achievementPct != null && c.achievementPct < tg ? "text-rose-600" : "text-slate-900"}>{c.achievementPct == null ? "—" : `${c.achievementPct >= tg ? "▲" : "▼"} ${pct(c.achievementPct, 0)}`}</b></div>
                 <div className="flex justify-between gap-2"><span className="font-semibold whitespace-nowrap text-blue-600">Est. {rpf(c.estimate)}{c.target > 0 && <span className="ml-1">({pct((c.estimate / c.target) * 100, 0)})</span>}</span><b className="whitespace-nowrap text-slate-900">{dec(c.points, 1).replace(",0", "")}/{c.pointsMax} pts</b></div>
-                <div className="flex justify-between gap-2"><span className="text-slate-500">Variance</span><b className={c.variance <= 0 ? "text-emerald-600" : "text-rose-600"}>{rpf(c.variance)}</b></div>
+                <div className="flex justify-between gap-2"><span className="text-slate-500">Variance</span><b className={c.variance >= 0 ? "text-emerald-600" : "text-rose-600"}>{rpf(c.variance)}</b></div>
 {details[c.key] && <p className="pt-1 text-xs font-semibold text-blue-600">Klik untuk rincian ›</p>}
               </div>
             </article>
@@ -164,25 +166,25 @@ const cards = [pc[0], grpCard("apple", "Apple", grp.Apple), grpCard("android", "
         <div className="sd-table-wrap">
           <table className="sd-table">
             <thead>
-              <tr><th>Grup</th><th className="n">Actual</th><th className="n">Target</th><th style={{ minWidth: 160 }}>Ach</th><th className="n">Time Gone</th><th className="n">Gap</th><th className="n">Estimasi</th><th className="n">Qty</th><th className="n">Point</th></tr>
+              <tr><th>Grup</th><th className="n">Actual</th><th className="n max-sm:hidden">Target</th><th className="max-sm:text-right sm:min-w-40">Ach</th><th className="n max-sm:hidden">Time Gone</th><th className="n max-sm:hidden">Gap</th><th className="n max-sm:hidden">Estimasi</th><th className="n max-sm:hidden">Qty</th><th className="n"><span className="max-sm:hidden">Point</span><span className="sm:hidden">Pts</span></th></tr>
             </thead>
             <tbody>
               {h.groups.map((g) => (
                 <tr key={g.group}>
                   <td className="font-bold">{g.group}</td>
                   <td className="n">{rpf(g.actual)}</td>
-                  <td className="n">{rpf(g.target)}</td>
+                  <td className="n max-sm:hidden">{rpf(g.target)}</td>
                   <td>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1"><Progress value={g.achievementPct} tick={tg} color={achColor(g.achievementPct, tg)} label={`Pencapaian ${g.group}`} /></div>
-                      <b className="w-12 text-right text-xs">{pct(g.achievementPct, 0)}</b>
+                    <div className="flex items-center justify-end gap-2 sm:justify-start">
+                      <div className="flex-1 max-sm:hidden"><Progress value={g.achievementPct} tick={tg} color={achColor(g.achievementPct, tg)} label={`Pencapaian ${g.group}`} /></div>
+                      <b className="text-right text-xs sm:w-12">{pct(g.achievementPct, 0)}</b>
                     </div>
                   </td>
-                  <td className="n">{pct(tg)}</td>
-                  <td className={`n font-semibold ${g.gap >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{rpf(g.gap)}</td>
-                  <td className="n">{rpf(g.estimate)} <span className="text-xs text-slate-500">{pct(g.estimatePct, 0)}</span></td>
-                  <td className="n">{num(g.qty)}</td>
-                  <td className="n">{dec(g.point, 1)} <span className="text-xs text-slate-500">/ {g.pointCap}</span></td>
+                  <td className="n max-sm:hidden">{pct(tg)}</td>
+                  <td className={`n font-semibold max-sm:hidden ${g.gap >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{rpf(g.gap)}</td>
+                  <td className="n max-sm:hidden">{rpf(g.estimate)} <span className="text-xs text-slate-500">{pct(g.estimatePct, 0)}</span></td>
+                  <td className="n max-sm:hidden">{num(g.qty)}</td>
+                  <td className="n">{dec(g.point, 1)} <span className="text-xs text-slate-500 max-sm:hidden">/ {g.pointCap}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -190,18 +192,18 @@ const cards = [pc[0], grpCard("apple", "Apple", grp.Apple), grpCard("android", "
               <tr>
                 <td>Total</td>
                 <td className="n">{rpf(h.totals.sales)}</td>
-                <td className="n">{rpf(h.achievement.target)}</td>
-                <td>{pct(h.achievement.achievementPct, 0)}</td>
-                <td className="n">{pct(tg)}</td>
-                <td className="n">{rpf(h.achievement.gap)}</td>
-                <td className="n">{rpf(h.estimate)}</td>
-                <td className="n">{num(h.totals.qty)}</td>
-                <td className="n">{dec(h.points.total, 1)} / {h.points.max}</td>
+                <td className="n max-sm:hidden">{rpf(h.achievement.target)}</td>
+                <td className="max-sm:text-right">{pct(h.achievement.achievementPct, 0)}</td>
+                <td className="n max-sm:hidden">{pct(tg)}</td>
+                <td className="n max-sm:hidden">{rpf(h.achievement.gap)}</td>
+                <td className="n max-sm:hidden">{rpf(h.estimate)}</td>
+                <td className="n max-sm:hidden">{num(h.totals.qty)}</td>
+                <td className="n">{dec(h.points.total, 1)}<span className="max-sm:hidden"> / {h.points.max}</span></td>
               </tr>
             </tfoot>
           </table>
         </div>
-        <p className="mt-3 text-xs text-slate-500">Time gone = tanggal data terupdate ÷ jumlah hari bulan ini × 100. AirPods dihitung di ACC.</p>
+        <p className="mt-3 text-xs text-slate-500"><span className="sm:hidden">Target, gap, estimasi & qty lengkap tampil di layar lebar. </span>Time gone = tanggal data terupdate ÷ jumlah hari bulan ini × 100. AirPods dihitung di ACC.</p>
       </Panel>
 
       <Panel title="Team Performance">
@@ -257,20 +259,20 @@ const cards = [pc[0], grpCard("apple", "Apple", grp.Apple), grpCard("android", "
         <div className="sd-table-wrap">
           <table className="sd-table">
             <thead>
-              <tr><th>Staff</th><th className="n">Sales</th><th className="n">Trx</th><th className="n">Device</th><th className="n">Accessories</th><th className="n">VAS</th><th className="n">UPT</th><th className="n">ATV</th><th>Status</th></tr>
+              <tr><th>Staff</th><th className="n">Sales</th><th className="n max-sm:hidden">Trx</th><th className="n max-sm:hidden">Device</th><th className="n max-sm:hidden">Accessories</th><th className="n max-sm:hidden">VAS</th><th className="n max-sm:hidden">UPT</th><th className="n max-sm:hidden">ATV</th><th>Status</th></tr>
             </thead>
             <tbody>
               {staff.map((s) => (
                 <tr key={s.key}>
-                  <td className="font-bold text-slate-950">{s.name}{s.isChannel && <span className="ml-2 text-xs font-semibold text-slate-400">online</span>}</td>
+                  <td className="font-bold text-slate-950">{s.name}{s.isChannel && <span className="text-xs font-semibold text-slate-400 max-sm:block sm:ml-2">online</span>}</td>
                   <td className="n">{rpf(s.totals.sales)}</td>
-                  <td className="n">{num(s.totals.invoices)}</td>
-                  <td className="n">{rpf(s.device)}</td>
-                  <td className="n">{rpf(s.acc)}</td>
-                  <td className="n">{rpf(s.vas)}</td>
-                  <td className="n">{dec(s.totals.upt, 1).replace(",", ".")}</td>
-                  <td className="n">{rpf(s.totals.atv)}</td>
-                  <td><span className={`sd-badge ${s.status === "Productive" ? "green" : "red"}`}>{s.status}</span></td>
+                  <td className="n max-sm:hidden">{num(s.totals.invoices)}</td>
+                  <td className="n max-sm:hidden">{rpf(s.device)}</td>
+                  <td className="n max-sm:hidden">{rpf(s.acc)}</td>
+                  <td className="n max-sm:hidden">{rpf(s.vas)}</td>
+                  <td className="n max-sm:hidden">{dec(s.totals.upt, 1).replace(",", ".")}</td>
+                  <td className="n max-sm:hidden">{rpf(s.totals.atv)}</td>
+                  <td><span className={`sd-badge ${s.status === "Productive" ? "green" : "red"}`}><span className="max-sm:hidden">{s.status}</span><span className="sm:hidden">{s.status === "Productive" ? "OK" : "Push"}</span></span></td>
                 </tr>
               ))}
             </tbody>
@@ -350,7 +352,7 @@ function Kv({ label, value }: { label: React.ReactNode; value: React.ReactNode }
   return (
     <div className="min-w-0">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-black text-slate-950">{value}</p>
+      <p className="mt-1 text-[15px] font-black text-slate-950 sm:text-lg">{value}</p>
     </div>
   );
 }
