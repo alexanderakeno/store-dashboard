@@ -1,4 +1,5 @@
 import "server-only";
+import { gunzipSync } from "node:zlib";
 import { NextResponse } from "next/server";
 import { AuthError } from "@/lib/auth/session";
 
@@ -15,7 +16,27 @@ export function handle(fn: () => Promise<Response>): Promise<Response> {
 
 export class BadRequest extends Error {}
 
+/** Largest JSON accepted after un-gzipping an upload (the gzipped body itself is capped by Vercel at ~4.5 MB). */
+const MAX_JSON_BYTES = 40_000_000;
+
+/**
+ * Parses a JSON request body. Uploads may arrive gzipped (`X-Body-Encoding: gzip`, sent by
+ * `postJson` in the browser) — 5–10× smaller, so imports from a phone finish faster.
+ */
 export async function jsonBody<T = Record<string, unknown>>(req: Request): Promise<T> {
+  if (req.headers.get("x-body-encoding") === "gzip") {
+    let text: string;
+    try {
+      text = gunzipSync(Buffer.from(await req.arrayBuffer()), { maxOutputLength: MAX_JSON_BYTES }).toString("utf8");
+    } catch {
+      throw new BadRequest("Upload rusak atau terlalu besar — coba lagi");
+    }
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new BadRequest("Body harus JSON");
+    }
+  }
   try {
     return (await req.json()) as T;
   } catch {
