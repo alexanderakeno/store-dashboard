@@ -65,3 +65,21 @@ test("summarizeAccess: counts, last login/seen, inactive accounts listed last", 
   assert.equal(rows[2].lastSeen, null); // Flora never opened the dashboard
   assert.equal(rows[1].failed, 1); // unknown NIK with failed logins still shows up
 });
+
+test("isAppPath: only menu pages and their sub-pages", async () => {
+  const { isAppPath } = await import("@/lib/domain/access");
+  const hrefs = ["/home", "/focus/lob", "/checklist/spv"];
+  assert.equal(isAppPath("/home", hrefs), true);
+  assert.equal(isAppPath("/checklist/spv", hrefs), true);
+  assert.equal(isAppPath("/homepage", hrefs), false);
+  assert.equal(isAppPath("/random/junk", hrefs), false);
+});
+
+test("groupByDay splits newest-first entries by WIB day", async () => {
+  const { groupByDay } = await import("@/lib/domain/access");
+  const g = groupByDay(
+    [e("2026-10-20T18:00:00.000Z", "1", "view"), e("2026-10-20T16:00:00.000Z", "1", "view"), e("2026-10-20T01:00:00.000Z", "1", "login")],
+    TZ,
+  );
+  assert.deepEqual(g.map((x) => [x.date, x.items.length]), [["2026-10-21", 1], ["2026-10-20", 2]]);
+});

@@ -57,7 +57,13 @@ export class SheetsSource implements DataSource {
     if (!this.ensured) {
       this.ensured = (async () => {
         const meta = await getSpreadsheetMeta(this.master);
-        for (const t of Object.values(MASTER_TABS)) if (!meta.sheets.includes(t.name)) await addTab(this.master, t.name, [...t.header]);
+        for (const t of Object.values(MASTER_TABS)) {
+          if (meta.sheets.includes(t.name)) continue;
+          // another server instance may create the same tab at the same moment — that's fine
+          await addTab(this.master, t.name, [...t.header]).catch((e: unknown) => {
+            if (!/already exists/i.test((e as Error).message)) throw e;
+          });
+        }
       })().catch((e) => {
         this.ensured = null;
         throw e;
@@ -288,30 +294,41 @@ export class SheetsSource implements DataSource {
 
   async logAccess(entries: AccessEntry[]): Promise<void> {
     if (!entries.length) return;
-    await this.ensureTabs();
-    await appendRows(this.master, MASTER_TABS.access.name, entries.map((e) => [e.ts, e.nik, e.name, e.role, e.event, e.path, e.ip, e.location, e.device]));
+    const t = MASTER_TABS.access.name;
+    const rows = entries.map((e) => [e.ts, e.nik, e.name, e.role, e.event, e.path, e.ip, e.location, e.device]);
+    try {
+      await appendRows(this.master, t, rows);
+    } catch (e) {
+      // 400 = tab missing (first entry ever, or deleted by hand): create it, then retry once
+      if (!(e instanceof SheetsError) || e.status !== 400) throw e;
+      this.ensured = null;
+      await this.ensureTabs();
+      await appendRows(this.master, t, rows);
+    }
   }
 
+  /**
+   * Reads only the newest `limit` rows: column A first (cheap) to find the last row, then that
+   * block. The log only grows, so reading the whole tab would get slower every month.
+   */
   async listAccess(limit: number): Promise<AccessEntry[]> {
-    const out: AccessEntry[] = [];
-    for (const r of await this.rows("access")) {
-      const event = normalizeText(r.event) as AccessEvent;
-      const ts = normalizeText(r.ts);
-      if (!ACCESS_EVENTS.includes(event) || !ts) continue;
-      const role = normalizeText(r.role);
-      out.push({
-        ts,
-        nik: normalizeText(r.nik),
-        name: normalizeText(r.name),
-        role: role === "admin" || role === "viewer" ? role : "",
-        event,
-        path: normalizeText(r.path),
-        ip: normalizeText(r.ip),
-        location: normalizeText(r.location),
-        device: normalizeText(r.device),
-      });
+    const t = MASTER_TABS.access.name;
+    let last: number;
+    try {
+      last = (await readTab(this.master, t, "A:A")).length;
+    } catch (e) {
+      if (e instanceof SheetsError && e.status === 400) return []; // tab not created yet = nothing logged
+      throw e;
     }
-    return out.sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, limit);
+    if (last < 2) return [];
+    const first = Math.max(2, last - limit + 1);
+    const out: AccessEntry[] = [];
+    for (const r of await readTab(this.master, t, `A${first}:I${last}`)) {
+      const [ts, nik, name, role, event, path, ip, location, device] = r.map((c) => normalizeText(c));
+      if (!ts || !ACCESS_EVENTS.includes(event as AccessEvent)) continue;
+      out.push({ ts, nik, name, role: role === "admin" || role === "viewer" ? role : "", event: event as AccessEvent, path, ip, location, device });
+    }
+    return out.sort((a, b) => b.ts.localeCompare(a.ts));
   }
 }
 
