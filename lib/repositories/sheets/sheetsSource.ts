@@ -11,6 +11,8 @@ import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList } from "@/types/pricelist";
 import type { PriceListInput } from "../types";
+import type { AccessEntry, AccessEvent } from "@/types/access";
+import { ACCESS_EVENTS } from "@/types/access";
 
 /** Optional tabs of the monthly sheet. */
 export const EXTRA_TABS = { tracker: "CX&GR Tracker", promo: "Rekap Promo", traffic: "Traffic" } as const;
@@ -23,6 +25,7 @@ export const MASTER_TABS = {
   users: { name: "APP_Users", header: ["nik", "name", "role", "passwordHash", "active"] },
   traffic: { name: "APP_Traffic", header: ["date", "traffic", "updatedAt", "updatedBy"] },
   audit: { name: "APP_Audit", header: ["ts", "nik", "action", "detail"] },
+  access: { name: "APP_Access", header: ["ts", "nik", "name", "role", "event", "path", "ip", "location", "device"] },
   records: { name: "APP_Records", header: ["kind", "date", "key", "data", "updatedAt", "updatedBy"] },
   soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy"] },
   priceList: { name: "APP_PriceList", header: ["kind", "brand", "series", "name", "normal", "promo", "status", "extra", "date", "source", "updatedAt", "updatedBy"] },
@@ -281,6 +284,34 @@ export class SheetsSource implements DataSource {
   async audit(entry: Omit<AuditEntry, "ts">): Promise<void> {
     await this.ensureTabs();
     await appendRows(this.master, MASTER_TABS.audit.name, [[new Date().toISOString(), entry.nik, entry.action, entry.detail]]);
+  }
+
+  async logAccess(entries: AccessEntry[]): Promise<void> {
+    if (!entries.length) return;
+    await this.ensureTabs();
+    await appendRows(this.master, MASTER_TABS.access.name, entries.map((e) => [e.ts, e.nik, e.name, e.role, e.event, e.path, e.ip, e.location, e.device]));
+  }
+
+  async listAccess(limit: number): Promise<AccessEntry[]> {
+    const out: AccessEntry[] = [];
+    for (const r of await this.rows("access")) {
+      const event = normalizeText(r.event) as AccessEvent;
+      const ts = normalizeText(r.ts);
+      if (!ACCESS_EVENTS.includes(event) || !ts) continue;
+      const role = normalizeText(r.role);
+      out.push({
+        ts,
+        nik: normalizeText(r.nik),
+        name: normalizeText(r.name),
+        role: role === "admin" || role === "viewer" ? role : "",
+        event,
+        path: normalizeText(r.path),
+        ip: normalizeText(r.ip),
+        location: normalizeText(r.location),
+        device: normalizeText(r.device),
+      });
+    }
+    return out.sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, limit);
   }
 }
 
