@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, Moon, RefreshCw, Sun, Upload } from "lucide-react";
 import { NAV, isGroup, titleFor, type NavLink } from "./nav";
 import { NavIcon } from "./Icon";
@@ -21,6 +21,20 @@ function useHref() {
   return (href: string) => (m ? `${href}?m=${m}` : href);
 }
 
+/** Tells the server which page was opened (access log). Fire-and-forget; never blocks navigation. */
+function useTrackView(path: string) {
+  const last = useRef<string | null>(null);
+  useEffect(() => {
+    if (!path || last.current === path) return;
+    last.current = path;
+    const body = JSON.stringify({ path });
+    try {
+      if (navigator.sendBeacon?.("/api/access-log", new Blob([body], { type: "application/json" }))) return;
+    } catch {}
+    fetch("/api/access-log", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+  }, [path]);
+}
+
 const isActive = (path: string, href: string) => path === href || path.startsWith(`${href}/`);
 
 export function Shell({ children, storeCode, storeName, userName, isAdmin, fixture }: ShellProps) {
@@ -28,6 +42,7 @@ export function Shell({ children, storeCode, storeName, userName, isAdmin, fixtu
   const [open, setOpen] = useState(false); // mobile drawer
   const [collapsed, setCollapsed] = useState(false); // desktop
   useEffect(() => setOpen(false), [path]);
+  useTrackView(path);
   useEffect(() => {
     try {
       setCollapsed(localStorage.getItem("sd-collapsed") === "1");

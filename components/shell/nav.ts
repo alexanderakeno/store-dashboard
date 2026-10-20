@@ -80,6 +80,7 @@ export const NAV: NavEntry[] = [
     color: "text-slate-400",
     items: [
       { href: "/cutoff", label: "Cut Off & Rekonsiliasi", icon: "shield", color: "text-emerald-300" },
+      { href: "/access-log", label: "Log Akses", icon: "users", color: "text-sky-300", adminOnly: true },
       { href: "/settings", label: "Settings", icon: "settings", color: "text-slate-400" },
     ],
   },

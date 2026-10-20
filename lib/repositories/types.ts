@@ -4,6 +4,7 @@ import type { ISODate, MonthKey, StoreTarget, TrafficEntry } from "@/types/domai
 import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList, QoalaTier } from "@/types/pricelist";
+import type { AccessEntry } from "@/types/access";
 
 /** A monthly spreadsheet registered in the app (master sheet `APP_Months`). */
 export interface MonthEntry {
@@ -84,6 +85,11 @@ export interface DataSource {
   saveUser(user: AppUser): Promise<void>;
 
   audit(entry: Omit<AuditEntry, "ts">): Promise<void>;
+
+  /** Appends login / logout / page-view rows to the access log. */
+  logAccess(entries: AccessEntry[]): Promise<void>;
+  /** The most recent access-log rows (at most `limit`), newest first. */
+  listAccess(limit: number): Promise<AccessEntry[]>;
 
   /** Records of one kind whose date starts with `prefix` (e.g. a month `2026-10`). */
   listRecords(kind: RecordKind, prefix: string): Promise<AppRecord[]>;

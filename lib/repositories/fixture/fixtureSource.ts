@@ -11,6 +11,7 @@ import { generateExtras, generateMonth } from "./generate";
 import type { SohSnapshot } from "@/types/soh";
 import type { PriceList } from "@/types/pricelist";
 import type { PriceListInput } from "../types";
+import type { AccessEntry } from "@/types/access";
 
 /**
  * In-memory data source with synthetic data — local development only.
@@ -22,6 +23,7 @@ interface Store {
   traffic: TrafficEntry[];
   users: AppUser[];
   audit: AuditEntry[];
+  access: AccessEntry[];
   records: AppRecord[];
   soh: SohSnapshot | null;
   priceList: PriceList | null;
@@ -47,7 +49,7 @@ function store(): Store {
     const end = m.month === cur ? addDays(today, -1) : monthEnd(m.month);
     for (let d = `${m.month}-01`; d <= end; d = addDays(d, 1)) traffic.push({ date: d, traffic: 60 + ((Number(d.slice(8)) * 37) % 40) });
   }
-  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], records: [], soh: null, priceList: null };
+  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], access: [], records: [], soh: null, priceList: null };
   return g.__fixtureStore;
 }
 
@@ -142,5 +144,11 @@ export class FixtureSource implements DataSource {
   }
   async audit(entry: Omit<AuditEntry, "ts">) {
     store().audit.push({ ts: new Date().toISOString(), ...entry });
+  }
+  async logAccess(entries: AccessEntry[]) {
+    store().access.push(...entries);
+  }
+  async listAccess(limit: number) {
+    return [...store().access].sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, limit);
   }
 }
