@@ -48,8 +48,86 @@ export function matchStock(name: string, soh: SohItem[]): PriceStock[] {
   return out.sort((a, b) => b.qty - a.qty || a.color.localeCompare(b.color));
 }
 
+/**
+ * Apple naming differs between the price list and SOH ("MBA 13.6 /M5/8C GPU/16GB/512GB" vs
+ * "MBA 13.6 STL/M5/8C GPU/16GB/512GB-IND", "IPAD AIR 11 WI-FI Celluler 128GB" vs "IPAD AIR 11 WF CL 128GB SPG M4"),
+ * so Apple rows match on tokens instead of a prefix.
+ */
+export function appleTokens(s: string): string[] {
+  let u = ` ${s.toUpperCase()} `
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/-IND\b/g, " ")
+    .replace(/(\d+)-INCH\b/g, "$1")
+    .replace(/\bINCH\b/g, " ")
+    .replace(/\bWI-?FI\b|\bWF\b/g, " WIFI ")
+    .replace(/\bCELLUL[AE]R|\bCL\b/g, " CELL ")
+    .replace(/\bULTRA(\d)\b/g, "ULTRA $1")
+    .replace(/(\d+C)(GPU|CPU)\b/g, "$1 $2");
+  if (/\bWATCH\b/.test(u)) u = u.replace(/\bS(\d{1,2})\b/g, "$1"); // "WATCH S11 42" = "WATCH 11 42"
+  return u
+    .split(/[\s/+,]+/)
+    .map((t) => t.replace(/^(\d+)G$/, "$1GB").replace(/^(\d+)T$/, "$1TB"))
+    .filter((t) => t && t !== "-" && t !== "&");
+}
+
+/** Words that tell models apart: a row without "PRO" must not take an SOH article with "PRO". */
+const APPLE_DISCRIMINATORS = ["AIR", "PRO", "MAX", "MINI", "PLUS", "ULTRA", "SE", "CELL", "NANO", "STUDIO"];
+const isChip = (t: string) => /^M\d$/.test(t);
+
+/** SOH articles for one Apple price-list row; `series` ("iPad Air 11 M4") supplies the chip when the name has none. */
+export function matchAppleStock(name: string, series: string, soh: SohItem[]): PriceStock[] {
+  const want = new Set(appleTokens(name));
+  const extra = new Set(appleTokens(series));
+  const wantChips = new Set([...want, ...extra].filter(isChip));
+  const out: PriceStock[] = [];
+  for (const s of soh) {
+    const tokens = appleTokens(s.description);
+    const have = new Set(tokens);
+    if (![...want].every((t) => have.has(t))) continue;
+    if (APPLE_DISCRIMINATORS.some((d) => have.has(d) !== want.has(d))) continue;
+    const haveChips = tokens.filter(isChip);
+    if (haveChips.length && wantChips.size && !haveChips.every((c) => wantChips.has(c))) continue;
+    const color = tokens.filter((t) => !want.has(t) && !extra.has(t) && !isChip(t)).join(" ");
+    out.push({ article: s.article, color: color || "—", qty: s.qty });
+  }
+  return out.sort((a, b) => b.qty - a.qty || a.color.localeCompare(b.color));
+}
+
+/** Apple: one model per Product label of the PDF; the variant is the part of the name not shared by the whole group. */
+function appleModels(items: PriceItem[], soh: SohItem[]): PriceModel[] {
+  const map = new Map<string, PriceModel>();
+  const rows = new Map<string, Array<{ it: PriceItem; i: number }>>();
+  items.forEach((it, i) => {
+    if (it.kind !== "apple") return;
+    const key = `${it.brand}|${it.series}`;
+    rows.set(key, [...(rows.get(key) ?? []), { it, i }]);
+  });
+  for (const [key, list] of rows) {
+    // shared prefix of all names, cut back to a word or "/" boundary ("MBA 15.3 /M5/10C GPU/" → "16GB/512GB")
+    const names = list.map(({ it }) => it.name);
+    let p = 0;
+    while (list.length > 1 && names.every((n) => n.length > p && n[p].toUpperCase() === names[0][p].toUpperCase())) p++;
+    const edge = (n: string) => n.length === p || " /".includes(n[p]) || " /".includes(n[p - 1]);
+    while (p > 0 && !names.every(edge)) p--;
+    const { brand, series } = list[0].it;
+    const m: PriceModel = { key, brand, series: brand, model: series, variants: [] };
+    list.forEach(({ it, i }) => {
+      let variant = list.length > 1 ? it.name.slice(p).replace(/^[\s/+-]+/, "").trim() : "";
+      // identical descriptions (Watch Ultra 3 + Milanese Loop) differ only by the bracket note
+      if (!variant && list.length > 1) variant = it.note ?? "";
+      if (/^\d{2}$/.test(variant) && brand === "Apple Watch") variant += "mm";
+      m.variants.push({ ...it, id: String(i), variant: variant || "Standar", stock: matchAppleStock(it.name, it.series, soh) });
+    });
+    // same variant label twice (e.g. two straps of one watch) → tell them apart by the bracket note
+    for (const v of m.variants) if (m.variants.filter((x) => x.variant === v.variant).length > 1 && v.note) v.variant = `${v.variant} · ${v.note}`;
+    map.set(key, m);
+  }
+  return [...map.values()];
+}
+
 /** Price-list rows of one kind grouped per model (brand → series order kept as in the PDF). */
 export function priceModels(items: PriceItem[], kind: PriceKind, soh: SohItem[]): PriceModel[] {
+  if (kind === "apple" && items.some((it) => it.kind === "apple" && it.credit != null)) return appleModels(items, soh);
   const map = new Map<string, PriceModel>();
   items.forEach((it, i) => {
     if (it.kind !== kind) return;
@@ -75,6 +153,7 @@ export function qoalaFor(price: number, tiers: QoalaTier[]): QoalaTier | null {
 export function displayName(s: string): string {
   return s
     .split(" ")
-    .map((w) => (/\d/.test(w) || w.length <= 2 ? w : w.charAt(0) + w.slice(1).toLowerCase()))
+    // mixed-case words ("iPhone", "MacBook") are already display-ready
+    .map((w) => (/\d/.test(w) || w.length <= 2 || /[a-z]/.test(w) ? w : w.charAt(0) + w.slice(1).toLowerCase()))
     .join(" ");
 }
