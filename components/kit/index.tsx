@@ -29,9 +29,9 @@ export function SectionHead({ title, desc, right }: { title: ReactNode; desc?: R
 }
 
 /** White rounded panel with optional header. */
-export function Panel({ title, desc, right, children, className = "", pad = true }: { title?: ReactNode; desc?: ReactNode; right?: ReactNode; children?: ReactNode; className?: string; pad?: boolean }) {
+export function Panel({ id, title, desc, right, children, className = "", pad = true }: { id?: string; title?: ReactNode; desc?: ReactNode; right?: ReactNode; children?: ReactNode; className?: string; pad?: boolean }) {
   return (
-    <section className={`sd-panel ${pad ? "p-5 sm:p-6" : ""} ${className}`}>
+    <section id={id} className={`sd-panel ${id ? "sd-anchor" : ""} ${pad ? "p-5 sm:p-6" : ""} ${className}`}>
       {(title || right) && (
         <div className={`flex flex-wrap items-start justify-between gap-3 ${children ? "mb-4" : ""}`}>
           <div className="min-w-0">
