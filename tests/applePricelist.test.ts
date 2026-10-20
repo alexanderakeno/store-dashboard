@@ -73,7 +73,7 @@ test("apple price list: page 2 — cash ≠ cicilan, Qoala fees follow their col
   assert.ok(pro512, "Pro512GB is split");
   assert.equal(pro512.credit, 27999000);
   assert.equal(pro512.promo, 27499000);
-  assert.equal(r.items.find((x) => x.name === "IPHONE 17E 256GB")?.note, "Black, White, Soft Pink");
+  assert.equal(r.items.find((x) => x.name === "iPhone 17e 256GB")?.note, "Black, White, Soft Pink");
   assert.deepEqual(r.qoala, [
     { tier: "KLABRONZE", range: "Rp 0 - Rp 3.000.000", fees: { "12": 200000, "18": 250000, "24": 280000 } },
     { tier: "KLAVVIP", range: "Rp 50.000.001 - Rp 65.000.000", fees: { "12": 3620000, "24": 5065000 } },
@@ -128,4 +128,19 @@ test("apple models: one per Product label, variant = part not shared by the grou
   assert.deepEqual(by("iPad Air 11 M4").variants.map((v) => v.variant), ["128GB", "Celluler 128GB"]);
   assert.equal(by("iPhone 17e").variants[0].variant, "Standar");
   assert.equal(by("iPhone 17 Pro").brand, "iPhone");
+});
+
+test("stored data: rows printed twice show once, IPHONE 17E reads iPhone 17e", async () => {
+  const { iphoneName } = await import("@/lib/parsers/applePricelist");
+  assert.equal(iphoneName("IPHONE 17E 256GB"), "iPhone 17e 256GB");
+  assert.equal(iphoneName("iPhone 17 Pro 256GB"), "iPhone 17 Pro 256GB");
+  assert.equal(iphoneName("IPAD AIR 11 WI-FI 128GB"), "IPAD AIR 11 WI-FI 128GB");
+  const row = { kind: "android" as const, brand: "Samsung", series: "GALAXY WATCH SERIES", name: "GALAXY WATCH 8 CLASSIC 46MM", normal: 6999000, promo: 5999000, status: "EOL" };
+  const other = { ...row, name: "GALAXY TAB S10 LITE 6/128G", series: "GALAXY TAB S SERIES", normal: 7999000, promo: 7999000, status: "ACTIVE" };
+  const models = priceModels([row, { ...row }, other, { ...other, normal: 6499000, promo: 6499000 }], "android", []);
+  assert.equal(models.find((m) => m.model === "GALAXY WATCH 8 CLASSIC")?.variants.length, 1);
+  // same name, different price: both kept (the PDF does not say which is which)
+  assert.equal(models.find((m) => m.model === "GALAXY TAB S10 LITE")?.variants.length, 2);
+  const apple = priceModels([{ kind: "apple", brand: "iPhone", series: "iPhone 17e", name: "IPHONE 17E 256GB", normal: 1, promo: 1, credit: 1, status: "ACTIVE" }], "apple", []);
+  assert.equal(apple[0].variants[0].name, "iPhone 17e 256GB");
 });
