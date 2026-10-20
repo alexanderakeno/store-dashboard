@@ -3,13 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, FileText, Loader2, Upload, X } from "lucide-react";
 import { parsePriceListPdf, type PriceListParse } from "@/lib/parsers/pricelist";
+import { isApplePriceListPdf } from "@/lib/parsers/applePricelist";
 import { loadPdfJs, readPdfTexts } from "./pdfText";
 import { postJson } from "./postJson";
 
 const dmy = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
-const kindLabel = (k: string) => (k === "apple" ? "Apple" : "Android");
 
-export function PriceListImportForm({ current }: { current: { apple: string | null; android: string | null } }) {
+/** Android price list (1 PDF). Apple has its own 2-PDF form (ApplePriceListImportForm). */
+export function PriceListImportForm({ current }: { current: string | null }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -29,8 +30,13 @@ export function PriceListImportForm({ current }: { current: { apple: string | nu
     if (!f) return setState("idle");
     setState("reading");
     try {
-      const r = parsePriceListPdf(await readPdfTexts(f));
-      if (!r.items.length) throw new Error(r.warnings[0] ?? "Tidak ada harga terbaca di PDF ini.");
+      const texts = await readPdfTexts(f);
+      if (isApplePriceListPdf(texts)) throw new Error("Ini PDF price list Apple — upload di bagian Import Price List Apple (2 PDF).");
+      const all = parsePriceListPdf(texts);
+      // Apple prices come from the Apple PDFs only — rows recognised as Apple here are left out
+      const apple = all.items.filter((x) => x.kind !== "android").length;
+      const r: PriceListParse = { ...all, items: all.items.filter((x) => x.kind === "android"), kinds: ["android"], warnings: apple ? [...all.warnings, `${apple} baris Apple dilewati (price list Apple diimport terpisah).`] : all.warnings };
+      if (!r.items.length) throw new Error(all.warnings[0] ?? "Tidak ada harga Android terbaca di PDF ini.");
       setParsed(r);
       setState("idle");
     } catch (e) {
@@ -48,7 +54,7 @@ export function PriceListImportForm({ current }: { current: { apple: string | nu
     setState("busy");
     setMsg("");
     try {
-      const r = await postJson("/api/pricelist", { date: parsed.date, source: [parsed.title, file?.name].filter(Boolean).join(" · "), items: parsed.items, qoala: parsed.qoala });
+      const r = await postJson("/api/pricelist", { kind: "android", date: parsed.date, source: [parsed.title, file?.name].filter(Boolean).join(" · "), items: parsed.items, qoala: parsed.qoala });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.error ?? `Import gagal (HTTP ${r.status})`);
       setMsg(j.message ?? "Selesai.");
@@ -71,8 +77,8 @@ export function PriceListImportForm({ current }: { current: { apple: string | nu
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-500">
-        PDF <b className="text-slate-700 dark:text-slate-200">Price List</b> (kolom Normal Price · Promotion Price · Product Remarks). Apple dan Android disimpan terpisah — upload Android tidak menghapus Apple.
-        {" "}Saat ini: Android {current.android ? dmy(current.android) : "belum ada"} · Apple {current.apple ? dmy(current.apple) : "belum ada"} · tab <b>APP_PriceList</b> di master sheet
+        PDF <b className="text-slate-700 dark:text-slate-200">Price List Android</b> (kolom Normal Price · Promotion Price · Product Remarks). Menimpa price list Android saja — Apple tidak berubah.
+        {" "}Saat ini: Android {current ? dmy(current) : "belum ada"} · tab <b>APP_PriceList</b> di master sheet
       </p>
 
       <div className={`relative rounded-2xl border-2 border-dashed p-4 transition ${bad ? "border-rose-400 bg-rose-50/60 dark:bg-rose-950/20" : ok ? "border-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-slate-300 dark:border-slate-700"}`}>
@@ -82,13 +88,13 @@ export function PriceListImportForm({ current }: { current: { apple: string | nu
             {state === "reading" ? <Loader2 className="size-6 animate-spin" /> : <FileText className="size-6" />}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-bold text-slate-950">Price List (PDF)</span>
+            <span className="block font-bold text-slate-950">Price List Android (PDF)</span>
             {!file && <span className="block text-sm text-slate-500">Ketuk untuk pilih file .pdf</span>}
             {file && (
               <span className={`block truncate text-sm ${bad ? "text-rose-700 dark:text-rose-300" : "text-emerald-700 dark:text-emerald-400"}`}>
                 {file.name}
                 {state === "reading" ? " · membaca…" : ""}
-                {parsed ? ` · ${parsed.kinds.map(kindLabel).join(" & ")} · ${parsed.items.length} tipe${parsed.date ? ` · ${dmy(parsed.date)}` : ""}` : ""}
+                {parsed ? ` · ${parsed.items.length} tipe${parsed.date ? ` · ${dmy(parsed.date)}` : ""}` : ""}
               </span>
             )}
             {bad ? <span className="block text-xs font-semibold text-rose-700 dark:text-rose-300">{msg}</span> : <span className="block text-xs text-slate-400">Tipe · harga normal · harga promo · status (ACTIVE/EOL) · tabel Qoala</span>}
@@ -117,12 +123,12 @@ export function PriceListImportForm({ current }: { current: { apple: string | nu
 
       <button type="button" className="sd-btn primary w-full justify-center !py-3 !text-base" onClick={run} disabled={!parsed || busy}>
         {busy ? <Loader2 className="size-5 animate-spin" /> : <Upload className="size-5" />}
-        {busy ? "Menyimpan price list…" : "Simpan Price List"}
+        {busy ? "Menyimpan price list Android…" : "Simpan Price List Android"}
       </button>
 
       {state === "ok" && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200" role="status">
-          <p className="flex items-center gap-2 font-bold"><CheckCircle2 className="size-4" /> Price list tersimpan</p>
+          <p className="flex items-center gap-2 font-bold"><CheckCircle2 className="size-4" /> Price list Android tersimpan</p>
           <p>{msg}</p>
         </div>
       )}
