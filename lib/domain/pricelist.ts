@@ -75,14 +75,24 @@ const APPLE_DISCRIMINATORS = ["AIR", "PRO", "MAX", "MINI", "PLUS", "ULTRA", "SE"
 const isChip = (t: string) => /^M\d$/.test(t);
 
 /** SOH articles for one Apple price-list row; `series` ("iPad Air 11 M4") supplies the chip when the name has none. */
-export function matchAppleStock(name: string, series: string, soh: SohItem[]): PriceStock[] {
+export interface SohTokens {
+  item: SohItem;
+  tokens: string[];
+  set: Set<string>;
+}
+/** Tokenises SOH once per page instead of once per price-list row. */
+export const tokenizeSoh = (soh: SohItem[]): SohTokens[] => soh.map((item) => {
+  const tokens = appleTokens(item.description);
+  return { item, tokens, set: new Set(tokens) };
+});
+
+export function matchAppleStock(name: string, series: string, soh: SohItem[] | SohTokens[]): PriceStock[] {
   const want = new Set(appleTokens(name));
   const extra = new Set(appleTokens(series));
   const wantChips = new Set([...want, ...extra].filter(isChip));
   const out: PriceStock[] = [];
-  for (const s of soh) {
-    const tokens = appleTokens(s.description);
-    const have = new Set(tokens);
+  const list: SohTokens[] = soh.length && "tokens" in soh[0] ? (soh as SohTokens[]) : tokenizeSoh(soh as SohItem[]);
+  for (const { item: s, tokens, set: have } of list) {
     if (![...want].every((t) => have.has(t))) continue;
     if (APPLE_DISCRIMINATORS.some((d) => have.has(d) !== want.has(d))) continue;
     const haveChips = tokens.filter(isChip);
@@ -94,8 +104,10 @@ export function matchAppleStock(name: string, series: string, soh: SohItem[]): P
 }
 
 /** Apple: one model per Product label of the PDF; the variant is the part of the name not shared by the whole group. */
-function appleModels(items: PriceItem[], soh: SohItem[]): PriceModel[] {
+function appleModels(items: PriceItem[], sohItems: SohItem[]): PriceModel[] {
   const map = new Map<string, PriceModel>();
+  // only Apple articles can match; tokenise them once
+  const soh = tokenizeSoh(sohItems.filter((s) => /\b(IPHONE|IPAD|MB[ANP]|MAC|IMAC|APPLE|AIRPODS)\b/i.test(s.description)));
   const rows = new Map<string, Array<{ it: PriceItem; i: number }>>();
   items.forEach((it, i) => {
     if (it.kind !== "apple") return;
