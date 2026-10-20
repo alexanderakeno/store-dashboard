@@ -72,6 +72,8 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel }
   };
 
   const save = variant ? variant.normal - variant.promo : 0;
+  // Apple lists a separate installment price; Android uses the active price for both
+  const credit = variant ? (variant.credit ?? variant.promo) : 0;
   const promo = !!variant && save > 0;
   const stock = variant?.stock ?? [];
   const totalSoh = stock.reduce((a, s) => a + s.qty, 0);
@@ -120,8 +122,9 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel }
         <section ref={card} className="sd-panel scroll-mt-20 space-y-4 p-4 sm:p-5 lg:sticky lg:top-20">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[11px] font-black tracking-[.12em] text-blue-600 uppercase">{model.brand} · {displayName(model.series)}</p>
+              <p className="text-[11px] font-black tracking-[.12em] text-blue-600 uppercase">{model.brand}{model.series !== model.brand ? ` · ${displayName(model.series)}` : ""}</p>
               <h2 className="text-xl font-black tracking-tight text-slate-950 sm:text-2xl">{displayName(model.model)}</h2>
+              {variant.note && <p className="text-xs text-slate-500">{variant.note}</p>}
             </div>
             {isEol(variant.status) ? <span className="sd-badge slate shrink-0">EOL</span> : promo ? <span className="sd-badge green shrink-0">Promo Aktif</span> : <span className="sd-badge slate shrink-0">Harga Normal</span>}
           </div>
@@ -160,13 +163,16 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel }
           <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/40">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[11px] font-black tracking-[.12em] text-slate-500 uppercase">{promo ? "Promo Price" : "Harga"}</p>
+                <p className="text-[11px] font-black tracking-[.12em] text-slate-500 uppercase">{variant.credit != null ? (promo ? "Promo Cash" : "Harga Cash") : promo ? "Promo Price" : "Harga"}</p>
                 <p className="text-2xl font-black tracking-tight text-blue-600 sm:text-3xl">{rp(variant.promo)}</p>
                 {promo && (
                   <>
                     <p className="text-sm text-slate-400 line-through">{rp(variant.normal)}</p>
                     <p className="text-sm font-bold text-emerald-600">Hemat {rp(save)} · {((save / variant.normal) * 100).toFixed(1).replace(".", ",")}%</p>
                   </>
+                )}
+                {variant.credit != null && variant.credit !== variant.promo && (
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Promo Cicilan {rp(variant.credit)}</p>
                 )}
                 {variant.promo > variant.normal && <p className="text-xs font-semibold text-amber-600">Harga promo di PDF lebih tinggi dari normal ({rp(variant.normal)}) — cek price list.</p>}
               </div>
@@ -182,11 +188,11 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel }
               {[12, 24].map((n) => (
                 <div key={n}>
                   <p className="text-[11px] font-black tracking-[.12em] text-slate-500 uppercase">{n} Bulan</p>
-                  <p className="font-black text-slate-950">{rp(variant.promo / n)} <span className="text-xs font-semibold text-slate-400">/bln</span></p>
+                  <p className="font-black text-slate-950">{rp(credit / n)} <span className="text-xs font-semibold text-slate-400">/bln</span></p>
                 </div>
               ))}
             </div>
-            <p className="mt-2 text-[11px] text-slate-400">Estimasi cicilan 0% dari harga aktif. Ketentuan bank mengikuti promo berjalan.</p>
+            <p className="mt-2 text-[11px] text-slate-400">Estimasi cicilan 0% dari {variant.credit != null ? "harga promo cicilan" : "harga aktif"}. Ketentuan bank mengikuti promo berjalan.</p>
             {tier && (
               <div className="mt-3 border-t border-dashed border-slate-300 pt-3 dark:border-slate-600">
                 <p className="text-[11px] font-black tracking-[.12em] text-slate-500 uppercase">Qoala Protection · {tier.tier}</p>

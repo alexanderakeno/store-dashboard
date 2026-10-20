@@ -14,6 +14,10 @@ export interface PriceItem {
   promo: number;
   /** "ACTIVE", "EOL", … as printed in Product Remarks. */
   status: string;
+  /** Apple only: "Promotion Cicilan Price" (installment); `promo` holds the cash price. */
+  credit?: number;
+  /** Apple only: text printed in brackets after the description (colours, strap). */
+  note?: string;
 }
 
 /** Qoala protection fee per price tier and tenor. */
