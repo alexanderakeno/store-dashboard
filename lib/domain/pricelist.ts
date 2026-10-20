@@ -1,4 +1,5 @@
-import { modelOf } from "@/lib/parsers/pricelist";
+import { dedupeItems, modelOf } from "@/lib/parsers/pricelist";
+import { iphoneName } from "@/lib/parsers/applePricelist";
 import type { PriceItem, PriceKind, QoalaTier } from "@/types/pricelist";
 import type { SohItem } from "@/types/soh";
 
@@ -138,7 +139,10 @@ function appleModels(items: PriceItem[], sohItems: SohItem[]): PriceModel[] {
 }
 
 /** Price-list rows of one kind grouped per model (brand → series order kept as in the PDF). */
-export function priceModels(items: PriceItem[], kind: PriceKind, soh: SohItem[]): PriceModel[] {
+export function priceModels(stored: PriceItem[], kind: PriceKind, soh: SohItem[]): PriceModel[] {
+  // fixes apply to data already in the sheet too: rows printed twice are shown once, "IPHONE 17E" reads "iPhone 17e"
+  const items = stored.map((it) => (it.kind === "apple" ? { ...it, name: iphoneName(it.name) } : it));
+  dedupeItems(items, []);
   if (kind === "apple" && items.some((it) => it.kind === "apple" && it.credit != null)) return appleModels(items, soh);
   const map = new Map<string, PriceModel>();
   items.forEach((it, i) => {

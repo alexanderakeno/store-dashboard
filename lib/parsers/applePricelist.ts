@@ -57,7 +57,17 @@ export function appleName(raw: string): { name: string; note: string } {
     .replace(/-IND\b/gi, "")
     .replace(/([A-Za-z])(\d+(?:GB|TB))\b/g, "$1 $2")
     .replace(/\s+-\s*$/, "");
-  return { name: clean(s), note: notes.filter(Boolean).join(" · ") };
+  return { name: iphoneName(clean(s)), note: notes.filter(Boolean).join(" · ") };
+}
+
+/** "IPHONE 17E 256GB" → "iPhone 17e 256GB", like the other iPhone rows of the PDF. Other names are left as printed. */
+export function iphoneName(name: string): string {
+  if (!/^IPHONE\b/.test(name) || /[a-z]/.test(name)) return name;
+  const W: Record<string, string> = { IPHONE: "iPhone", PRO: "Pro", MAX: "Max", PLUS: "Plus", AIR: "Air", MINI: "mini" };
+  return name
+    .split(" ")
+    .map((w) => W[w] ?? w.replace(/^(\d+)E$/, "$1e"))
+    .join(" ");
 }
 
 const HEADER = /^(product|description|normal\s*price|promotion.*|cicilan(\s*price)?|cash(\s*price)?|price)$/i;
