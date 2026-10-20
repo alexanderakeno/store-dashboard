@@ -9,6 +9,7 @@ import { loadPage, type SearchParams } from "@/lib/page";
 import { getSoh } from "@/lib/soh";
 import { getPriceList } from "@/lib/pricelist";
 import { PriceListImportForm } from "@/components/modules/PriceListImportForm";
+import { ApplePriceListImportForm } from "@/components/modules/ApplePriceListImportForm";
 
 export default async function UploadPage({ searchParams }: { searchParams: SearchParams }) {
   const p = await loadPage(searchParams);
@@ -54,7 +55,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
         ? `Android ${priceCount("android")} tipe${price.dates.android ? ` (${dmy(price.dates.android)})` : ""} · Apple ${priceCount("apple") ? `${priceCount("apple")} tipe${price.dates.apple ? ` (${dmy(price.dates.apple)})` : ""}` : "belum ada"} · Qoala ${price.qoala.length} tier`
         : priceError
           ? `Gagal membaca APP_PriceList: ${priceError}`
-          : "Belum ada — import PDF price list di atas",
+          : "Belum ada — import PDF price list Android / Apple di atas",
     },
     { name: "Stokan Aksesoris", ok: false, detail: "Format file stokan belum ada" },
     { name: "Jadwal / Shift Staff", ok: false, detail: "Untuk status Masuk Shift di Daily Sales" },
@@ -80,8 +81,15 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
         </Panel>
       </div>
       <div id="pricelist" className="scroll-mt-20">
-        <Panel title="Import Price List" desc="Upload PDF price list Android atau Apple → tampil di Dashboard › Price List." right={price ? <Link href="/pricelist" prefetch={false} className="sd-btn">Lihat Price List</Link> : undefined}>
-          {isAdmin ? <PriceListImportForm current={{ apple: price?.dates.apple ?? null, android: price?.dates.android ?? null }} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
+        <div id="pricelist-android" className="scroll-mt-20">
+          <Panel title="Import Price List Android" desc="Upload PDF price list Android (Samsung, Oppo, Xiaomi, …) → Dashboard › Price List › Android." right={price ? <Link href="/pricelist" prefetch={false} className="sd-btn">Lihat Android</Link> : undefined}>
+            {isAdmin ? <PriceListImportForm current={price?.dates.android ?? null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
+          </Panel>
+        </div>
+      </div>
+      <div id="pricelist-apple" className="scroll-mt-20">
+        <Panel title="Import Price List Apple" desc="Upload 2 PDF price list Apple sekaligus → Dashboard › Price List › Apple." right={priceCount("apple") ? <Link href="/pricelist?k=apple" prefetch={false} className="sd-btn">Lihat Apple</Link> : undefined}>
+          {isAdmin ? <ApplePriceListImportForm current={price?.dates.apple ?? null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
         </Panel>
       </div>
       <Panel title="Sumber Data">

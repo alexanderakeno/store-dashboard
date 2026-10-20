@@ -21,7 +21,7 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
   const q = await searchParams;
   const kind: PriceKind = q.k === "apple" ? "apple" : "android";
   const isAdmin = session.role === "admin";
-  const update = isAdmin ? <Link href="/upload#pricelist" prefetch={false} className="sd-btn primary">Update Price List</Link> : undefined;
+  const update = isAdmin ? <Link href={`/upload#pricelist-${kind}`} prefetch={false} className="sd-btn primary">Update Price List {kind === "apple" ? "Apple" : "Android"}</Link> : undefined;
 
   let list: PriceList | null;
   try {
@@ -69,7 +69,7 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
       ) : (
         <Panel>
           <EmptyBlock title={`Price list ${label}`}>
-            Belum ada price list {label}. {isAdmin ? <>Upload PDF-nya di <Link href="/upload#pricelist" className="font-semibold text-blue-600">Data Upload → Import Price List</Link>.</> : "Minta admin upload PDF price list."}
+            Belum ada price list {label}. {isAdmin ? <>Upload PDF-nya di <Link href={`/upload#pricelist-${kind}`} className="font-semibold text-blue-600">Data Upload → Import Price List {label}</Link>.</> : `Minta admin upload PDF price list ${label}.`}
           </EmptyBlock>
         </Panel>
       )}
