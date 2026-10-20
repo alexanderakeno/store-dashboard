@@ -12,9 +12,9 @@ export interface PriceListParse {
   warnings: string[];
 }
 
-const clean = (s: string) => s.replace(/\s+/g, " ").trim();
-const isPrice = (s: string) => /^(?:Rp\s?)?\d{1,3}(?:[.,]\d{3})+$/.test(s) || /^\d{4,}$/.test(s);
-const toNum = (s: string) => Number(s.replace(/[^\d]/g, ""));
+export const clean = (s: string) => s.replace(/\s+/g, " ").trim();
+export const isPrice = (s: string) => /^(?:Rp\s?)?\d{1,3}(?:[.,]\d{3})+$/i.test(s) || /^\d{4,}$/.test(s);
+export const toNum = (s: string) => Number(s.replace(/[^\d]/g, ""));
 
 const MONTHS: Record<string, number> = {
   JANUARI: 1, JANUARY: 1, JAN: 1, FEBRUARI: 2, FEBRUARY: 2, FEB: 2, MARET: 3, MARCH: 3, MAR: 3, APRIL: 4, APR: 4, MEI: 5, MAY: 5,
@@ -58,7 +58,7 @@ export function brandOf(name: string, series: string): string {
 }
 
 /** Groups runs into visual rows (same baseline within ~half a line height). */
-function rows(texts: PdfText[]): PdfText[][] {
+export function rows(texts: PdfText[]): PdfText[][] {
   const out: PdfText[][] = [];
   for (const t of [...texts].sort((a, b) => b.y - a.y || a.x - b.x)) {
     const row = out[out.length - 1];
