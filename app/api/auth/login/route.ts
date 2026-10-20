@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { recordAccess } from "@/lib/accessLog";
 import { authenticate } from "@/lib/auth/session";
+import { normalizeNik } from "@/lib/domain/normalize";
 import { clearFailures, loginBlocked, recordFailure } from "@/lib/auth/rateLimit";
 import { SESSION_COOKIE, cookieOptions, signSession } from "@/lib/auth/token";
 import { assertSameOrigin, handle, jsonBody } from "@/lib/http";
@@ -22,9 +24,11 @@ export async function POST(req: Request) {
     const session = await authenticate(nik, password);
     if (!session) {
       recordFailure(ip, nik);
+      if (nik) recordAccess(req, "login_failed", { nik: normalizeNik(nik) ?? nik });
       return NextResponse.json({ error: "NIK atau password salah" }, { status: 401 });
     }
     clearFailures(ip, nik);
+    recordAccess(req, "login", session);
     const res = NextResponse.json({ ok: true, role: session.role });
     res.cookies.set(SESSION_COOKIE, await signSession(session), cookieOptions);
     return res;
