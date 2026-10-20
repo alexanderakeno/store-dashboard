@@ -78,8 +78,8 @@ interface Section {
   to: number;
   /** x of the Normal Price column (row text left of it = the item name). */
   priceX: number;
-  /** Fee column headers for Qoala ("12 MONTHS" …), left to right. */
-  tenors: string[];
+  /** Fee column headers for Qoala ("12 MONTHS" …) with their centre x. */
+  tenors: Array<{ m: string; x: number }>;
 }
 
 /**
@@ -148,13 +148,18 @@ export function parsePriceListPdf(input: PdfText[]): PriceListParse {
         if (sec.kind === "qoala") {
           const label = words.map((w) => w.str).join(" ");
           if (/months?|bulan/i.test(label) && !nums.length) {
-            sec.tenors = words.filter((w) => /\d+\s*(months?|bulan)/i.test(w.str)).map((w) => String(Number(/\d+/.exec(w.str)![0])));
+            sec.tenors = words.filter((w) => /\d+\s*(months?|bulan)/i.test(w.str)).map((w) => ({ m: String(Number(/\d+/.exec(w.str)![0])), x: w.x + (w.w || 0) / 2 }));
             continue;
           }
           if (!nums.length || !/\//.test(label)) continue;
           const [tier, ...rest] = label.split("/");
-          const tenors = sec.tenors.length === nums.length ? sec.tenors : ["12", "18", "24"].slice(0, nums.length);
-          qoala.push({ tier: clean(tier), range: clean(rest.join("/")).replace(/\s*-$/, ""), fees: Object.fromEntries(nums.map((n, k) => [tenors[k] ?? String(k), toNum(n.str)])) });
+          // a fee belongs to the tenor column it sits under — a row may leave a column empty (KLAVVIP has no 24-month fee… or no 18)
+          const keyOf = (n: PdfText, k: number) => {
+            if (!sec.tenors.length) return ["12", "18", "24"][k] ?? String(k);
+            const c = n.x + (n.w || 0) / 2;
+            return [...sec.tenors].sort((a, b) => Math.abs(a.x - c) - Math.abs(b.x - c))[0].m;
+          };
+          qoala.push({ tier: clean(tier), range: clean(rest.join("/")).replace(/\s*-$/, ""), fees: Object.fromEntries(nums.map((n, k) => [keyOf(n, k), toNum(n.str)])) });
           continue;
         }
         if (!nums.length) continue;
@@ -169,11 +174,29 @@ export function parsePriceListPdf(input: PdfText[]): PriceListParse {
     }
   }
 
+  dedupeItems(items, warnings);
   if (!items.length) warnings.push('Header "Normal Price / Promotion Price" tidak ditemukan — bukan PDF price list?');
   const odd = items.filter((x) => x.promo > x.normal);
   if (odd.length) warnings.push(`${odd.length} tipe harga promo lebih tinggi dari harga normal (cek PDF): ${odd.slice(0, 3).map((x) => x.name).join(", ")}${odd.length > 3 ? ", …" : ""}`);
   const kinds = [...new Set(items.map((x) => x.kind))];
   return { date, title, items, qoala, kinds, warnings };
+}
+
+/** Drops rows printed twice in the PDF (same series, name and prices) — they only doubled the variant chips. */
+export function dedupeItems(items: PriceItem[], warnings: string[]): void {
+  const seen = new Set<string>();
+  const dup: string[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const x = items[i];
+    const k = [x.kind, x.series, x.name, x.normal, x.promo, x.credit ?? "", x.status, x.note ?? ""].join("|").toUpperCase();
+    if (!seen.has(k)) {
+      seen.add(k);
+      continue;
+    }
+    dup.push(x.name);
+    items.splice(i--, 1);
+  }
+  if (dup.length) warnings.push(`${dup.length} baris dobel (sama persis) dilewati: ${dup.slice(0, 3).join(", ")}${dup.length > 3 ? ", …" : ""}`);
 }
 
 /** A memory/size token: "12/256GB", "8/128G", "256GB", "1TB", "44MM", "44M". */

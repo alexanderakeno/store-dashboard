@@ -1,5 +1,5 @@
 import type { PdfText } from "./soh";
-import { clean, isPrice, priceListDate, rows, toNum, type PriceListParse } from "./pricelist";
+import { clean, dedupeItems, isPrice, priceListDate, rows, toNum, type PriceListParse } from "./pricelist";
 import type { PriceItem, QoalaTier } from "@/types/pricelist";
 
 /**
@@ -150,6 +150,13 @@ export function parseApplePriceListPdf(input: PdfText[]): PriceListParse {
     list = list.filter((r) => r.name && r.nums.length).sort((a, b) => b.y - a.y);
 
     const groups = labels.length ? assignGroups(list.map((r) => r.y), labels) : list.map(() => "Apple");
+    // each label should sit in the middle of its rows — if not, the PDF layout changed: say so
+    const lineH = list[0]?.h ?? 7;
+    const off = labels.filter((l) => {
+      const ys = list.filter((_, i) => groups[i] === l.str).map((r) => r.y);
+      return !ys.length || Math.abs((ys[0] + ys[ys.length - 1]) / 2 - l.y) > lineH * 1.2;
+    });
+    if (off.length) warnings.push(`Pengelompokan tipe mungkin meleset di halaman ${page}: ${off.slice(0, 3).map((l) => l.str).join(", ")} — cek hasilnya di Price List.`);
     list.forEach((r, i) => {
       const { name, note } = appleName(r.name);
       const series = appleLabel(groups[i] || "Apple");
@@ -185,6 +192,7 @@ export function parseApplePriceListPdf(input: PdfText[]): PriceListParse {
     }
   }
 
+  dedupeItems(items, warnings);
   if (!items.length) warnings.push('Header "Description / Normal Price / Cash Price" tidak ditemukan — bukan PDF price list Apple?');
   const odd = items.filter((x) => x.promo > x.normal);
   if (odd.length) warnings.push(`${odd.length} tipe harga promo lebih tinggi dari harga normal (cek PDF): ${odd.slice(0, 3).map((x) => x.name).join(", ")}${odd.length > 3 ? ", …" : ""}`);
