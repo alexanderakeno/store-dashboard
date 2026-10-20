@@ -11,12 +11,15 @@ const qoala = (amount: number, qty = 1, staffName = "CHELSY ARRAHMAT") => line({
 
 const R = DEFAULT_RULES.incentive;
 
-test("qoalaFee tiers: <1jt 20rb, 1jt 40rb, 1,9jt 60rb, ≥2jt 80rb", () => {
+test("qoalaFee tiers: <1jt 20rb, 1–1,5jt 40rb, 1,5–<2jt 60rb, ≥2jt 80rb (real October prices)", () => {
   assert.equal(qoalaFee(699_000, R.qoalaTiers), 20_000);
   assert.equal(qoalaFee(1_000_000, R.qoalaTiers), 40_000);
-  assert.equal(qoalaFee(1_499_000, R.qoalaTiers), 40_000);
-  assert.equal(qoalaFee(1_900_000, R.qoalaTiers), 60_000);
-  assert.equal(qoalaFee(1_999_000, R.qoalaTiers), 60_000);
+  assert.equal(qoalaFee(280_000, R.qoalaTiers), 20_000); // Bronze
+  assert.equal(qoalaFee(700_000, R.qoalaTiers), 20_000); // Gold
+  assert.equal(qoalaFee(1_315_000, R.qoalaTiers), 40_000); // Emerald
+  assert.equal(qoalaFee(1_890_000, R.qoalaTiers), 60_000); // Buy 12 Get 24 Tier 6
+  assert.equal(qoalaFee(1_970_000, R.qoalaTiers), 60_000); // Diamond
+  assert.equal(qoalaFee(2_645_000, R.qoalaTiers), 80_000); // Platinum
   assert.equal(qoalaFee(2_000_000, R.qoalaTiers), 80_000);
   assert.equal(qoalaFee(5_065_000, R.qoalaTiers), 80_000);
 });
@@ -33,16 +36,16 @@ test("devices: 30rb per unit for Mac/iPhone/iPad/Watch; AirPods and Android not 
 
 test("qoala: each policy priced on its own, then summed; online channel ignored", () => {
   const v = incentiveView(
-    [qoala(1_200_000), qoala(2_400_000, 2), qoala(2_500_000), qoala(800_000), qoala(1_950_000), line({ ...qoala(1_200_000), isChannel: true, staffName: "MAPEMALL" })],
+    [qoala(1_200_000), qoala(2_400_000, 2), qoala(2_500_000), qoala(800_000), qoala(1_950_000), line({ ...qoala(1_200_000), isChannel: true, staffName: "MAPEMALL" }), qoala(-1_200_000, -1)],
     R, null, ["Chelsy Arrahmat"],
   );
   const r = v.rows[0];
-  // 1,2jt→40 · 2×1,2jt→2×40 · 2,5jt→80 · 0,8jt→20 · 1,95jt→60
-  assert.equal(r.qoala.policies, 6);
-  assert.equal(r.qoala.fee, 40_000 + 80_000 + 80_000 + 20_000 + 60_000);
-  assert.deepEqual(r.qoala.tiers.map((t) => t.policies), [1, 3, 1, 1]);
+  // 1,2jt→40 · 2×1,2jt→2×40 · 2,5jt→80 · 0,8jt→20 · 1,95jt→60 · refund of a 1,2jt policy→−40
+  assert.equal(r.qoala.policies, 5);
+  assert.equal(r.qoala.fee, 40_000 + 80_000 + 80_000 + 20_000 + 60_000 - 40_000);
+  assert.deepEqual(r.qoala.tiers.map((t) => t.policies), [1, 2, 1, 1]);
   assert.equal(v.rows.some((x) => x.name === "Mapemall"), false);
-  assert.equal(incentiveView([qoala(1_600_000)], R, null, []).qoalaInGap, 1);
+  assert.equal(incentiveView([{ ...qoala(3_940_000), qtySource: "uncertain" }], R, null, []).qoalaUncertain, 1);
 });
 
 test("parseAccFocus reads the Data - Akeno leaderboard by label; ACC fee joins staff by name", () => {

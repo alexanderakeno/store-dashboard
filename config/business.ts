@@ -66,8 +66,8 @@ export const DEFAULT_RULES: BusinessRules = {
     perUnit: { Mac: 30_000, iPhone: 30_000, iPad: 30_000, "Apple Watch": 30_000 },
     qoalaTiers: [
       { min: 0, fee: 20_000 }, // below 1 jt
-      { min: 1_000_000, fee: 40_000 }, // 1 jt – 1,5 jt (no Qoala policy is priced 1,5–1,9 jt)
-      { min: 1_900_000, fee: 60_000 }, // 1,9 jt – < 2 jt
+      { min: 1_000_000, fee: 40_000 }, // 1 jt – 1,5 jt (e.g. Emerald 1.315.000)
+      { min: 1_500_000, fee: 60_000 }, // the "1,9–2 jt" tier: Tier 6 1.890.000, Diamond 1.970.000 (nothing is priced 1,5–1,85 jt)
       { min: 2_000_000, fee: 80_000 }, // 2 jt and up
     ],
   },

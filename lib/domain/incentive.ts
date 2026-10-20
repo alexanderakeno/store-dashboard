@@ -6,9 +6,6 @@ import { displayName } from "./normalize";
 /** Apple LOBs paid per unit, in display order. */
 export const DEVICE_LOBS = ["Mac", "iPhone", "iPad", "Apple Watch"] as const;
 
-/** No Qoala policy is priced in this band; any sale here is flagged so the scheme can be checked. */
-const QOALA_GAP = { from: 1_500_000, to: 1_900_000 };
-
 export interface QoalaTierCount {
   min: number;
   fee: number;
@@ -19,7 +16,7 @@ export interface IncentiveRow {
   name: string;
   device: Record<string, { qty: number; fee: number }>;
   deviceFee: number;
-  qoala: { policies: number; fee: number; tiers: QoalaTierCount[]; inGap: number };
+  qoala: { policies: number; fee: number; tiers: QoalaTierCount[]; uncertain: number };
   /** From the sheet's ACC Fokus leaderboard (null = staff not on the board). */
   acc: (AccFocusCell & { bySupplier: Record<string, AccFocusCell> }) | null;
   total: number;
@@ -28,8 +25,11 @@ export interface IncentiveRow {
 export interface IncentiveView {
   rows: IncentiveRow[];
   total: { device: number; acc: number; qoala: number; all: number; policies: number };
-  /** Qoala policies priced in the 1,5–1,9 jt band (not in the scheme). */
-  qoalaInGap: number;
+  /**
+   * Qoala lines whose policy count could not be inferred from the MR prices: the per-policy
+   * price (and so the tier) of these lines may be off.
+   */
+  qoalaUncertain: number;
 }
 
 /** Name key that survives case, apostrophe and spacing differences ("Elvina Qur'ani" = "ELVINA QUR'ANI"). */
@@ -62,7 +62,7 @@ export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: Ac
         name,
         device: Object.fromEntries(DEVICE_LOBS.map((l) => [l, { qty: 0, fee: 0 }])),
         deviceFee: 0,
-        qoala: { policies: 0, fee: 0, tiers: tiers.map((t) => ({ ...t, policies: 0 })), inGap: 0 },
+        qoala: { policies: 0, fee: 0, tiers: tiers.map((t) => ({ ...t, policies: 0 })), uncertain: 0 },
         acc: null,
         total: 0,
       };
@@ -92,7 +92,7 @@ export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: Ac
       r.qoala.fee += sign * n * fee;
       const t = [...r.qoala.tiers].reverse().find((x) => price >= x.min);
       if (t) t.policies += sign * n;
-      if (price >= QOALA_GAP.from && price < QOALA_GAP.to) r.qoala.inGap += n;
+      if (l.qtySource === "uncertain") r.qoala.uncertain++;
     }
   }
 
@@ -117,6 +117,6 @@ export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: Ac
       all: sum((r) => r.total),
       policies: sum((r) => r.qoala.policies),
     },
-    qoalaInGap: sum((r) => r.qoala.inGap),
+    qoalaUncertain: sum((r) => r.qoala.uncertain),
   };
 }
