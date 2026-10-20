@@ -8,12 +8,12 @@ import { totals } from "@/lib/domain/kpi";
 import { sameMonthLastYear } from "@/lib/domain/period";
 import { shareText } from "@/lib/domain/share";
 import { homeView } from "@/lib/domain/views";
-import { dec, monthLabel, monthShort, num, pct, pctArrow, rpf } from "@/lib/format";
+import { dec, monthLabel, monthShort, num, pct, pctArrow, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 import { Mtm } from "./Mtm";
 import { ProductDrill } from "@/components/modules/ProductDrill";
-import { getMonthSnapshot, type MonthSnapshot } from "@/lib/services/dashboard";
+import { getMonthLines, type MonthSnapshot } from "@/lib/services/dashboard";
 import type { MonthEntry } from "@/lib/repositories";
 import type { SalesLine } from "@/types/domain";
 
@@ -303,7 +303,19 @@ const cards = [total, grpCard("apple", "Apple", grp.Apple), grpCard("android", "
           <Kv label="Growth" value={lfl ? <Trend value={lfl.sales ? ((h.totals.sales - lfl.sales) / lfl.sales) * 100 : null} digits={1} /> : <span className="text-slate-400">—</span>} />
           <Kv label="Selisih" value={lfl ? rpf(h.totals.sales - lfl.sales) : <span className="text-slate-400">—</span>} />
         </div>
-        {!lfl && <p className="mt-3 text-xs text-slate-500">Daftarkan file {monthLabel(sameMonthLastYear(p.month))} di Settings untuk mengaktifkan LFL (periode yang sama, tanggal 1–{Number(p.asOf.slice(8))}).</p>}
+        {lfl && (
+          <div className="mt-4 grid grid-cols-2 gap-5 border-t border-dashed border-slate-200 pt-4 md:grid-cols-4 dark:border-slate-700">
+            <Kv label={`Qty ${monthShort(sameMonthLastYear(p.month))}`} value={num(lfl.qty)} />
+            <Kv label={`Qty ${monthShort(p.month)}`} value={num(h.totals.qty)} />
+            <Kv label="Growth Qty" value={<Trend value={lfl.qty ? ((h.totals.qty - lfl.qty) / lfl.qty) * 100 : null} digits={1} />} />
+            <Kv label="Selisih Qty" value={num(h.totals.qty - lfl.qty)} />
+          </div>
+        )}
+        <p className="mt-3 text-xs text-slate-500">
+          {lfl
+            ? `Periode sama: tanggal 1–${Number(p.asOf.slice(8))}.${lfl.source === "mr" ? ` Data ${monthLabel(sameMonthLastYear(p.month))} dari Merchandise Report yang di-upload.` : ""} Rincian per grup & LOB ada di tab Compare.`
+            : `Upload Merchandise Report ${monthLabel(sameMonthLastYear(p.month))} di Data Upload → Data Tahun Lalu untuk mengaktifkan LFL (periode yang sama, tanggal 1–${Number(p.asOf.slice(8))}).`}
+        </p>
       </Panel>
 
       <Panel title="Share Daily" desc="Ringkasan harian untuk WhatsApp." right={<div className="flex gap-2"><CopyButton text={shareText(h, cfg.storeName)} label="Salin teks" /><WhatsAppButton text={shareText(h, cfg.storeName)} /></div>}>
@@ -390,35 +402,34 @@ function Mini({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-/** Same month last year, same day range — only when that month is registered. */
+/**
+ * Same month last year, same day range. Comes from the registered monthly sheet or, when that month
+ * has no sheet, from an imported Merchandise Report (Data Upload → Data Tahun Lalu).
+ */
 async function lastYear(months: MonthEntry[], month: string, asOf: string) {
-  const ly = sameMonthLastYear(month);
-  if (!months.some((m) => m.month === ly)) return null;
-  try {
-    const s = await getMonthSnapshot(ly);
-    const day = asOf.slice(8);
-    return totals(s.lines.filter((l) => l.date.slice(8) <= day));
-  } catch {
-    return null;
-  }
+  const ly = await getMonthLines(sameMonthLastYear(month), months).catch(() => null);
+  if (!ly) return null;
+  const day = asOf.slice(8);
+  return { ...totals(ly.lines.filter((l) => l.date.slice(8) <= day)), source: ly.source };
 }
 
 /* ---------------- YTD ---------------- */
 
-async function loadYear(months: MonthEntry[], year: string, upTo: string): Promise<Map<string, MonthSnapshot>> {
-  const out = new Map<string, MonthSnapshot>();
-  const list = months.filter((m) => m.month.startsWith(year) && m.month <= upTo);
+const MONTH_NUMS = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"];
+
+/** Lines per month of `year` up to `upTo` — monthly sheet or imported Merchandise Report. */
+async function loadYear(months: MonthEntry[], year: string, upTo: string): Promise<Map<string, SalesLine[]>> {
+  const out = new Map<string, SalesLine[]>();
+  const keys = MONTH_NUMS.map((n) => `${year}-${n}`).filter((m) => m <= upTo);
   await Promise.all(
-    list.map(async (m) => {
-      try {
-        out.set(m.month, await getMonthSnapshot(m.month));
-      } catch {}
+    keys.map(async (m) => {
+      const x = await getMonthLines(m, months).catch(() => null);
+      if (x) out.set(m, x.lines);
     }),
   );
   return out;
 }
 
-const MONTH_NUMS = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"];
 
 async function Ytd({ snap, months }: { snap: MonthSnapshot; months: MonthEntry[] }) {
   const year = snap.month.slice(0, 4);
@@ -426,7 +437,7 @@ async function Ytd({ snap, months }: { snap: MonthSnapshot; months: MonthEntry[]
   const mm = snap.month.slice(5);
   const cur = await loadYear(months, year, snap.month);
   const prev = await loadYear(months, prevYear, `${prevYear}-${mm}`);
-  const all = (m: Map<string, MonthSnapshot>) => [...m.values()].flatMap((s) => s.lines);
+  const all = (m: Map<string, SalesLine[]>) => [...m.values()].flat();
   const curLines = all(cur);
   const prevLines = all(prev);
   const ct = totals(curLines);
@@ -449,8 +460,8 @@ async function Ytd({ snap, months }: { snap: MonthSnapshot; months: MonthEntry[]
           <PrintButton />
         </div>
       </div>
-      <Panel title={`YTD ${prevYear} vs ${year}`} desc={`Januari – ${monthLabel(snap.month).split(" ")[0]}. Hanya bulan yang sudah didaftarkan di Settings yang dihitung.`}>
-        {missingCur > 0 && <p className="mb-4 text-sm text-amber-700">{missingCur} bulan {year} belum didaftarkan — nilai YTD hanya dari bulan yang terdaftar.</p>}
+      <Panel title={`YTD ${prevYear} vs ${year}`} desc={`Januari – ${monthLabel(snap.month).split(" ")[0]}. Hanya bulan yang ada datanya (file bulanan, atau Merchandise Report untuk tahun lalu) yang dihitung.`}>
+        {missingCur > 0 && <p className="mb-4 text-sm text-amber-700">{missingCur} bulan {year} belum ada datanya — nilai YTD hanya dari bulan yang ada.</p>}
         <div className="grid gap-4 lg:grid-cols-2">
           <YearCard year={prevYear} tone="blue" qty={pt.qty} value={pt.sales} lob={pl} lobV={pv} need={prev.size === 0} />
           <YearCard year={year} tone="green" qty={ct.qty} value={ct.sales} lob={cl} lobV={cv} growthQty={prev.size ? g(ct.qty, pt.qty) : null} growthValue={prev.size ? g(ct.sales, pt.sales) : null} lobPrev={prev.size ? pl : null} />
@@ -469,7 +480,7 @@ function YearCard({ year, tone, qty, value, lob, lobV, need, growthQty, growthVa
       <div className={`px-4 py-3 text-lg font-black ${tone === "blue" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>{year}</div>
       <div className="p-4">
         {need ? (
-          <EmptyBlock title={`Data ${year}`}>Daftarkan file bulanan {year} di Settings untuk perbandingan YTD.</EmptyBlock>
+          <EmptyBlock title={`Data ${year}`}>Upload Merchandise Report {year} per bulan di Data Upload → Data Tahun Lalu untuk perbandingan YTD.</EmptyBlock>
         ) : (
           <>
             <p className="text-xs font-black tracking-[.08em] text-slate-500 uppercase">All Sales</p>
@@ -498,11 +509,10 @@ function YearCard({ year, tone, qty, value, lob, lobV, need, growthQty, growthVa
   );
 }
 
-function MonthTable({ year, prevYear, cur, prev, upTo, deviceOnly = false }: { year: string; prevYear: string; cur: Map<string, MonthSnapshot>; prev: Map<string, MonthSnapshot>; upTo: string; deviceOnly?: boolean }) {
-  const pick = (s?: MonthSnapshot) => {
-    if (!s) return null;
-    const ls = deviceOnly ? s.lines.filter((l) => l.type === "DEVICES") : s.lines;
-    return totals(ls);
+function MonthTable({ year, prevYear, cur, prev, upTo, deviceOnly = false }: { year: string; prevYear: string; cur: Map<string, SalesLine[]>; prev: Map<string, SalesLine[]>; upTo: string; deviceOnly?: boolean }) {
+  const pick = (lines?: SalesLine[]) => {
+    if (!lines) return null;
+    return totals(deviceOnly ? lines.filter((l) => l.type === "DEVICES") : lines);
   };
   return (
     <div className="sd-table-wrap">
@@ -537,7 +547,11 @@ async function Compare({ snap, months }: { snap: MonthSnapshot; months: MonthEnt
   const prevYear = String(Number(year) - 1);
   const cur = await loadYear(months, year, `${year}-12`);
   const prev = await loadYear(months, prevYear, `${prevYear}-12`);
+  const lyMonth = sameMonthLastYear(snap.month);
+  const ly = prev.get(lyMonth) ?? null;
   return (
+    <>
+    {ly && <YoyDetail snap={snap} ly={ly} lyMonth={lyMonth} />}
     <Panel title={`Compare ${prevYear} vs ${year}`} desc="Perbandingan bulanan Qty, Value, Selisih, dan Growth." right={prev.size === 0 ? <NeedData label={`Need Data ${prevYear}`} /> : undefined}>
       <div className="space-y-6">
         <div>
@@ -549,7 +563,72 @@ async function Compare({ snap, months }: { snap: MonthSnapshot; months: MonthEnt
           <MonthTable year={year} prevYear={prevYear} cur={cur} prev={prev} upTo="12" deviceOnly />
         </div>
       </div>
-      {prev.size === 0 && <p className="mt-3 text-xs text-slate-500">Data {prevYear} belum ada di aplikasi. Daftarkan file bulanan {prevYear} di Settings (satu file per bulan) agar kolom {prevYear} terisi.</p>}
+      {prev.size === 0 && <p className="mt-3 text-xs text-slate-500">Data {prevYear} belum ada di aplikasi. Upload Merchandise Report {prevYear} per bulan di Data Upload → Data Tahun Lalu agar kolom {prevYear} terisi.</p>}
+    </Panel>
+    </>
+  );
+}
+
+type YoyRow = { label: string; a: { v: number; q: number }; b: { v: number; q: number }; full: number; strong?: boolean; note?: string };
+
+/**
+ * This month vs the same month last year, same day range (1 → last data day), per group, Apple LOB
+ * and Android brand. Last year's full-month value is shown as the bar to beat.
+ */
+function YoyDetail({ snap, ly, lyMonth }: { snap: MonthSnapshot; ly: SalesLine[]; lyMonth: string }) {
+  const day = (snap.lastDataDate ?? `${snap.month}-31`).slice(8);
+  const lyRange = ly.filter((l) => l.date.slice(8) <= day);
+  const cur = snap.lines;
+  const sum = (ls: SalesLine[], f: (l: SalesLine) => boolean) => ls.filter(f).reduce((a, l) => ({ v: a.v + l.amount, q: a.q + (l.countsInQty ? l.qty : 0) }), { v: 0, q: 0 });
+  const row = (label: string, f: (l: SalesLine) => boolean, extra: Partial<YoyRow> = {}): YoyRow => ({ label, a: sum(lyRange, f), b: sum(cur, f), full: sum(ly, f).v, ...extra });
+  const groups: YoyRow[] = [
+    row("Total", () => true, { strong: true }),
+    row("Apple", (l) => l.group === "Apple"),
+    row("Android", (l) => l.group === "Android"),
+    row("Accessories", (l) => l.group === "ACC"),
+    row("VAS", (l) => l.group === "VAS"),
+  ];
+  const apple: YoyRow[] = APPLE_LOBS.map((k) => row(APPLE_LABELS[k], (l) => l.lob === k, k === "AirPods" ? { note: "ACC" } : {}));
+  const brands = [...new Set([...lyRange, ...cur].filter((l) => l.group === "Android").map((l) => l.lob ?? "Lainnya"))];
+  const android: YoyRow[] = brands
+    .map((b) => row(b, (l) => l.group === "Android" && (l.lob ?? "Lainnya") === b))
+    .sort((x, y) => y.a.v + y.b.v - (x.a.v + x.b.v));
+  const lyLabel = monthShort(lyMonth);
+  const nowLabel = monthShort(snap.month);
+  const Table = ({ title, rows }: { title: string; rows: YoyRow[] }) => (
+    <div>
+      <p className="mb-2 text-sm font-black text-slate-700">{title}</p>
+      <div className="sd-table-wrap">
+        <table className="sd-table sd-table-compact">
+          <thead>
+            <tr><th>{title === "Per Grup" ? "Grup" : title === "Apple per LOB" ? "LOB" : "Brand"}</th><th className="n">{lyLabel}</th><th className="n">{nowLabel}</th><th className="n max-sm:hidden">Growth</th><th className="n max-sm:hidden">Full {lyLabel}</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.label} className={r.strong ? "font-black" : undefined}>
+                <td className="font-bold">{r.label}{r.note && <span className="ml-1 text-[11px] font-semibold text-slate-400">({r.note})</span>}</td>
+                <td className="n">{rpc(r.a.v)}<div className="text-[11px] font-normal text-slate-400">{num(r.a.q)} unit</div></td>
+                <td className="n">
+                  {rpc(r.b.v)}
+                  <div className="text-[11px] font-normal text-slate-400">{num(r.b.q)} unit</div>
+                  {r.a.v ? <div className="sm:hidden"><Trend value={((r.b.v - r.a.v) / Math.abs(r.a.v)) * 100} digits={1} className="text-[11px]" /></div> : null}
+                </td>
+                <td className="n max-sm:hidden">{r.a.v ? <Trend value={((r.b.v - r.a.v) / Math.abs(r.a.v)) * 100} digits={1} /> : <span className="text-slate-400">—</span>}</td>
+                <td className="n max-sm:hidden">{rpc(r.full)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+  return (
+    <Panel title={`${nowLabel} vs ${lyLabel}`} desc={`Periode sama: tanggal 1–${Number(day)}. Growth = value ${nowLabel} dibanding ${lyLabel} pada tanggal yang sama. "Full ${lyLabel}" = total sebulan penuh tahun lalu.`}>
+      <div className="space-y-6">
+        <Table title="Per Grup" rows={groups} />
+        <Table title="Apple per LOB" rows={apple} />
+        {android.length > 0 && <Table title="Android per Brand" rows={android} />}
+      </div>
     </Panel>
   );
 }
