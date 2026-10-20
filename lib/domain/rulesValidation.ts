@@ -48,6 +48,22 @@ export function validateRuleOverrides(input: unknown): Result {
         if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 31) return { ok: false, error: "estimateMinDays: bilangan 0–31" };
         out.estimateMinDays = v;
         break;
+      case "incentive": {
+        if (!isObj(v)) return { ok: false, error: "incentive: harus objek { perUnit, qoalaTiers }" };
+        const inc: Partial<BusinessRules["incentive"]> = {};
+        if (v.perUnit !== undefined) {
+          if (!isObj(v.perUnit) || !Object.values(v.perUnit).every((n) => typeof n === "number" && n >= 0 && n <= 10_000_000))
+            return { ok: false, error: 'incentive.perUnit: harus objek { "iPhone": 30000, … }' };
+          inc.perUnit = v.perUnit as Record<string, number>;
+        }
+        if (v.qoalaTiers !== undefined) {
+          const ok = Array.isArray(v.qoalaTiers) && v.qoalaTiers.length > 0 && v.qoalaTiers.every((x) => isObj(x) && typeof x.min === "number" && x.min >= 0 && typeof x.fee === "number" && x.fee >= 0 && x.fee <= 10_000_000);
+          if (!ok) return { ok: false, error: 'incentive.qoalaTiers: daftar { "min": 1000000, "fee": 40000 }' };
+          inc.qoalaTiers = (v.qoalaTiers as Array<{ min: number; fee: number }>).map((x) => ({ min: x.min, fee: x.fee }));
+        }
+        out.incentive = inc as BusinessRules["incentive"];
+        break;
+      }
       default:
         return { ok: false, error: `Kunci tidak dikenal: ${k}` };
     }
