@@ -79,12 +79,17 @@ export class SheetsSource implements DataSource {
     }
   }
 
-  /** Small tables are rewritten whole (clear + write) — simple and consistent. */
+  /**
+   * Small tables are rewritten whole: overwrite from row 2, then clear the rows below the new end.
+   * Writing first means a failed write leaves the old data in place instead of an empty tab.
+   */
   private async rewrite(tab: TabKey, rows: unknown[][]) {
     await this.ensureTabs();
     const t = MASTER_TABS[tab];
-    await clearRange(this.master, t.name, "A2:Z");
-    if (rows.length) await writeRange(this.master, t.name, "A2", rows);
+    const width = t.header.length;
+    // pad every row to the header width so leftover cells of a longer old row are overwritten too
+    if (rows.length) await writeRange(this.master, t.name, "A2", rows.map((r) => [...r, ...Array(Math.max(0, width - r.length)).fill("")]));
+    await clearRange(this.master, t.name, `A${rows.length + 2}:Z`);
   }
 
   async listMonths(): Promise<MonthEntry[]> {
