@@ -34,7 +34,13 @@ function mergeTraffic(app: TrafficEntry[], sheet: TrafficEntry[]): TrafficEntry[
 }
 
 export function mergeRules(o: Partial<BusinessRules>): BusinessRules {
-  return { ...DEFAULT_RULES, ...o, pointCaps: { ...DEFAULT_RULES.pointCaps, ...(o.pointCaps ?? {}) } };
+  const inc = o.incentive ?? ({} as Partial<BusinessRules["incentive"]>);
+  return {
+    ...DEFAULT_RULES,
+    ...o,
+    pointCaps: { ...DEFAULT_RULES.pointCaps, ...(o.pointCaps ?? {}) },
+    incentive: { perUnit: inc.perUnit ?? DEFAULT_RULES.incentive.perUnit, qoalaTiers: inc.qoalaTiers ?? DEFAULT_RULES.incentive.qoalaTiers },
+  };
 }
 
 /** Shared (cross-instance) revalidate window = CACHE_TTL_SECONDS. */

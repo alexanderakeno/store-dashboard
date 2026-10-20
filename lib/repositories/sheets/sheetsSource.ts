@@ -6,7 +6,7 @@ import { parseControlSheet, type Grid } from "@/lib/parsers/controlSheet";
 import { parseTargetStore } from "@/lib/parsers/targetStore";
 import type { MonthKey, TrafficEntry } from "@/types/domain";
 import type { AppRecord, AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
-import { parsePromo, parseTracker, parseTrafficTab } from "@/lib/parsers/extras";
+import { parseAccFocus, parsePromo, parseTracker, parseTrafficTab } from "@/lib/parsers/extras";
 import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList } from "@/types/pricelist";
@@ -15,7 +15,7 @@ import type { AccessEntry, AccessEvent } from "@/types/access";
 import { ACCESS_EVENTS } from "@/types/access";
 
 /** Optional tabs of the monthly sheet. */
-export const EXTRA_TABS = { tracker: "CX&GR Tracker", promo: "Rekap Promo", traffic: "Traffic" } as const;
+export const EXTRA_TABS = { tracker: "CX&GR Tracker", promo: "Rekap Promo", traffic: "Traffic", accFocus: "Data - Akeno" } as const;
 import { SheetsError, addTab, appendRows, clearRange, getSpreadsheetMeta, readTab, readTabs, writeRange } from "./client";
 
 /** Master-sheet tabs owned by the app. Header order = column order. */
@@ -155,6 +155,11 @@ export class SheetsSource implements DataSource {
       if (grids[EXTRA_TABS.traffic]) extras.sheetTraffic = parseTrafficTab(grids[EXTRA_TABS.traffic], entry.month);
     } catch (e) {
       extras.warnings.push(`Tab tambahan gagal dibaca: ${(e as Error).message}`);
+    }
+    try {
+      extras.accFocus = grids[EXTRA_TABS.accFocus] ? parseAccFocus(grids[EXTRA_TABS.accFocus]) : null;
+    } catch (e) {
+      extras.warnings.push(`Leaderboard ACC Fokus gagal dibaca: ${(e as Error).message}`);
     }
     return { control, target, sourceTitle: meta.title, errors, extras };
   }

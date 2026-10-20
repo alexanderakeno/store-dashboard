@@ -6,7 +6,7 @@ import { parseControlSheet } from "@/lib/parsers/controlSheet";
 import { parseTargetStore } from "@/lib/parsers/targetStore";
 import type { MonthKey, TrafficEntry } from "@/types/domain";
 import type { AppRecord, AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
-import { parsePromo, parseTracker } from "@/lib/parsers/extras";
+import { parseAccFocus, parsePromo, parseTracker } from "@/lib/parsers/extras";
 import { generateExtras, generateMonth } from "./generate";
 import type { SohSnapshot } from "@/types/soh";
 import type { PriceList } from "@/types/pricelist";
@@ -82,7 +82,8 @@ export class FixtureSource implements DataSource {
         gr: parseTracker(x.tracker, entry.month, "GR"),
         promo: parsePromo(x.promo),
         sheetTraffic: [],
-        tabs: ["CX&GR Tracker", "Rekap Promo"],
+        accFocus: parseAccFocus(x.accFocus),
+        tabs: ["CX&GR Tracker", "Rekap Promo", "Data - Akeno"],
         warnings: [],
       },
     };
