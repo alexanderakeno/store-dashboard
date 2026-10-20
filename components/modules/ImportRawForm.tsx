@@ -30,7 +30,7 @@ interface SheetJS {
 }
 
 let sheetjs: Promise<SheetJS> | null = null;
-function loadSheetJS(): Promise<SheetJS> {
+export function loadSheetJS(): Promise<SheetJS> {
   const w = window as unknown as { XLSX?: SheetJS };
   if (w.XLSX) return Promise.resolve(w.XLSX);
   sheetjs ??= new Promise<SheetJS>((resolve, reject) => {
@@ -51,7 +51,7 @@ function loadSheetJS(): Promise<SheetJS> {
 const isEmpty = (v: unknown) => v === null || v === undefined || v === "";
 
 /** Reads the first sheet like the Apps Script dialog (header:1, raw, blank rows kept), trimmed to `cols` columns. */
-async function readRows(file: File, cols: number): Promise<Rows> {
+export async function readRows(file: File, cols: number): Promise<Rows> {
   const XLSX = await loadSheetJS();
   let rows: Rows;
   try {
