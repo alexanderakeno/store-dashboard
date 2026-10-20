@@ -135,3 +135,20 @@ export function summarizeAccess(entries: AccessEntry[], accounts: Array<{ nik: s
     .map(({ daySet, ...r }) => ({ ...r, days: daySet.size }))
     .sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? "") || b.failed - a.failed || a.name.localeCompare(b.name));
 }
+
+/** True when `path` is a page of the app menu (or one of its sub-pages). Blocks junk paths. */
+export function isAppPath(path: string, hrefs: readonly string[]): boolean {
+  return hrefs.some((h) => path === h || path.startsWith(`${h}/`));
+}
+
+/** Entries (newest first) split into local days, newest day first. */
+export function groupByDay(entries: AccessEntry[], timeZone: string): Array<{ date: string; items: AccessEntry[] }> {
+  const out: Array<{ date: string; items: AccessEntry[] }> = [];
+  for (const e of entries) {
+    const d = localDate(e.ts, timeZone);
+    const g = out[out.length - 1];
+    if (g && g.date === d) g.items.push(e);
+    else out.push({ date: d, items: [e] });
+  }
+  return out;
+}
