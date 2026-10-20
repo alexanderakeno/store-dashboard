@@ -445,3 +445,6 @@ html.dark .sd-log-acct[aria-current="true"] { border-color: #1e3a8a; background:
 .sd-dot { width: 8px; height: 8px; border-radius: 999px; flex: none; background: #cbd5e1; }
 .sd-dot.green { background: #22c55e; } .sd-dot.red { background: #ef4444; } .sd-dot.blue { background: #3b82f6; } .sd-dot.slate { background: #94a3b8; }
 .sd-tabs.sm .sd-tab { font-size: 13px; padding: 8px 6px; }
+
+/* jump targets (JumpChips): land below the sticky header */
+.sd-anchor { scroll-margin-top: 84px; }
