@@ -24,6 +24,15 @@ export interface BusinessRules {
   pointCaps: Record<Group, number>;
   /** Days before the closing estimate is considered stable. */
   estimateMinDays: number;
+  /** Est. incentive scheme (accessories come from the sheet's ACC Fokus leaderboard). */
+  incentive: IncentiveRules;
+}
+
+export interface IncentiveRules {
+  /** Rupiah per unit sold, per Apple LOB (iPhone, iPad, Mac, Apple Watch). */
+  perUnit: Record<string, number>;
+  /** Qoala fee per policy by policy price: the highest tier whose `min` ≤ price applies. */
+  qoalaTiers: Array<{ min: number; fee: number }>;
 }
 
 export const DEFAULT_RULES: BusinessRules = {
@@ -53,4 +62,13 @@ export const DEFAULT_RULES: BusinessRules = {
   qtyTypes: ["DEVICES", "ACCESSORIES"],
   pointCaps: { Apple: 30, Android: 30, ACC: 30, VAS: 10 },
   estimateMinDays: 3,
+  incentive: {
+    perUnit: { Mac: 30_000, iPhone: 30_000, iPad: 30_000, "Apple Watch": 30_000 },
+    qoalaTiers: [
+      { min: 0, fee: 20_000 }, // below 1 jt
+      { min: 1_000_000, fee: 40_000 }, // 1 jt – 1,5 jt (no Qoala policy is priced 1,5–1,9 jt)
+      { min: 1_900_000, fee: 60_000 }, // 1,9 jt – < 2 jt
+      { min: 2_000_000, fee: 80_000 }, // 2 jt and up
+    ],
+  },
 };
