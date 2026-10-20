@@ -110,7 +110,7 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
             : 'Leaderboard ACC Fokus tidak ditemukan di tab "Data - Akeno" file bulan ini — incentive aksesoris dihitung 0.'}
         </div>
       )}
-      {view.qoalaInGap > 0 && <div className="alert warn">{view.qoalaInGap} polis Qoala berharga 1,5–1,9 jt (di luar skema) — dihitung {rp(tiers.filter((t) => t.min <= 1_500_000).at(-1)?.fee ?? 0)}. Mohon cek.</div>}
+      {view.qoalaUncertain > 0 && <div className="alert warn">{view.qoalaUncertain} baris Qoala jumlah polisnya tidak bisa dipastikan dari harga di MR — harga per polis (dan tier-nya) baris itu mungkin kurang tepat. Cek di Cut Off &amp; Rekonsiliasi.</div>}
 
       <Panel title="Rincian per Staff" desc={pick ? undefined : "Klik nama untuk rincian Qoala per harga polis dan aksesoris per supplier."} className="!p-4 sm:!p-6">
         {/* phone: one card per staff */}
