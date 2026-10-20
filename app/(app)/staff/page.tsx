@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageIntro, Panel, Progress, achColor } from "@/components/kit";
 import { ParamDate, ParamSelect } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
-import { APPLE_LOBS, clampRange, linesByStaff, linesIn, lobQty, staffStats, timeGonePct } from "@/lib/domain/extra";
+import { APPLE_LOBS, VAS_PROVIDERS, clampRange, linesByStaff, linesIn, lobQty, staffStats, timeGonePct, vasSplit } from "@/lib/domain/extra";
 import { totals } from "@/lib/domain/kpi";
 import { nameKey } from "@/lib/domain/normalize";
 import { daysInMonth, eachDay, monthStart } from "@/lib/domain/period";
@@ -31,6 +31,30 @@ export default async function StaffPage({ searchParams }: { searchParams: Search
 const teamGapTg = team.sales - (teamTarget * tg) / 100;
   const byKey = linesByStaff(ls);
   const lobTotal = lobQty(ls);
+
+  // VAS per salesperson × provider; staff target per provider comes from the VAS section of Target Store
+  const vasCols = s.target?.sections.VAS?.columns ?? [];
+  const vasTarget = (name: string, provider: string) => {
+    const st = s.target?.staff.find((x) => nameKey(x.name) === nameKey(name));
+    const col = vasCols.find((c) => nameKey(c) === nameKey(provider));
+    return st && col ? (st.byColumn[`VAS:${col}`] ?? 0) * scale : 0;
+  };
+  const vasRows = rows.map((r) => {
+    const split = vasSplit(byKey.get(r.key) ?? []);
+    const cells = VAS_PROVIDERS.map((pv) => ({ pv, ...split[pv], target: vasTarget(r.name, pv) }));
+    const value = cells.reduce((a, c) => a + c.value, 0);
+    const qty = cells.reduce((a, c) => a + c.qty, 0);
+    const target = cells.reduce((a, c) => a + c.target, 0);
+    return { r, cells, value, qty, target };
+  });
+  const vasSum = VAS_PROVIDERS.map((pv) => ({
+    pv,
+    value: vasRows.reduce((a, x) => a + x.cells.find((c) => c.pv === pv)!.value, 0),
+    qty: vasRows.reduce((a, x) => a + x.cells.find((c) => c.pv === pv)!.qty, 0),
+    target: vasRows.reduce((a, x) => a + x.cells.find((c) => c.pv === pv)!.target, 0),
+  }));
+  const vasAll = { value: vasSum.reduce((a, c) => a + c.value, 0), qty: vasSum.reduce((a, c) => a + c.qty, 0), target: vasSum.reduce((a, c) => a + c.target, 0) };
+  const achTone = (v: number, t: number) => ((v / t) * 100 >= tg ? "text-emerald-600" : "text-rose-600");
 
   return (
     <div className="sd-content">
@@ -112,6 +136,57 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
             </tbody>
           </table>
         </div>
+      </Panel>
+
+      <Panel title="Pencapaian VAS" desc={`Value & qty VAS per salesperson per provider${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per provider dari Target Store.`}>
+        <div className="sd-table-wrap">
+          <table className="sd-table">
+            <thead>
+              <tr>
+                <th>Nama</th>
+                {VAS_PROVIDERS.map((pv) => <th key={pv} className="n">{pv}</th>)}
+                <th className="n">Total VAS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vasRows.map(({ r, cells, value, qty, target }) => (
+                <tr key={r.key}>
+                  <td className="font-bold">{r.name}</td>
+                  {cells.map((c) => (
+                    <td key={c.pv} className="n">
+                      {c.value || c.qty ? rpf(c.value) : <span className="text-slate-300">–</span>}
+                      {(c.value !== 0 || c.qty !== 0) && <div className="text-xs text-slate-400">{num(c.qty)} unit</div>}
+                      {c.target > 0 && <div className={`text-xs font-semibold ${achTone(c.value, c.target)}`}>{pct((c.value / c.target) * 100, 0)} dari {rpf(c.target)}</div>}
+                    </td>
+                  ))}
+                  <td className="n font-black">
+                    {rpf(value)}
+                    <div className="text-xs font-normal text-slate-400">{num(qty)} unit</div>
+                    {target > 0 && <div className={`text-xs font-semibold ${achTone(value, target)}`}>{pct((value / target) * 100, 0)} dari {rpf(target)}</div>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>TOTAL</td>
+                {vasSum.map((c) => (
+                  <td key={c.pv} className="n">
+                    {rpf(c.value)}
+                    <div className="text-xs font-normal">{num(c.qty)} unit</div>
+                    {c.target > 0 && <div className={`text-xs font-semibold ${achTone(c.value, c.target)}`}>{pct((c.value / c.target) * 100, 0)}</div>}
+                  </td>
+                ))}
+                <td className="n">
+                  {rpf(vasAll.value)}
+                  <div className="text-xs font-normal">{num(vasAll.qty)} unit</div>
+                  {vasAll.target > 0 && <div className={`text-xs font-semibold ${achTone(vasAll.value, vasAll.target)}`}>{pct((vasAll.value / vasAll.target) * 100, 0)} dari {rpf(vasAll.target)}</div>}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <p className="mt-3 text-xs text-slate-500">Hijau bila achievement ≥ {range ? "100%" : `time gone (${pct(tg)})`}. {vasCols.length ? "" : "Target VAS per provider belum terbaca dari tab Target Store — hanya actual yang ditampilkan."}</p>
       </Panel>
 
       <Panel title="Achievement by LOB" desc="Qty per staff.">
