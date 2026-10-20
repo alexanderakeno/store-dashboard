@@ -107,7 +107,8 @@ button:disabled { cursor: default; }
 .sd-shell { min-height: 100vh; background: var(--block-bg); }
 @media (min-width: 1024px) {
   .sd-shell { display: grid; grid-template-columns: 236px minmax(0, 1fr); }
-  .sd-shell[data-collapsed="true"] { grid-template-columns: 0 minmax(0, 1fr); }
+  /* sidebar hidden → one full-width column (with a 0px first column the content would auto-place into it) */
+  .sd-shell[data-collapsed="true"] { grid-template-columns: minmax(0, 1fr); }
   .sd-shell[data-collapsed="true"] .sd-sidebar { display: none; }
 }
 .sd-main { min-width: 0; padding-bottom: 40px; background: var(--block-bg); }
