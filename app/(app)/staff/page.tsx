@@ -82,6 +82,8 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
   const androidCols = [...androidSold.values()].filter((x) => x.value !== 0).sort((a, b) => b.value - a.value).map((x) => ({ key: x.label, label: x.label }));
   for (const c of s.target?.sections.Android?.columns ?? []) if (!androidCols.some((x) => nameKey(x.key) === nameKey(c))) androidCols.push({ key: c, label: c });
   const androidTable = breakdownOf("Android", androidCols);
+  // TOTAL rows add up the staff shown (online channel accounts and the staff filter excluded), like the value tables
+  const staffLines = rows.flatMap((r) => byKey.get(r.key) ?? []);
   // unit counts per Apple LOB and per Android brand (qty-counted lines only, as everywhere else)
   const qtyOf = (lines: SalesLine[]) => {
     const lob = lobQty(lines);
@@ -186,7 +188,7 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
       <Panel title="Achievement by LOB (Qty)" desc="Unit terjual per staff · Apple per LOB dan Android per brand.">
         {/* phone: one row per staff, Apple and Android on their own lines */}
         <ul className="divide-y divide-slate-200 md:hidden dark:divide-slate-700">
-          {[...rows.map((r) => ({ key: r.key, name: r.name, q: qtyOf(byKey.get(r.key) ?? []) })), { key: "__total", name: "TOTAL", q: qtyOf(ls) }].map(({ key, name, q }) => (
+          {[...rows.map((r) => ({ key: r.key, name: r.name, q: qtyOf(byKey.get(r.key) ?? []) })), { key: "__total", name: "TOTAL", q: qtyOf(staffLines) }].map(({ key, name, q }) => (
             <li key={key} className="py-2">
               <div className="flex justify-between gap-2"><p className="font-bold text-slate-950">{name}</p><p className="font-black">{num(q.device)} unit</p></div>
               <p className="text-xs text-slate-500"><b className="text-slate-700 dark:text-slate-200">Apple {num(q.apple)}</b> · {APPLE_LOBS.map((k) => `${k === "Mac" ? "MacBook" : k} ${num(q.lob[k])}`).join(" · ")}</p>
@@ -227,7 +229,7 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
             </tbody>
             <tfoot>
               {(() => {
-                const q = qtyOf(ls);
+                const q = qtyOf(staffLines);
                 return (
                   <tr>
                     <td>TOTAL</td>
