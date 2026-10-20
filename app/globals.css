@@ -432,3 +432,16 @@ html.dark .alert.ok { background: #34c7591a; border-color: #34c75955; color: #7e
 }
 
 }
+
+/* Log Akses: compact lists that read well on a phone */
+.sd-log-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.sd-log-stats > * + * { border-left: 1px solid var(--block-border); }
+.sd-log-list > * + * { border-top: 1px solid var(--block-border); }
+.sd-log-acct { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--block-border); text-decoration: none; color: var(--block-text); }
+.sd-log-acct:hover { background: var(--block-surface-hover); }
+.sd-log-acct[aria-current="true"] { border-color: #93c5fd; background: #eff6ff; }
+html.dark .sd-log-acct[aria-current="true"] { border-color: #1e3a8a; background: #0a84ff1f; }
+.sd-log-day { padding: 8px 0 6px; font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--block-text-secondary); background: var(--block-surface); }
+.sd-dot { width: 8px; height: 8px; border-radius: 999px; flex: none; background: #cbd5e1; }
+.sd-dot.green { background: #22c55e; } .sd-dot.red { background: #ef4444; } .sd-dot.blue { background: #3b82f6; } .sd-dot.slate { background: #94a3b8; }
+.sd-tabs.sm .sd-tab { font-size: 13px; padding: 8px 6px; }
