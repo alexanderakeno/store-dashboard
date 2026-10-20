@@ -163,7 +163,7 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel }
           <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/40">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[11px] font-black tracking-[.12em] text-slate-500 uppercase">{variant.credit != null ? (promo ? "Promo Cash" : "Harga Cash") : promo ? "Promo Price" : "Harga"}</p>
+                <p className="text-[11px] font-black tracking-[.12em] text-slate-500 uppercase">{promo ? "Promo Price" : "Harga"}</p>
                 <p className="text-2xl font-black tracking-tight text-blue-600 sm:text-3xl">{rp(variant.promo)}</p>
                 {promo && (
                   <>
