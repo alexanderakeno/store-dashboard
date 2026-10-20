@@ -168,7 +168,7 @@ export function generateMonth(month: MonthKey, lastDay: ISODate): { control: Gri
 }
 
 /** Synthetic `CX&GR Tracker` and `Rekap Promo` grids (same layout as the real tabs). */
-export function generateExtras(month: MonthKey, lastDay: ISODate): { tracker: Grid; promo: Grid } {
+export function generateExtras(month: MonthKey, lastDay: ISODate): { tracker: Grid; promo: Grid; accFocus: Grid } {
   const r = rng(Number(month.replace("-", "")) + 7);
   const names = FIXTURE_STAFF.map((s) => s.name.split(" ")[1].charAt(0) + s.name.split(" ")[1].slice(1).toLowerCase());
   const days = lastDay < monthStart(month) ? [] : eachDay(monthStart(month), lastDay).filter((d) => d.startsWith(month));
@@ -195,5 +195,24 @@ export function generateExtras(month: MonthKey, lastDay: ISODate): { tracker: Gr
     ["BNPL 0% Demo", "Min 5 jt", "iPhone Demo", "Free adapter", "Galaxy Demo", "Cashback 500rb"],
     ["", "", "", "selama persediaan ada", "Trade In Demo", "Up to 1 jt"],
   ];
-  return { tracker, promo };
+  // "Data - Akeno" ACC Fokus leaderboard: a few suppliers, QTY | AMOUNT | INSENTIF each, then TOTAL
+  const sup = ["SUPPLIER DEMO A", "SUPPLIER DEMO B", "APPLE ACC"];
+  const accRows = FIXTURE_STAFF.map((s, i) => {
+    const cells = sup.flatMap((): Array<string | number> => {
+      const q = Math.floor(r() * 8);
+      return q ? [q, q * (150_000 + Math.floor(r() * 300_000)), q * 7_500] : ["-", "-", "-"];
+    });
+    const num = (k: number) => cells.filter((_, j) => j % 3 === k).reduce<number>((a, v) => a + (Number(v) || 0), 0);
+    return ["", i + 1, displayCase(s.name), ...cells, num(0), num(1), num(2)];
+  });
+  const accFocus: Grid = [
+    ["", `LEADERBOARD ACC FOKUS - MTD ${Number(lastDay.slice(8, 10))}/${lastDay.slice(5, 7)}/${lastDay.slice(2, 4)}`],
+    ["", "", "ACC FOKUS", ...sup.flatMap((x) => [x, "", ""]), "TOTAL", "", ""],
+    ["", "RANK", "SALES NAME", ...[...sup, "TOTAL"].flatMap(() => ["QTY", "AMOUNT", "INSENTIF"])],
+    ...accRows,
+    ["", "TOTAL"],
+  ];
+  return { tracker, promo, accFocus };
 }
+
+const displayCase = (s: string) => s.toLowerCase().replace(/(^|\s)([a-z])/g, (_, p: string, c: string) => p + c.toUpperCase());
