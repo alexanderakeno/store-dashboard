@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageIntro, Panel, Progress, achColor } from "@/components/kit";
+import { JumpChips } from "@/components/modules/JumpChips";
 import { ParamDate, ParamSelect } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, clampRange, linesByStaff, linesIn, lobQty, staffStats, timeGonePct } from "@/lib/domain/extra";
@@ -100,6 +101,16 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
   return (
     <div className="sd-content">
       <PageIntro title="Staff Performance" desc="Seluruh staff toko kecuali akun online (channel)." />
+      <JumpChips
+        items={[
+          { id: "tabel-staff", label: "Staff Performance" },
+          { id: "tabel-grup", label: "Per Grup" },
+          { id: "tabel-apple", label: "Apple" },
+          { id: "tabel-android", label: "Android" },
+          { id: "tabel-vas", label: "VAS" },
+          { id: "tabel-lob", label: "LOB (Qty)" },
+        ]}
+      />
       <section className="sd-panel flex flex-wrap items-center justify-between gap-3 p-5">
         <div>
           <p className="font-black text-slate-950">Filter Range Penjualan Daily</p>
@@ -130,7 +141,7 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
         <div className="mt-3"><Progress value={teamAch} tick={tg} color={achColor(teamAch, tg)} label="Achievement tim" /></div>
       </section>
 
-      <Panel title="Staff Performance" desc={range ? `Achievement value ${from} s/d ${to} (target dipro-rata ${eachDay(from, to).length} hari).` : "Achievement value bulanan."}>
+      <Panel id="tabel-staff" title="Staff Performance" desc={range ? `Achievement value ${from} s/d ${to} (target dipro-rata ${eachDay(from, to).length} hari).` : "Achievement value bulanan."}>
         {/* phone: one card per staff, no sideways scrolling */}
         <div className="space-y-3 md:hidden">
           {rows.map((r) => (
@@ -180,12 +191,12 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
         <p className="mt-3 text-xs text-slate-500">Pace: On Track bila achievement ≥ time gone ({pct(tg)}). Gap = target − achievement. Jabatan staff (Cashier / Sales Assistant) butuh master staff — <b>Need Data</b>.</p>
       </Panel>
 
-      <BreakdownPanel title="Achievement per Grup" desc="Actual vs target staff per grup (Apple · Android · ACC · VAS)." data={groupTable} tg={tg} range={range} totalLabel="Total" />
-      <BreakdownPanel title="Achievement Apple" desc={`Value & qty Apple per salesperson per LOB${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per LOB dari Target Store.`} data={appleTable} tg={tg} range={range} note="AirPods dihitung di ACC — ditampilkan, tapi tidak masuk Total Apple." totalLabel="Total Apple" />
-      <BreakdownPanel title="Detail Pencapaian Android" desc={`Value & qty Android per salesperson per brand${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per brand dari Target Store.`} data={androidTable} tg={tg} range={range} totalLabel="Total Android" />
-      <BreakdownPanel title="Pencapaian VAS" desc={`Value & qty VAS per salesperson per provider${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per provider dari Target Store.`} data={vasTable} tg={tg} range={range} totalLabel="Total VAS" />
+      <BreakdownPanel id="tabel-grup" title="Achievement per Grup" desc="Actual vs target staff per grup (Apple · Android · ACC · VAS)." data={groupTable} tg={tg} range={range} totalLabel="Total" />
+      <BreakdownPanel id="tabel-apple" title="Achievement Apple" desc={`Value & qty Apple per salesperson per LOB${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per LOB dari Target Store.`} data={appleTable} tg={tg} range={range} note="AirPods dihitung di ACC — ditampilkan, tapi tidak masuk Total Apple." totalLabel="Total Apple" />
+      <BreakdownPanel id="tabel-android" title="Detail Pencapaian Android" desc={`Value & qty Android per salesperson per brand${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per brand dari Target Store.`} data={androidTable} tg={tg} range={range} totalLabel="Total Android" />
+      <BreakdownPanel id="tabel-vas" title="Pencapaian VAS" desc={`Value & qty VAS per salesperson per provider${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per provider dari Target Store.`} data={vasTable} tg={tg} range={range} totalLabel="Total VAS" />
 
-      <Panel title="Achievement by LOB (Qty)" desc="Unit terjual per staff · Apple per LOB dan Android per brand.">
+      <Panel id="tabel-lob" title="Achievement by LOB (Qty)" desc="Unit terjual per staff · Apple per LOB dan Android per brand.">
         {/* phone: one row per staff, Apple and Android on their own lines */}
         <ul className="divide-y divide-slate-200 md:hidden dark:divide-slate-700">
           {[...rows.map((r) => ({ key: r.key, name: r.name, q: qtyOf(byKey.get(r.key) ?? []) })), { key: "__total", name: "TOTAL", q: qtyOf(staffLines) }].map(({ key, name, q }) => (
@@ -260,7 +271,7 @@ interface Breakdown {
 }
 
 /** Salesperson × item table: value, unit and % of the staff target for each item, plus the group total. */
-function BreakdownPanel({ title, desc, data, tg, range, note, totalLabel }: { title: string; desc: string; data: Breakdown; tg: number; range: boolean; note?: string; totalLabel: string }) {
+function BreakdownPanel({ id, title, desc, data, tg, range, note, totalLabel }: { id: string; title: string; desc: string; data: Breakdown; tg: number; range: boolean; note?: string; totalLabel: string }) {
   const tone = (c: Cell) => ((c.value / c.target) * 100 >= tg ? "text-emerald-600" : "text-rose-600");
   const Value = ({ c, strong, foot }: { c: Cell; strong?: boolean; foot?: boolean }) => (
     <>
@@ -270,7 +281,7 @@ function BreakdownPanel({ title, desc, data, tg, range, note, totalLabel }: { ti
     </>
   );
   return (
-    <Panel title={title} desc={desc}>
+    <Panel id={id} title={title} desc={desc}>
       {/* phone: one card per staff — items listed vertically, empty items hidden */}
       <div className="space-y-3 md:hidden">
         {[...data.body.map((b) => ({ key: b.r.key, name: b.r.name, cells: b.cells, total: b.total })), { key: "__total", name: "TOTAL", cells: data.foot, total: data.total }].map((b) => (
