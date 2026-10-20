@@ -17,6 +17,7 @@ function page(): PdfText[] {
   head("GALAXY A SERIES", 59, 27, 720);
   row("GALAXY A17 5G 8/256GB", "5.299.000", "4.499.000", "ACTIVE", 27, 714);
   row("GALAXY WATCH 8 44MM DARK", "5.999.000", "4.499.000", "EOL", 27, 708);
+  row("GALAXY WATCH 8 44MM DARK", "5.999.000", "4.499.000", "EOL", 27, 702); // printed twice in the PDF
   // right block
   head("MATEPAD SERIES", 365, 322, 751);
   row("HUAWEI MATEPAD 11.5 8/256GB", "8.999.000", "8.599.000", "ACTIVE", 322, 745);
@@ -25,6 +26,8 @@ function page(): PdfText[] {
   out.push(t("ARTICLE & TIER", 322, 694), t("12 MONTHS", 440, 694), t("18 MONTHS", 487, 694), t("24 MONTHS", 532, 694));
   out.push(t("KLABRONZE / Rp 0 - Rp 3.000.000", 322, 688), t("200.000", 450, 688), t("250.000", 497, 688), t("280.000", 542, 688));
   out.push(t("KLASILVER / Rp 3.000.001 - Rp 5.000.000", 322, 682), t("350.000", 450, 682), t("435.000", 497, 682), t("490.000", 542, 682));
+  // last tier has no 18-month fee: the 24-month fee must stay under "24 MONTHS"
+  out.push(t("KLAVVIP / Rp 50.000.001 - Rp 60.000.000", 322, 676), t("3.620.000", 448, 676), t("5.065.000", 540, 676));
   return out.sort(() => 0.5 - Math.random()); // pdf.js order is not guaranteed
 }
 
@@ -40,8 +43,9 @@ test("price list PDF: blocks, series, prices, status, Qoala", () => {
   assert.deepEqual(r.qoala, [
     { tier: "KLABRONZE", range: "Rp 0 - Rp 3.000.000", fees: { "12": 200000, "18": 250000, "24": 280000 } },
     { tier: "KLASILVER", range: "Rp 3.000.001 - Rp 5.000.000", fees: { "12": 350000, "18": 435000, "24": 490000 } },
+    { tier: "KLAVVIP", range: "Rp 50.000.001 - Rp 60.000.000", fees: { "12": 3620000, "24": 5065000 } },
   ]);
-  assert.deepEqual(r.warnings, []);
+  assert.deepEqual(r.warnings, ["1 baris dobel (sama persis) dilewati: GALAXY WATCH 8 44MM DARK"]);
 });
 
 test("price list: not a price list PDF → warning, no items", () => {
