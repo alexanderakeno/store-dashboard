@@ -9,7 +9,7 @@ import type { AppRecord, AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, 
 import { parsePromo, parseTracker, parseTrafficTab } from "@/lib/parsers/extras";
 import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
-import type { PriceKind, PriceList } from "@/types/pricelist";
+import type { PriceItem, PriceKind, PriceList } from "@/types/pricelist";
 import type { PriceListInput } from "../types";
 
 /** Optional tabs of the monthly sheet. */
@@ -244,7 +244,14 @@ export class SheetsSource implements DataSource {
       }
       if (kind !== "apple" && kind !== "android") continue;
       const k = kind as PriceKind;
-      out.items.push({ kind: k, brand: normalizeText(r.brand), series: normalizeText(r.series), name: normalizeText(r.name), normal: parseNumber(r.normal), promo: parseNumber(r.promo), status: normalizeText(r.status) || "ACTIVE" });
+      const item: PriceItem = { kind: k, brand: normalizeText(r.brand), series: normalizeText(r.series), name: normalizeText(r.name), normal: parseNumber(r.normal), promo: parseNumber(r.promo), status: normalizeText(r.status) || "ACTIVE" };
+      // Apple rows keep the installment price + bracket note as JSON in `extra`
+      try {
+        const x = r.extra ? (JSON.parse(String(r.extra)) as { credit?: unknown; note?: unknown }) : {};
+        if (typeof x.credit === "number" && Number.isFinite(x.credit)) item.credit = x.credit;
+        if (typeof x.note === "string" && x.note) item.note = x.note;
+      } catch {}
+      out.items.push(item);
       out.dates[k] ??= parseDate(r.date);
       out.source[k] ??= normalizeText(r.source);
       out.updatedAt[k] ??= normalizeText(r.updatedAt);
@@ -260,7 +267,8 @@ export class SheetsSource implements DataSource {
       return k === "qoala" ? !replaceQoala : !input.kinds.includes(k as PriceKind);
     });
     const out: unknown[][] = keep.map((r) => MASTER_TABS.priceList.header.map((h) => r[h] ?? ""));
-    for (const x of input.items) out.push([x.kind, x.brand, x.series, x.name, x.normal, x.promo, x.status, "", input.date ?? "", input.source, now, by]);
+    const extra = (x: PriceItem) => (x.credit != null || x.note ? JSON.stringify({ ...(x.credit != null ? { credit: x.credit } : {}), ...(x.note ? { note: x.note } : {}) }) : "");
+    for (const x of input.items) out.push([x.kind, x.brand, x.series, x.name, x.normal, x.promo, x.status, extra(x), input.date ?? "", input.source, now, by]);
     for (const q of input.qoala) out.push(["qoala", q.tier, q.range, "", "", "", "", JSON.stringify(q.fees), input.date ?? "", input.source, now, by]);
     await this.rewrite("priceList", out);
   }
