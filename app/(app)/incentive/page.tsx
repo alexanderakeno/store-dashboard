@@ -29,8 +29,11 @@ const unit = (q: number) => (q ? `${num(q)} unit` : null);
 const accSub = (r: IncentiveRow) => (r.acc ? `${num(r.acc.qty)} pcs` : null);
 const qoalaSub = (r: IncentiveRow) => (r.qoala.policies ? `${num(r.qoala.policies)} polis` : null);
 
-/** Breakdown shown under a staff: devices, Qoala per price tier, accessories per supplier. */
-function Breakdown({ r, tierLabel }: { r: IncentiveRow; tierLabel: (min: number) => string }) {
+/**
+ * Breakdown shown under a staff: devices, Qoala, accessories per supplier. Only the admin sees
+ * Qoala split per price tier — that would reveal the scheme.
+ */
+function Breakdown({ r, tierLabel, admin }: { r: IncentiveRow; tierLabel: (min: number) => string; admin: boolean }) {
   const sups = Object.entries(r.acc?.bySupplier ?? {}).sort((a, b) => b[1].fee - a[1].fee);
   return (
     <div className="grid gap-4 text-[13px] sm:grid-cols-3">
@@ -41,10 +44,14 @@ function Breakdown({ r, tierLabel }: { r: IncentiveRow; tierLabel: (min: number)
         ))}
       </div>
       <div>
-        <p className="sd-label">Qoala per harga polis</p>
-        {r.qoala.tiers.map((t) => (
-          <p key={t.min} className="flex justify-between gap-3"><span className="text-slate-600">{tierLabel(t.min)} · {num(t.policies)} polis</span><span className="tabular-nums">{rp(t.policies * t.fee)}</span></p>
-        ))}
+        <p className="sd-label">{admin ? "Qoala per harga polis" : "Qoala"}</p>
+        {admin ? (
+          r.qoala.tiers.map((t) => (
+            <p key={t.min} className="flex justify-between gap-3"><span className="text-slate-600">{tierLabel(t.min)} · {num(t.policies)} polis</span><span className="tabular-nums">{rp(t.policies * t.fee)}</span></p>
+          ))
+        ) : (
+          <p className="flex justify-between gap-3"><span className="text-slate-600">{num(r.qoala.policies)} polis</span><span className="tabular-nums">{rp(r.qoala.fee)}</span></p>
+        )}
       </div>
       <div>
         <p className="sd-label">Aksesoris per supplier</p>
@@ -63,6 +70,8 @@ function Breakdown({ r, tierLabel }: { r: IncentiveRow; tierLabel: (min: number)
 export default async function IncentivePage({ searchParams }: { searchParams: SearchParams }) {
   const p = await loadPage(searchParams);
   if (p.state !== "ok") return <PageStatus title="Est. Incentive" p={p} />;
+  // the scheme (rates, Qoala price tiers) is for the admin only; viewers see the resulting amounts
+  const admin = p.session.role === "admin";
   const { from, to } = clampRange(p.month, p.asOf, p.q.from, p.q.to);
   // rules cached before this feature existed have no `incentive` yet (cache lives a few minutes)
   const rules = p.snap.rules.incentive ?? DEFAULT_RULES.incentive;
@@ -103,16 +112,16 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
         </div>
       </div>
 
-      {!board && (
+      {admin && !board && (
         <div className="alert warn">
           {p.snap.extras.accFocus === undefined
             ? "Data sheet belum dibaca ulang sejak fitur ini dipasang — klik Perbarui di kanan atas untuk memuat incentive aksesoris."
             : 'Leaderboard ACC Fokus tidak ditemukan di tab "Data - Akeno" file bulan ini — incentive aksesoris dihitung 0.'}
         </div>
       )}
-      {view.qoalaUncertain > 0 && <div className="alert warn">{view.qoalaUncertain} baris Qoala jumlah polisnya tidak bisa dipastikan dari harga di MR — harga per polis (dan tier-nya) baris itu mungkin kurang tepat. Cek di Cut Off &amp; Rekonsiliasi.</div>}
+      {admin && view.qoalaUncertain > 0 && <div className="alert warn">{view.qoalaUncertain} baris Qoala jumlah polisnya tidak bisa dipastikan dari harga di MR — harga per polis (dan tier-nya) baris itu mungkin kurang tepat. Cek di Cut Off &amp; Rekonsiliasi.</div>}
 
-      <Panel title="Rincian per Staff" desc={pick ? undefined : "Klik nama untuk rincian Qoala per harga polis dan aksesoris per supplier."} className="!p-4 sm:!p-6">
+      <Panel title="Rincian per Staff" desc={pick ? undefined : "Klik nama untuk rincian per staff."} className="!p-4 sm:!p-6">
         {/* phone: one card per staff */}
         <div className="space-y-2 sm:hidden">
           {rows.map((r, i) => (
@@ -125,7 +134,7 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
                 </span>
                 <b className="shrink-0 text-sm tabular-nums">{rp(r.total)}</b>
               </summary>
-              <div className="mt-3 border-t border-[var(--block-border)] pt-3"><Breakdown r={r} tierLabel={tierLabel} /></div>
+              <div className="mt-3 border-t border-[var(--block-border)] pt-3"><Breakdown r={r} tierLabel={tierLabel} admin={admin} /></div>
             </details>
           ))}
         </div>
@@ -163,10 +172,11 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
             )}
           </table>
         </div>
-        {pick && <div className="mt-4 hidden sm:block"><Breakdown r={pick} tierLabel={tierLabel} /></div>}
+        {pick && <div className="mt-4 hidden sm:block"><Breakdown r={pick} tierLabel={tierLabel} admin={admin} /></div>}
       </Panel>
 
-      <Panel title="Skema" className="!p-4 sm:!p-6">
+      {admin && (
+      <Panel title="Skema" desc="Hanya terlihat oleh admin." className="!p-4 sm:!p-6">
         <ul className="space-y-1.5 text-sm text-slate-600">
           <li><b>Device:</b> {DEVICE_LOBS.map((l) => `${LOB_LABEL[l]} ${rp(rules.perUnit[l] ?? 0)}`).join(" · ")} per unit. Retur mengurangi.</li>
           <li><b>Qoala:</b> dihitung per polis, lalu dijumlahkan — {tiers.map((t) => `${tierLabel(t.min)} ${rp(t.fee)}`).join(" · ")}.</li>
@@ -174,6 +184,7 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
           <li className="text-xs text-slate-500">Penjualan akun online (Mapemall) tidak dihitung. Skema bisa diubah admin di Settings → Aturan bisnis (kunci <code>incentive</code>).</li>
         </ul>
       </Panel>
+      )}
     </div>
   );
 }
