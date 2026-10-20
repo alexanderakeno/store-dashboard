@@ -1,5 +1,5 @@
 import type { MonthKey, TrafficEntry } from "@/types/domain";
-import type { PromoBrand, Tracker, TrackerDay } from "@/types/extras";
+import type { AccFocusBoard, AccFocusCell, PromoBrand, Tracker, TrackerDay } from "@/types/extras";
 import { normalizeText, parseDate, parseNumber } from "@/lib/domain/normalize";
 import type { Grid } from "./controlSheet";
 
@@ -118,4 +118,54 @@ export function parseTrafficTab(grid: Grid, month: MonthKey): TrafficEntry[] {
     }
   }
   return [];
+}
+
+/**
+ * `Data - Akeno` → "LEADERBOARD ACC FOKUS" block (found by label, not position):
+ * title row, then a row of supplier names (each spanning QTY | AMOUNT | INSENTIF), then
+ * `RANK | SALES NAME | QTY | AMOUNT | INSENTIF …`, then one row per staff until `TOTAL`.
+ * The last supplier column group is "TOTAL".
+ */
+export function parseAccFocus(grid: Grid): AccFocusBoard | null {
+  let tr = -1;
+  let tc = -1;
+  for (let r = 0; r < grid.length && tr < 0; r++) {
+    const c = (grid[r] ?? []).findIndex((v) => /leaderboard acc fokus/i.test(t(v)));
+    if (c >= 0) [tr, tc] = [r, c];
+  }
+  if (tr < 0) return null;
+  // header row with "SALES NAME" within the next few rows
+  let hr = -1;
+  let nameCol = -1;
+  for (let r = tr + 1; r <= tr + 4 && r < grid.length; r++) {
+    const c = (grid[r] ?? []).findIndex((v) => low(v) === "sales name");
+    if (c >= 0) [hr, nameCol] = [r, c];
+  }
+  if (hr < 1) return null;
+  const supRow = grid[hr - 1] ?? [];
+  const groups: Array<{ name: string; col: number }> = [];
+  for (let c = nameCol + 1; c < supRow.length; c++) if (t(supRow[c])) groups.push({ name: t(supRow[c]).replace(/\s+/g, " "), col: c });
+  if (!groups.length) return null;
+  const totalGroup = groups.find((g) => /^total$/i.test(g.name));
+  const suppliers = groups.filter((g) => g !== totalGroup);
+  const cell = (row: unknown[], col: number): AccFocusCell => ({ qty: parseNumber(row[col]), amount: parseNumber(row[col + 1]), fee: parseNumber(row[col + 2]) });
+  const staff: AccFocusBoard["staff"] = [];
+  for (let r = hr + 1; r < grid.length; r++) {
+    const row = grid[r] ?? [];
+    const rank = t(row[nameCol - 1]);
+    const name = t(row[nameCol]);
+    if (/^total/i.test(rank) || /^total/i.test(name)) break;
+    if (!name) {
+      if (!rank) break; // blank row = end of block
+      continue; // numbered but empty slot
+    }
+    const bySupplier: Record<string, AccFocusCell> = {};
+    for (const g of suppliers) {
+      const x = cell(row, g.col);
+      if (x.qty || x.amount || x.fee) bySupplier[g.name] = x;
+    }
+    const sum = Object.values(bySupplier).reduce((a, x) => ({ qty: a.qty + x.qty, amount: a.amount + x.amount, fee: a.fee + x.fee }), { qty: 0, amount: 0, fee: 0 });
+    staff.push({ name, bySupplier, total: totalGroup ? cell(row, totalGroup.col) : sum });
+  }
+  return { title: t(grid[tr][tc]), suppliers: suppliers.map((g) => g.name), staff };
 }
