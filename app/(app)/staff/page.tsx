@@ -2,14 +2,15 @@ import Link from "next/link";
 import { PageIntro, Panel, Progress, achColor } from "@/components/kit";
 import { ParamDate, ParamSelect } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
-import { APPLE_LOBS, VAS_PROVIDERS, clampRange, linesByStaff, linesIn, lobQty, staffStats, timeGonePct, vasSplit } from "@/lib/domain/extra";
+import { APPLE_LOBS, VAS_PROVIDERS, clampRange, linesByStaff, linesIn, lobQty, staffStats, timeGonePct } from "@/lib/domain/extra";
+import { focusKey } from "@/lib/domain/views";
 import { totals } from "@/lib/domain/kpi";
 import { nameKey } from "@/lib/domain/normalize";
 import { daysInMonth, eachDay, monthStart } from "@/lib/domain/period";
-import { dec, monthLabel, num, pct, rpf } from "@/lib/format";
+import { dec, monthLabel, num, pct, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
-import { GROUPS } from "@/types/domain";
+import { GROUPS, type Group, type SalesLine } from "@/types/domain";
 
 export default async function StaffPage({ searchParams }: { searchParams: SearchParams }) {
   const p = await loadPage(searchParams);
@@ -30,31 +31,69 @@ export default async function StaffPage({ searchParams }: { searchParams: Search
   const onTrack = (teamAch ?? 0) >= tg;
 const teamGapTg = team.sales - (teamTarget * tg) / 100;
   const byKey = linesByStaff(ls);
-  const lobTotal = lobQty(ls);
 
-  // VAS per salesperson × provider; staff target per provider comes from the VAS section of Target Store
-  const vasCols = s.target?.sections.VAS?.columns ?? [];
-  const vasTarget = (name: string, provider: string) => {
-    const st = s.target?.staff.find((x) => nameKey(x.name) === nameKey(name));
-    const col = vasCols.find((c) => nameKey(c) === nameKey(provider));
-    return st && col ? (st.byColumn[`VAS:${col}`] ?? 0) * scale : 0;
+  // Detail per salesperson × item (Apple LOB · Android brand · VAS provider), same keys as Target Fokus;
+  // staff target per item comes from that group's section of Target Store
+  const staffTarget = (name: string) => s.target?.staff.find((x) => nameKey(x.name) === nameKey(name));
+  type Col = { key: string; label: string; inTotal?: boolean };
+  const table = (cols: Col[], keyOf: (l: SalesLine) => string | null, targetOf: (name: string, key: string) => number, qtyAll = false) => {
+    const cell = (lines: SalesLine[], key: string) => {
+      const m = lines.filter((l) => nameKey(keyOf(l) ?? "") === nameKey(key));
+      return { value: m.reduce((a, l) => a + l.amount, 0), qty: m.reduce((a, l) => a + (qtyAll || l.countsInQty ? l.qty : 0), 0) };
+    };
+    const sum = (xs: Array<{ value: number; qty: number; target: number }>) => ({ value: xs.reduce((a, c) => a + c.value, 0), qty: xs.reduce((a, c) => a + c.qty, 0), target: xs.reduce((a, c) => a + c.target, 0) });
+    const body = rows.map((r) => {
+      const cells = cols.map((c) => ({ ...c, ...cell(byKey.get(r.key) ?? [], c.key), target: targetOf(r.name, c.key) }));
+      return { r, cells, total: sum(cells.filter((c) => c.inTotal !== false)) };
+    });
+    const foot = cols.map((c, i) => ({ ...c, ...sum(body.map((b) => b.cells[i])) }));
+    return { cols, body, foot, total: sum(foot.filter((c) => c.inTotal !== false)) };
   };
-  const vasRows = rows.map((r) => {
-    const split = vasSplit(byKey.get(r.key) ?? []);
-    const cells = VAS_PROVIDERS.map((pv) => ({ pv, ...split[pv], target: vasTarget(r.name, pv) }));
-    const value = cells.reduce((a, c) => a + c.value, 0);
-    const qty = cells.reduce((a, c) => a + c.qty, 0);
-    const target = cells.reduce((a, c) => a + c.target, 0);
-    return { r, cells, value, qty, target };
-  });
-  const vasSum = VAS_PROVIDERS.map((pv) => ({
-    pv,
-    value: vasRows.reduce((a, x) => a + x.cells.find((c) => c.pv === pv)!.value, 0),
-    qty: vasRows.reduce((a, x) => a + x.cells.find((c) => c.pv === pv)!.qty, 0),
-    target: vasRows.reduce((a, x) => a + x.cells.find((c) => c.pv === pv)!.target, 0),
-  }));
-  const vasAll = { value: vasSum.reduce((a, c) => a + c.value, 0), qty: vasSum.reduce((a, c) => a + c.qty, 0), target: vasSum.reduce((a, c) => a + c.target, 0) };
-  const achTone = (v: number, t: number) => ((v / t) * 100 >= tg ? "text-emerald-600" : "text-rose-600");
+  // Detail per salesperson × item (Apple LOB · Android brand · VAS provider), same keys as Target Fokus;
+  // staff target per item comes from that group's section of Target Store
+  const breakdownOf = (group: Group, cols: Col[]) => {
+    const tcols = s.target?.sections[group]?.columns ?? [];
+    const targetOf = (name: string, key: string) => {
+      const st = staffTarget(name);
+      const col = tcols.find((c) => nameKey(c) === nameKey(key));
+      return st && col ? (st.byColumn[`${group}:${col}`] ?? 0) * scale : 0;
+    };
+    return { ...table(cols, (l) => focusKey(group, l), targetOf, group === "VAS"), hasTarget: tcols.length > 0 };
+  };
+  const groupTable = { ...table(GROUPS.map((g) => ({ key: g, label: g })), (l) => l.group, (name, g) => (staffTarget(name)?.byGroup[g as Group] ?? 0) * scale), hasTarget: !!s.target?.staff.length };
+  const vasTable = breakdownOf("VAS", VAS_PROVIDERS.map((k) => ({ key: k, label: k })));
+  const appleTable = breakdownOf("Apple", [
+    { key: "iPhone", label: "iPhone" },
+    { key: "iPad", label: "iPad" },
+    { key: "Mac", label: "MacBook" },
+    { key: "Apple Watch", label: "Apple Watch" },
+    // AirPods are sold by Apple staff but their value is ACC — shown, not added to Total Apple
+    { key: "AirPods", label: "AirPods", inTotal: false },
+  ]);
+  // Android brands: every brand sold in the period (highest first), then brands that only have a target
+  const androidSold = new Map<string, { label: string; value: number }>();
+  for (const l of ls) {
+    const k = focusKey("Android", l);
+    if (!k) continue;
+    const e = androidSold.get(nameKey(k)) ?? { label: k, value: 0 };
+    e.value += l.amount;
+    androidSold.set(nameKey(k), e);
+  }
+  const androidCols = [...androidSold.values()].filter((x) => x.value !== 0).sort((a, b) => b.value - a.value).map((x) => ({ key: x.label, label: x.label }));
+  for (const c of s.target?.sections.Android?.columns ?? []) if (!androidCols.some((x) => nameKey(x.key) === nameKey(c))) androidCols.push({ key: c, label: c });
+  const androidTable = breakdownOf("Android", androidCols);
+  // unit counts per Apple LOB and per Android brand (qty-counted lines only, as everywhere else)
+  const qtyOf = (lines: SalesLine[]) => {
+    const lob = lobQty(lines);
+    const byBrand = new Map<string, number>();
+    for (const l of lines) {
+      const k = focusKey("Android", l);
+      if (k && l.countsInQty) byBrand.set(nameKey(k), (byBrand.get(nameKey(k)) ?? 0) + l.qty);
+    }
+    const apple = APPLE_LOBS.reduce((a, k) => a + lob[k], 0);
+    const android = [...byBrand.values()].reduce((a, n) => a + n, 0);
+    return { lob, apple, android, device: apple + android, brand: (k: string) => byBrand.get(nameKey(k)) ?? 0 };
+  };
 
   return (
     <div className="sd-content">
@@ -90,7 +129,31 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
       </section>
 
       <Panel title="Staff Performance" desc={range ? `Achievement value ${from} s/d ${to} (target dipro-rata ${eachDay(from, to).length} hari).` : "Achievement value bulanan."}>
-        <div className="sd-table-wrap">
+        {/* phone: one card per staff, no sideways scrolling */}
+        <div className="space-y-3 md:hidden">
+          {rows.map((r) => (
+            <div key={r.key} className="rounded-2xl border border-slate-200 p-3 dark:border-slate-700">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0"><p className="font-bold text-slate-950">{r.name}</p><p className="text-xs text-slate-400">{r.nik ?? "NIK tidak ada"}</p></div>
+                <span className={`sd-badge shrink-0 ${r.target && r.onPace ? "green" : r.target ? "red" : "slate"}`}>● {r.target ? (r.onPace ? "On Track" : "Behind") : "No Target"}</span>
+              </div>
+              <div className="mt-2 flex items-baseline justify-between gap-2">
+                <p className="text-lg font-black text-slate-950">{rpf(r.totals.sales)}</p>
+                <p className="text-sm font-bold" style={{ color: achColor(r.achievementPct, tg) }}>{pct(r.achievementPct ?? 0, 0)}</p>
+              </div>
+              <p className="text-xs text-slate-500">Target {rpf(r.target)} · Gap <span className={r.gap > 0 ? "text-rose-600" : "text-emerald-600"}>{rpf(r.gap)}</span></p>
+              <div className="mt-2"><Progress value={r.achievementPct} tick={tg} color={achColor(r.achievementPct, tg)} label={`Achievement ${r.name}`} /></div>
+              <dl className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1 text-xs">
+                <div><dt className="text-slate-400">Accessories</dt><dd className="font-semibold">{rpf(r.acc)}</dd></div>
+                <div><dt className="text-slate-400">VAS</dt><dd className="font-semibold">{rpf(r.vas)}</dd></div>
+                <div><dt className="text-slate-400">Trx</dt><dd className="font-semibold">{num(r.totals.invoices)}</dd></div>
+                <div><dt className="text-slate-400">UPT</dt><dd className="font-semibold">{dec(r.totals.upt, 1).replace(",", ".")}</dd></div>
+                <div className="col-span-2"><dt className="text-slate-400">ATV</dt><dd className="font-semibold">{rpf(r.totals.atv)}</dd></div>
+              </dl>
+            </div>
+          ))}
+        </div>
+        <div className="sd-table-wrap hidden md:block">
           <table className="sd-table">
             <thead><tr><th>Nama</th><th className="n">Target</th><th className="n">Achievement</th><th className="n">%</th><th>Pace</th><th className="n">Gap</th><th className="n">Accessories</th><th className="n">VAS</th><th className="n">UPT</th><th className="n">ATV</th><th className="n">Trx</th></tr></thead>
             <tbody>
@@ -115,100 +178,155 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
         <p className="mt-3 text-xs text-slate-500">Pace: On Track bila achievement ≥ time gone ({pct(tg)}). Gap = target − achievement. Jabatan staff (Cashier / Sales Assistant) butuh master staff — <b>Need Data</b>.</p>
       </Panel>
 
-      <Panel title="Achievement per Grup" desc="Actual vs target staff per grup (Apple · Android · ACC · VAS).">
-        <div className="sd-table-wrap">
-          <table className="sd-table">
-            <thead><tr><th>Nama</th>{GROUPS.map((g) => <th key={g} className="n">{g}</th>)}<th className="n">Total</th></tr></thead>
-            <tbody>
-              {rows.map((r) => {
-                const st = s.target?.staff.find((x) => nameKey(x.name) === nameKey(r.name));
-                return (
-                  <tr key={r.key}>
-                    <td className="font-bold">{r.name}</td>
-                    {GROUPS.map((g) => {
-                      const tgt = (st?.byGroup[g] ?? 0) * scale;
-                      return <td key={g} className="n">{rpf(r.totals.byGroup[g])}{tgt > 0 && <div className={`text-xs font-semibold ${(r.totals.byGroup[g] / tgt) * 100 >= tg ? "text-emerald-600" : "text-rose-600"}`}>{pct((r.totals.byGroup[g] / tgt) * 100, 0)} dari {rpf(tgt)}</div>}</td>;
-                    })}
-                    <td className="n font-black">{rpf(r.totals.sales)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
+      <BreakdownPanel title="Achievement per Grup" desc="Actual vs target staff per grup (Apple · Android · ACC · VAS)." data={groupTable} tg={tg} range={range} totalLabel="Total" />
+      <BreakdownPanel title="Achievement Apple" desc={`Value & qty Apple per salesperson per LOB${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per LOB dari Target Store.`} data={appleTable} tg={tg} range={range} note="AirPods dihitung di ACC — ditampilkan, tapi tidak masuk Total Apple." totalLabel="Total Apple" />
+      <BreakdownPanel title="Detail Pencapaian Android" desc={`Value & qty Android per salesperson per brand${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per brand dari Target Store.`} data={androidTable} tg={tg} range={range} totalLabel="Total Android" />
+      <BreakdownPanel title="Pencapaian VAS" desc={`Value & qty VAS per salesperson per provider${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per provider dari Target Store.`} data={vasTable} tg={tg} range={range} totalLabel="Total VAS" />
 
-      <Panel title="Pencapaian VAS" desc={`Value & qty VAS per salesperson per provider${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per provider dari Target Store.`}>
-        <div className="sd-table-wrap">
+      <Panel title="Achievement by LOB (Qty)" desc="Unit terjual per staff · Apple per LOB dan Android per brand.">
+        {/* phone: one row per staff, Apple and Android on their own lines */}
+        <ul className="divide-y divide-slate-200 md:hidden dark:divide-slate-700">
+          {[...rows.map((r) => ({ key: r.key, name: r.name, q: qtyOf(byKey.get(r.key) ?? []) })), { key: "__total", name: "TOTAL", q: qtyOf(ls) }].map(({ key, name, q }) => (
+            <li key={key} className="py-2">
+              <div className="flex justify-between gap-2"><p className="font-bold text-slate-950">{name}</p><p className="font-black">{num(q.device)} unit</p></div>
+              <p className="text-xs text-slate-500"><b className="text-slate-700 dark:text-slate-200">Apple {num(q.apple)}</b> · {APPLE_LOBS.map((k) => `${k === "Mac" ? "MacBook" : k} ${num(q.lob[k])}`).join(" · ")}</p>
+              <p className="text-xs text-slate-500"><b className="text-slate-700 dark:text-slate-200">Android {num(q.android)}</b>{androidCols.filter((c) => q.brand(c.key)).map((c) => ` · ${c.label} ${num(q.brand(c.key))}`).join("")}</p>
+            </li>
+          ))}
+        </ul>
+        <div className="sd-table-wrap hidden md:block">
           <table className="sd-table">
             <thead>
               <tr>
-                <th>Nama</th>
-                {VAS_PROVIDERS.map((pv) => <th key={pv} className="n">{pv}</th>)}
-                <th className="n">Total VAS</th>
+                <th rowSpan={2}>Nama</th>
+                <th colSpan={APPLE_LOBS.length + 1} className="text-center">Apple</th>
+                <th colSpan={androidCols.length + 1} className="text-center">Android</th>
+                <th rowSpan={2} className="n">Total Device</th>
+              </tr>
+              <tr>
+                {APPLE_LOBS.map((k) => <th key={k} className="n">{k === "Mac" ? "MacBook" : k}</th>)}
+                <th className="n">Total</th>
+                {androidCols.map((c) => <th key={c.key} className="n">{c.label}</th>)}
+                <th className="n">Total</th>
               </tr>
             </thead>
             <tbody>
-              {vasRows.map(({ r, cells, value, qty, target }) => (
-                <tr key={r.key}>
-                  <td className="font-bold">{r.name}</td>
-                  {cells.map((c) => (
-                    <td key={c.pv} className="n">
-                      {c.value || c.qty ? rpf(c.value) : <span className="text-slate-300">–</span>}
-                      {(c.value !== 0 || c.qty !== 0) && <div className="text-xs text-slate-400">{num(c.qty)} unit</div>}
-                      {c.target > 0 && <div className={`text-xs font-semibold ${achTone(c.value, c.target)}`}>{pct((c.value / c.target) * 100, 0)} dari {rpf(c.target)}</div>}
-                    </td>
-                  ))}
-                  <td className="n font-black">
-                    {rpf(value)}
-                    <div className="text-xs font-normal text-slate-400">{num(qty)} unit</div>
-                    {target > 0 && <div className={`text-xs font-semibold ${achTone(value, target)}`}>{pct((value / target) * 100, 0)} dari {rpf(target)}</div>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td>TOTAL</td>
-                {vasSum.map((c) => (
-                  <td key={c.pv} className="n">
-                    {rpf(c.value)}
-                    <div className="text-xs font-normal">{num(c.qty)} unit</div>
-                    {c.target > 0 && <div className={`text-xs font-semibold ${achTone(c.value, c.target)}`}>{pct((c.value / c.target) * 100, 0)}</div>}
-                  </td>
-                ))}
-                <td className="n">
-                  {rpf(vasAll.value)}
-                  <div className="text-xs font-normal">{num(vasAll.qty)} unit</div>
-                  {vasAll.target > 0 && <div className={`text-xs font-semibold ${achTone(vasAll.value, vasAll.target)}`}>{pct((vasAll.value / vasAll.target) * 100, 0)} dari {rpf(vasAll.target)}</div>}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">Hijau bila achievement ≥ {range ? "100%" : `time gone (${pct(tg)})`}. {vasCols.length ? "" : "Target VAS per provider belum terbaca dari tab Target Store — hanya actual yang ditampilkan."}</p>
-      </Panel>
-
-      <Panel title="Achievement by LOB" desc="Qty per staff.">
-        <div className="sd-table-wrap">
-          <table className="sd-table">
-            <thead><tr><th>Nama</th><th className="n">iPhone</th><th className="n">MacBook</th><th className="n">iPad</th><th className="n">Apple Watch</th><th className="n">AirPods</th><th className="n">Total Device</th></tr></thead>
-            <tbody>
               {rows.map((r) => {
-                const q = lobQty(byKey.get(r.key) ?? []);
+                const q = qtyOf(byKey.get(r.key) ?? []);
                 return (
                   <tr key={r.key}>
                     <td className="font-bold">{r.name}</td>
-                    {APPLE_LOBS.map((k) => <td key={k} className="n">{num(q[k])}</td>)}
-                    <td className="n font-black">{num(q.iPhone + q.Mac + q.iPad + q["Apple Watch"] + q.AirPods)}</td>
+                    {APPLE_LOBS.map((k) => <td key={k} className="n">{num(q.lob[k])}</td>)}
+                    <td className="n font-bold">{num(q.apple)}</td>
+                    {androidCols.map((c) => <td key={c.key} className="n">{num(q.brand(c.key))}</td>)}
+                    <td className="n font-bold">{num(q.android)}</td>
+                    <td className="n font-black">{num(q.device)}</td>
                   </tr>
                 );
               })}
             </tbody>
-            <tfoot><tr><td>TOTAL</td>{APPLE_LOBS.map((k) => <td key={k} className="n">{num(lobTotal[k])}</td>)}<td className="n">{num(APPLE_LOBS.reduce((a, k) => a + lobTotal[k], 0))}</td></tr></tfoot>
+            <tfoot>
+              {(() => {
+                const q = qtyOf(ls);
+                return (
+                  <tr>
+                    <td>TOTAL</td>
+                    {APPLE_LOBS.map((k) => <td key={k} className="n">{num(q.lob[k])}</td>)}
+                    <td className="n">{num(q.apple)}</td>
+                    {androidCols.map((c) => <td key={c.key} className="n">{num(q.brand(c.key))}</td>)}
+                    <td className="n">{num(q.android)}</td>
+                    <td className="n">{num(q.device)}</td>
+                  </tr>
+                );
+              })()}
+            </tfoot>
           </table>
         </div>
+        <p className="mt-3 text-xs text-slate-500">Total Device = Apple (termasuk AirPods, seperti sebelumnya) + Android.</p>
       </Panel>
     </div>
+  );
+}
+
+type Cell = { value: number; qty: number; target: number };
+interface Breakdown {
+  cols: Array<{ key: string; label: string; inTotal?: boolean }>;
+  body: Array<{ r: { key: string; name: string }; cells: Array<Cell & { key: string }>; total: Cell }>;
+  foot: Array<Cell & { key: string }>;
+  total: Cell;
+  hasTarget: boolean;
+}
+
+/** Salesperson × item table: value, unit and % of the staff target for each item, plus the group total. */
+function BreakdownPanel({ title, desc, data, tg, range, note, totalLabel }: { title: string; desc: string; data: Breakdown; tg: number; range: boolean; note?: string; totalLabel: string }) {
+  const tone = (c: Cell) => ((c.value / c.target) * 100 >= tg ? "text-emerald-600" : "text-rose-600");
+  const Value = ({ c, strong, foot }: { c: Cell; strong?: boolean; foot?: boolean }) => (
+    <>
+      {c.value || c.qty || foot || strong ? rpf(c.value) : <span className="text-slate-300">–</span>}
+      {(c.value !== 0 || c.qty !== 0 || foot || strong) && <div className={`text-xs ${foot ? "font-normal" : "font-normal text-slate-400"}`}>{num(c.qty)} unit</div>}
+      {c.target > 0 && <div className={`text-xs font-semibold ${tone(c)}`}>{pct((c.value / c.target) * 100, 0)}{foot && !strong ? "" : ` dari ${rpc(c.target)}`}</div>}
+    </>
+  );
+  return (
+    <Panel title={title} desc={desc}>
+      {/* phone: one card per staff — items listed vertically, empty items hidden */}
+      <div className="space-y-3 md:hidden">
+        {[...data.body.map((b) => ({ key: b.r.key, name: b.r.name, cells: b.cells, total: b.total })), { key: "__total", name: "TOTAL", cells: data.foot, total: data.total }].map((b) => (
+          <div key={b.key} className={`rounded-2xl border p-3 ${b.key === "__total" ? "border-slate-300 bg-slate-50 dark:border-slate-600 dark:bg-slate-800/50" : "border-slate-200 dark:border-slate-700"}`}>
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-bold text-slate-950">{b.name}</p>
+              <div className="text-right">
+                <p className="font-black text-slate-950">{rpf(b.total.value)}</p>
+                <p className="text-xs text-slate-400">{num(b.total.qty)} unit{b.total.target > 0 && <> · <span className={`font-semibold ${tone(b.total)}`}>{pct((b.total.value / b.total.target) * 100, 0)}</span> dari {rpc(b.total.target)}</>}</p>
+              </div>
+            </div>
+            <ul className="mt-2 space-y-1 border-t border-dashed border-slate-200 pt-2 text-sm dark:border-slate-700">
+              {b.cells.map((c, i) => ({ c, label: data.cols[i].label })).filter(({ c }) => c.value !== 0 || c.qty !== 0 || c.target > 0).map(({ c, label }) => (
+                <li key={c.key} className="flex items-baseline justify-between gap-2">
+                  <span className="text-slate-600 dark:text-slate-300">{label}</span>
+                  <span className="text-right">
+                    <b className="text-slate-950">{rpf(c.value)}</b>
+                    <span className="ml-1 text-xs text-slate-400">{num(c.qty)}u</span>
+                    {c.target > 0 && <span className={`ml-1 text-xs font-semibold ${tone(c)}`}>{pct((c.value / c.target) * 100, 0)}</span>}
+                  </span>
+                </li>
+              ))}
+              {!b.cells.some((c) => c.value !== 0 || c.qty !== 0 || c.target > 0) && <li className="text-xs text-slate-400">Belum ada penjualan.</li>}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <div className="sd-table-wrap hidden md:block">
+        <table className="sd-table">
+          <thead>
+            <tr>
+              <th>Nama</th>
+              {data.cols.map((c) => <th key={c.key} className="n">{c.label}</th>)}
+              <th className="n">{totalLabel}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.body.map(({ r, cells, total }) => (
+              <tr key={r.key}>
+                <td className="font-bold">{r.name}</td>
+                {cells.map((c) => <td key={c.key} className="n"><Value c={c} /></td>)}
+                <td className="n font-black"><Value c={total} strong /></td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>TOTAL</td>
+              {data.foot.map((c) => <td key={c.key} className="n"><Value c={c} foot /></td>)}
+              <td className="n"><Value c={data.total} foot strong /></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="mt-3 text-xs text-slate-500">
+        Hijau bila achievement ≥ {range ? "100%" : `time gone (${pct(tg)})`}. {note ? `${note} ` : ""}
+        {data.hasTarget ? "" : "Target per item belum terbaca dari tab Target Store — hanya actual yang ditampilkan."}
+      </p>
+    </Panel>
   );
 }
