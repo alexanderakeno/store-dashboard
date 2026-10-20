@@ -82,7 +82,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
       </div>
       <div id="pricelist" className="scroll-mt-20">
         <div id="pricelist-android" className="scroll-mt-20">
-          <Panel title="Import Price List Android" desc="Upload PDF price list Android (Samsung, Oppo, Xiaomi, …) → Dashboard › Price List › Android." right={price ? <Link href="/pricelist" prefetch={false} className="sd-btn">Lihat Android</Link> : undefined}>
+          <Panel title="Import Price List Android" desc="Upload PDF price list Android (Samsung, Oppo, Xiaomi, …) → Dashboard › Price List › Android." right={priceCount("android") ? <Link href="/pricelist" prefetch={false} className="sd-btn">Lihat Android</Link> : undefined}>
             {isAdmin ? <PriceListImportForm current={price?.dates.android ?? null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
           </Panel>
         </div>
