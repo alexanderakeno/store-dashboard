@@ -24,7 +24,9 @@ export async function POST(req: Request) {
     const session = await authenticate(nik, password);
     if (!session) {
       recordFailure(ip, nik);
-      if (nik) recordAccess(req, "login_failed", { nik: normalizeNik(nik) ?? nik });
+      // only a plausible NIK (digits) is stored, so a failed login can't write arbitrary text to the sheet
+      const failedNik = normalizeNik(nik);
+      if (failedNik) recordAccess(req, "login_failed", { nik: failedNik.slice(0, 20) });
       return NextResponse.json({ error: "NIK atau password salah" }, { status: 401 });
     }
     clearFailures(ip, nik);
