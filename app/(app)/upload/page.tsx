@@ -2,7 +2,6 @@ import Link from "next/link";
 import { CheckCircle2, CircleDashed } from "lucide-react";
 import { NeedData, PageIntro, Panel } from "@/components/kit";
 import { PageStatus } from "@/components/layout/PageStatus";
-import { ImportRawForm } from "@/components/modules/ImportRawForm";
 import { SohImportForm } from "@/components/modules/SohImportForm";
 import { dmy, monthLabel, num, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
@@ -10,7 +9,7 @@ import { getSoh } from "@/lib/soh";
 import { getPriceList } from "@/lib/pricelist";
 import { PriceListImportForm } from "@/components/modules/PriceListImportForm";
 import { ApplePriceListImportForm } from "@/components/modules/ApplePriceListImportForm";
-import { HistoryImportForm } from "@/components/modules/HistoryImportForm";
+import { SalesImportForm } from "@/components/modules/SalesImportForm";
 import { getHistoryList } from "@/lib/services/dashboard";
 import { rpf } from "@/lib/format";
 
@@ -76,18 +75,43 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
     {
       name: `Data ${lastYear} (LFL / YTD / Compare)`,
       ok: lyHistory.length > 0 || p.months.some((m) => m.month.startsWith(lastYear)),
-      detail: lyHistory.length ? `Merchandise Report ${lyHistory.length} bulan (${lyHistory.map((h) => monthLabel(h.month).split(" ")[0]).reverse().join(", ")})` : `Upload Merchandise Report ${lastYear} di bagian Data Tahun Lalu di atas`,
+      detail: lyHistory.length ? `Merchandise Report ${lyHistory.length} bulan (${lyHistory.map((h) => monthLabel(h.month).split(" ")[0]).reverse().join(", ")})` : `Upload Merchandise Report ${lastYear} di Import Data Penjualan di atas`,
     },
   ];
   return (
     <div className="sd-content">
       <PageIntro title="Data Upload" desc={`Status sumber data ${monthLabel(p.month)} · file: ${s.sourceTitle} · dibaca ${timeAgo(s.loadedAt)}.`} actions={isAdmin ? <Link href="/settings" prefetch={false} className="sd-btn primary">Kelola di Settings</Link> : undefined} />
       <div id="import" className="scroll-mt-20">
-        <Panel title="Import Raw MR & Sales Person" desc="Sama seperti menu Import Raw → Upload MR & Sales Person di Google Sheet. Bisa dari HP.">
+        <Panel title="Import Data Penjualan" desc="Satu tempat untuk semua file Merchandise Report & Sales Person, bulan apa saja. Bulan & tanggal dibaca otomatis dari isi file.">
           {isAdmin ? (
-            <ImportRawForm month={p.month} monthLabel={monthLabel(p.month)} sourceTitle={s.sourceTitle} />
+            <SalesImportForm sheetMonths={p.months.map((m) => m.month)} historyMonths={history.map((h) => h.month)} />
           ) : (
             <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>
+          )}
+          <ul className="mt-4 list-disc space-y-1 pl-5 text-xs text-slate-500">
+            <li>Bulan yang punya Google Sheet bulanan ({p.months.map((m) => monthLabel(m.month)).join(", ") || "belum ada"}) → masuk ke tab Control MR &amp; SP sheet itu, seperti Import Raw.</li>
+            <li>Bulan lain → Merchandise Report disimpan sebagai riwayat penjualan untuk LFL, YTD, dan Compare.</li>
+          </ul>
+          {historyError && <div className="alert error mt-3">Gagal membaca riwayat (APP_History): {historyError}</div>}
+          {history.length > 0 && (
+            <details className="mt-4">
+              <summary className="cursor-pointer text-sm font-bold text-slate-700 select-none">Riwayat penjualan tersimpan · {history.length} bulan</summary>
+              <div className="sd-table-wrap mt-2">
+                <table className="sd-table sd-table-compact">
+                  <thead><tr><th>Bulan</th><th className="n">Qty</th><th className="n">Net Sales</th><th className="max-sm:hidden">File</th></tr></thead>
+                  <tbody>
+                    {history.map((h) => (
+                      <tr key={h.month}>
+                        <td className="font-bold">{monthLabel(h.month)}</td>
+                        <td className="n">{num(h.qty)}</td>
+                        <td className="n">{rpf(h.net)}</td>
+                        <td className="text-xs text-slate-500 max-sm:hidden">{h.source} · {timeAgo(new Date(h.updatedAt).getTime())}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
           )}
         </Panel>
       </div>
@@ -106,29 +130,6 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
       <div id="pricelist-apple" className="scroll-mt-20">
         <Panel title="Import Price List Apple" desc="Upload 2 PDF price list Apple sekaligus → Dashboard › Price List › Apple." right={priceCount("apple") ? <Link href="/pricelist?k=apple" prefetch={false} className="sd-btn">Lihat Apple</Link> : undefined}>
           {isAdmin ? <ApplePriceListImportForm current={price?.dates.apple ?? null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
-        </Panel>
-      </div>
-      <div id="history" className="scroll-mt-20">
-        <Panel title="Data Tahun Lalu (Merchandise Report)" desc="Upload file Merchandise Report per bulan (misal Oktober 2025). Dipakai untuk LFL di Overview, YTD, dan Compare tahun lalu vs tahun ini.">
-          {historyError && <div className="alert error">Gagal membaca APP_History: {historyError}</div>}
-          {history.length > 0 && (
-            <div className="sd-table-wrap mb-4">
-              <table className="sd-table sd-table-compact">
-                <thead><tr><th>Bulan</th><th className="n">Qty</th><th className="n">Net Sales</th><th className="max-sm:hidden">File</th></tr></thead>
-                <tbody>
-                  {history.map((h) => (
-                    <tr key={h.month}>
-                      <td className="font-bold">{monthLabel(h.month)}</td>
-                      <td className="n">{num(h.qty)}</td>
-                      <td className="n">{rpf(h.net)}</td>
-                      <td className="text-xs text-slate-500 max-sm:hidden">{h.source} · {timeAgo(new Date(h.updatedAt).getTime())}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {isAdmin ? <HistoryImportForm existing={history.map((h) => h.month)} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
         </Panel>
       </div>
       <Panel title="Sumber Data">

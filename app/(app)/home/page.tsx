@@ -314,7 +314,7 @@ const cards = [total, grpCard("apple", "Apple", grp.Apple), grpCard("android", "
         <p className="mt-3 text-xs text-slate-500">
           {lfl
             ? `Periode sama: tanggal 1–${Number(p.asOf.slice(8))}.${lfl.source === "mr" ? ` Data ${monthLabel(sameMonthLastYear(p.month))} dari Merchandise Report yang di-upload.` : ""} Rincian per grup & LOB ada di tab Compare.`
-            : `Upload Merchandise Report ${monthLabel(sameMonthLastYear(p.month))} di Data Upload → Data Tahun Lalu untuk mengaktifkan LFL (periode yang sama, tanggal 1–${Number(p.asOf.slice(8))}).`}
+            : `Upload Merchandise Report ${monthLabel(sameMonthLastYear(p.month))} di Data Upload → Import Data Penjualan untuk mengaktifkan LFL (periode yang sama, tanggal 1–${Number(p.asOf.slice(8))}).`}
         </p>
       </Panel>
 
@@ -404,7 +404,7 @@ function Mini({ label, value }: { label: string; value: React.ReactNode }) {
 
 /**
  * Same month last year, same day range. Comes from the registered monthly sheet or, when that month
- * has no sheet, from an imported Merchandise Report (Data Upload → Data Tahun Lalu).
+ * has no sheet, from an imported Merchandise Report (Data Upload → Import Data Penjualan).
  */
 async function lastYear(months: MonthEntry[], month: string, asOf: string) {
   const ly = await getMonthLines(sameMonthLastYear(month), months).catch(() => null);
@@ -480,7 +480,7 @@ function YearCard({ year, tone, qty, value, lob, lobV, need, growthQty, growthVa
       <div className={`px-4 py-3 text-lg font-black ${tone === "blue" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>{year}</div>
       <div className="p-4">
         {need ? (
-          <EmptyBlock title={`Data ${year}`}>Upload Merchandise Report {year} per bulan di Data Upload → Data Tahun Lalu untuk perbandingan YTD.</EmptyBlock>
+          <EmptyBlock title={`Data ${year}`}>Upload Merchandise Report {year} per bulan di Data Upload → Import Data Penjualan untuk perbandingan YTD.</EmptyBlock>
         ) : (
           <>
             <p className="text-xs font-black tracking-[.08em] text-slate-500 uppercase">All Sales</p>
@@ -563,7 +563,7 @@ async function Compare({ snap, months }: { snap: MonthSnapshot; months: MonthEnt
           <MonthTable year={year} prevYear={prevYear} cur={cur} prev={prev} upTo="12" deviceOnly />
         </div>
       </div>
-      {prev.size === 0 && <p className="mt-3 text-xs text-slate-500">Data {prevYear} belum ada di aplikasi. Upload Merchandise Report {prevYear} per bulan di Data Upload → Data Tahun Lalu agar kolom {prevYear} terisi.</p>}
+      {prev.size === 0 && <p className="mt-3 text-xs text-slate-500">Data {prevYear} belum ada di aplikasi. Upload Merchandise Report {prevYear} per bulan di Data Upload → Import Data Penjualan agar kolom {prevYear} terisi.</p>}
     </Panel>
     </>
   );
