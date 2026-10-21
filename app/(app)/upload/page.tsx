@@ -98,11 +98,17 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
               <summary className="cursor-pointer text-sm font-bold text-slate-700 select-none">Riwayat penjualan tersimpan · {history.length} bulan</summary>
               <div className="sd-table-wrap mt-2">
                 <table className="sd-table sd-table-compact">
-                  <thead><tr><th>Bulan</th><th className="n">Qty</th><th className="n">Net Sales</th><th className="max-sm:hidden">File</th></tr></thead>
+                  <thead><tr><th>Bulan</th><th>Tanggal</th><th className="n">Qty</th><th className="n">Net Sales</th><th className="max-sm:hidden">File</th></tr></thead>
                   <tbody>
                     {history.map((h) => (
                       <tr key={h.month}>
                         <td className="font-bold">{monthLabel(h.month)}</td>
+                        <td>
+                          {h.firstDate ? `${Number(h.firstDate.slice(8))}–${Number(h.lastDate.slice(8))}` : "–"}
+                          {h.lastDate && Number(h.lastDate.slice(8)) < new Date(Date.UTC(Number(h.month.slice(0, 4)), Number(h.month.slice(5)), 0)).getUTCDate() && (
+                            <span className="ml-1.5 sd-badge amber">belum full</span>
+                          )}
+                        </td>
                         <td className="n">{num(h.qty)}</td>
                         <td className="n">{rpf(h.net)}</td>
                         <td className="text-xs text-slate-500 max-sm:hidden">{h.source} · {timeAgo(new Date(h.updatedAt).getTime())}</td>
