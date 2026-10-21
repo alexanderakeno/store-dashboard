@@ -150,7 +150,7 @@ export class FixtureSource implements DataSource {
   }
   async listHistory(): Promise<HistorySummary[]> {
     return Object.entries(store().history)
-      .map(([month, h]) => ({ month, lines: h.rows.length, qty: h.rows.reduce((a, x) => a + x.qty, 0), net: h.rows.reduce((a, x) => a + x.net, 0), source: h.source, updatedAt: h.updatedAt, updatedBy: h.updatedBy }))
+      .map(([month, h]) => ({ month, firstDate: h.rows.map((x) => x.date).sort()[0] ?? "", lastDate: h.rows.map((x) => x.date).sort().at(-1) ?? "", lines: h.rows.length, qty: h.rows.reduce((a, x) => a + x.qty, 0), net: h.rows.reduce((a, x) => a + x.net, 0), source: h.source, updatedAt: h.updatedAt, updatedBy: h.updatedBy }))
       .sort((a, b) => b.month.localeCompare(a.month));
   }
   async getHistory(month: MonthKey) {
