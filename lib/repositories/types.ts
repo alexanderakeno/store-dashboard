@@ -1,6 +1,6 @@
 import type { BusinessRules } from "@/config/business";
 import type { ControlSheetData } from "@/lib/parsers/controlSheet";
-import type { ISODate, MonthKey, StoreTarget, TrafficEntry } from "@/types/domain";
+import type { ISODate, MerchLine, MonthKey, StoreTarget, TrafficEntry } from "@/types/domain";
 import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList, QoalaTier } from "@/types/pricelist";
@@ -86,6 +86,13 @@ export interface DataSource {
 
   audit(entry: Omit<AuditEntry, "ts">): Promise<void>;
 
+  /** Months of last-year Merchandise Report imported in the app (Data Upload → Data Tahun Lalu). */
+  listHistory(): Promise<HistorySummary[]>;
+  /** MR lines of one imported month (empty when not imported). */
+  getHistory(month: MonthKey): Promise<MerchLine[]>;
+  /** Replaces the stored MR lines of `month`. */
+  saveHistory(month: MonthKey, rows: MerchLine[], source: string, by: string): Promise<void>;
+
   /** Appends login / logout / page-view rows to the access log. */
   logAccess(entries: AccessEntry[]): Promise<void>;
   /** The most recent access-log rows (at most `limit`), newest first. */
@@ -108,6 +115,16 @@ export interface DataSource {
    * import never wipes the other). `qoala` replaces the Qoala tiers when non-empty.
    */
   savePriceList(input: PriceListInput, by: string): Promise<void>;
+}
+
+export interface HistorySummary {
+  month: MonthKey;
+  lines: number;
+  qty: number;
+  net: number;
+  source: string;
+  updatedAt: string;
+  updatedBy: string;
 }
 
 export interface PriceListInput {

@@ -5,7 +5,8 @@ import { monthEnd, prevMonth, todayIn, addDays } from "@/lib/domain/period";
 import { parseControlSheet } from "@/lib/parsers/controlSheet";
 import { parseTargetStore } from "@/lib/parsers/targetStore";
 import type { MonthKey, TrafficEntry } from "@/types/domain";
-import type { AppRecord, AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
+import type { AppRecord, AppUser, AuditEntry, DataSource, HistorySummary, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
+import type { MerchLine } from "@/types/domain";
 import { parseAccFocus, parsePromo, parseTracker } from "@/lib/parsers/extras";
 import { generateExtras, generateMonth } from "./generate";
 import type { SohSnapshot } from "@/types/soh";
@@ -24,6 +25,7 @@ interface Store {
   users: AppUser[];
   audit: AuditEntry[];
   access: AccessEntry[];
+  history: Record<string, { rows: MerchLine[]; source: string; updatedAt: string; updatedBy: string }>;
   records: AppRecord[];
   soh: SohSnapshot | null;
   priceList: PriceList | null;
@@ -49,7 +51,7 @@ function store(): Store {
     const end = m.month === cur ? addDays(today, -1) : monthEnd(m.month);
     for (let d = `${m.month}-01`; d <= end; d = addDays(d, 1)) traffic.push({ date: d, traffic: 60 + ((Number(d.slice(8)) * 37) % 40) });
   }
-  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], access: [], records: [], soh: null, priceList: null };
+  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], access: [], history: {}, records: [], soh: null, priceList: null };
   return g.__fixtureStore;
 }
 
@@ -145,6 +147,17 @@ export class FixtureSource implements DataSource {
   }
   async audit(entry: Omit<AuditEntry, "ts">) {
     store().audit.push({ ts: new Date().toISOString(), ...entry });
+  }
+  async listHistory(): Promise<HistorySummary[]> {
+    return Object.entries(store().history)
+      .map(([month, h]) => ({ month, lines: h.rows.length, qty: h.rows.reduce((a, x) => a + x.qty, 0), net: h.rows.reduce((a, x) => a + x.net, 0), source: h.source, updatedAt: h.updatedAt, updatedBy: h.updatedBy }))
+      .sort((a, b) => b.month.localeCompare(a.month));
+  }
+  async getHistory(month: MonthKey) {
+    return store().history[month]?.rows ?? [];
+  }
+  async saveHistory(month: MonthKey, rows: MerchLine[], source: string, by: string) {
+    store().history[month] = { rows, source, updatedAt: new Date().toISOString(), updatedBy: by };
   }
   async logAccess(entries: AccessEntry[]) {
     store().access.push(...entries);

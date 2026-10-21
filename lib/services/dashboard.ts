@@ -7,8 +7,9 @@ import { monthEnd, monthStart, todayIn } from "@/lib/domain/period";
 import { reconcile } from "@/lib/domain/reconcile";
 import { lastDataDate, type MonthInput } from "@/lib/domain/views";
 import type { ControlSheetData } from "@/lib/parsers/controlSheet";
-import { dataSource, type MonthEntry } from "@/lib/repositories";
-import type { ISODate, MerchLine, MonthKey, ReconcileIssue, TrafficEntry } from "@/types/domain";
+import { dataSource, type HistorySummary, type MonthEntry } from "@/lib/repositories";
+import { historyLines } from "@/lib/domain/history";
+import type { ISODate, MerchLine, MonthKey, ReconcileIssue, SalesLine, TrafficEntry } from "@/types/domain";
 import { EMPTY_EXTRAS, type MonthExtras } from "@/types/extras";
 
 export interface MonthSnapshot extends MonthInput {
@@ -153,4 +154,40 @@ export function refreshAll(): void {
 
 export function invalidateMonth(month: MonthKey, part: "raw" | "traffic" | "all" = "all"): void {
   invalidate(part === "all" ? `month:${month}:` : `month:${month}:${part}`);
+}
+
+/* ---------------- last-year data imported from a Merchandise Report ---------------- */
+
+export async function getHistoryList(force = false): Promise<HistorySummary[]> {
+  const { value } = await cached("history:list", memTtl(), () => shared(["history-list"], ["history"], sharedSec(), () => dataSource().listHistory(), force), force);
+  return value;
+}
+
+/** Sales lines of an imported last-year month (null when that month was not imported). */
+export async function getHistoryLines(month: MonthKey, force = false): Promise<SalesLine[] | null> {
+  const [rules, list] = await Promise.all([getRules(force), getHistoryList(force)]);
+  if (!list.some((h) => h.month === month)) return null;
+  const { value } = await cached(`history:${month}`, memTtl(), () => shared(["history", month], ["history"], sharedSec(), () => dataSource().getHistory(month), force), force);
+  return historyLines(value, rules);
+}
+
+export function invalidateHistory(): void {
+  invalidate("history");
+}
+
+/**
+ * Lines of any month for comparisons: the registered monthly sheet when there is one, otherwise an
+ * imported Merchandise Report (last-year months). `source` tells which; null = no data.
+ */
+export async function getMonthLines(month: MonthKey, months?: MonthEntry[]): Promise<{ lines: SalesLine[]; source: "sheet" | "mr" } | null> {
+  const list = months ?? (await getMonths());
+  if (list.some((m) => m.month === month)) {
+    try {
+      return { lines: (await getMonthSnapshot(month)).lines, source: "sheet" };
+    } catch {
+      // fall through to an imported MR, if any
+    }
+  }
+  const h = await getHistoryLines(month).catch(() => null);
+  return h ? { lines: h, source: "mr" } : null;
 }

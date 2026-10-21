@@ -5,7 +5,8 @@ import { normalizeText, parseDate, parseNumber } from "@/lib/domain/normalize";
 import { parseControlSheet, type Grid } from "@/lib/parsers/controlSheet";
 import { parseTargetStore } from "@/lib/parsers/targetStore";
 import type { MonthKey, TrafficEntry } from "@/types/domain";
-import type { AppRecord, AppUser, AuditEntry, DataSource, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
+import type { AppRecord, AppUser, AuditEntry, DataSource, HistorySummary, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
+import type { MerchLine } from "@/types/domain";
 import { parseAccFocus, parsePromo, parseTracker, parseTrafficTab } from "@/lib/parsers/extras";
 import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
@@ -25,6 +26,7 @@ export const MASTER_TABS = {
   users: { name: "APP_Users", header: ["nik", "name", "role", "passwordHash", "active"] },
   traffic: { name: "APP_Traffic", header: ["date", "traffic", "updatedAt", "updatedBy"] },
   audit: { name: "APP_Audit", header: ["ts", "nik", "action", "detail"] },
+  history: { name: "APP_History", header: ["month", "date", "brand", "division", "group", "category", "article", "description", "qty", "discount", "net", "source", "updatedAt", "updatedBy"] },
   access: { name: "APP_Access", header: ["ts", "nik", "name", "role", "event", "path", "ip", "location", "device"] },
   records: { name: "APP_Records", header: ["kind", "date", "key", "data", "updatedAt", "updatedBy"] },
   soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy"] },
@@ -295,6 +297,57 @@ export class SheetsSource implements DataSource {
   async audit(entry: Omit<AuditEntry, "ts">): Promise<void> {
     await this.ensureTabs();
     await appendRows(this.master, MASTER_TABS.audit.name, [[new Date().toISOString(), entry.nik, entry.action, entry.detail]]);
+  }
+
+  /** History rows are positional (header order) — faster than objects for ~1000 rows per month. */
+  private async historyRows(): Promise<unknown[][]> {
+    const t = MASTER_TABS.history.name;
+    try {
+      return (await readTab(this.master, t)).slice(1);
+    } catch (e) {
+      if (e instanceof SheetsError && e.status === 400) return []; // tab not created yet
+      throw e;
+    }
+  }
+
+  async listHistory(): Promise<HistorySummary[]> {
+    const m = new Map<string, HistorySummary>();
+    for (const r of await this.historyRows()) {
+      const month = normalizeText(r[0]);
+      if (!/^\d{4}-\d{2}$/.test(month)) continue;
+      const x = m.get(month) ?? { month, lines: 0, qty: 0, net: 0, source: normalizeText(r[11]), updatedAt: normalizeText(r[12]), updatedBy: normalizeText(r[13]) };
+      x.lines++;
+      x.qty += parseNumber(r[8]);
+      x.net += parseNumber(r[10]);
+      m.set(month, x);
+    }
+    return [...m.values()].sort((a, b) => b.month.localeCompare(a.month));
+  }
+
+  async getHistory(month: MonthKey): Promise<MerchLine[]> {
+    return (await this.historyRows())
+      .filter((r) => normalizeText(r[0]) === month)
+      .map((r) => ({
+        date: normalizeText(r[1]),
+        brand: normalizeText(r[2]),
+        division: normalizeText(r[3]),
+        productGroup: normalizeText(r[4]),
+        category: normalizeText(r[5]),
+        article: normalizeText(r[6]),
+        description: normalizeText(r[7]),
+        qty: parseNumber(r[8]),
+        discount: parseNumber(r[9]),
+        net: parseNumber(r[10]),
+      }))
+      .filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.date));
+  }
+
+  async saveHistory(month: MonthKey, rows: MerchLine[], source: string, by: string): Promise<void> {
+    const now = new Date().toISOString();
+    const keep = (await this.historyRows()).filter((r) => normalizeText(r[0]) && normalizeText(r[0]) !== month);
+    const add = rows.map((x) => [month, x.date, x.brand, x.division, x.productGroup, x.category, x.article, x.description, x.qty, x.discount, x.net, source, now, by]);
+    const out = [...keep, ...add].sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])));
+    await this.rewrite("history", out);
   }
 
   async logAccess(entries: AccessEntry[]): Promise<void> {
