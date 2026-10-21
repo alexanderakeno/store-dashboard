@@ -14,6 +14,8 @@ const ACCEPT = ".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlforma
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const label = (m: string) => `${MONTHS[Number(m.slice(5)) - 1]} ${m.slice(0, 4)}`;
 const nf = new Intl.NumberFormat("id-ID");
+/** Rows per history request (one request ≈ 1.5–2 MB before gzip at this size). */
+const HISTORY_BATCH_ROWS = 12_000;
 const rp = (n: number) => `Rp${nf.format(Math.round(n))}`;
 
 /** One month of work: either the monthly Google Sheet (MR and/or Sales Person) or stored MR history. */
@@ -130,22 +132,45 @@ export function SalesImportForm({ sheetMonths, historyMonths }: { sheetMonths: s
 
   const runnable = (j: Job) => j.status !== "done" && (j.target === "history" ? !!j.mr : !!(j.mr?.raw || j.sp));
 
+  /** History months go to the server together (one sheet write), sheet months one by one (Apps Script). */
   const run = async () => {
     setBusy(true);
-    for (const j of jobs) {
-      if (!runnable(j)) continue;
-      const set = (patch: Partial<Job>) => setJobs((s) => s.map((x) => (x.month === j.month ? { ...x, ...patch } : x)));
-      set({ status: "busy", msg: undefined });
+    const set = (month: string, patch: Partial<Job>) => setJobs((s) => s.map((x) => (x.month === month ? { ...x, ...patch } : x)));
+    const hist = jobs.filter((j) => runnable(j) && j.target === "history");
+    // a request stays well under Vercel's body limit: split very large uploads by row count
+    const batches: Job[][] = [];
+    let cur: Job[] = [];
+    let n = 0;
+    for (const j of hist) {
+      if (cur.length && n + j.mr!.rows.length > HISTORY_BATCH_ROWS) {
+        batches.push(cur);
+        cur = [];
+        n = 0;
+      }
+      cur.push(j);
+      n += j.mr!.rows.length;
+    }
+    if (cur.length) batches.push(cur);
+    for (const b of batches) {
+      for (const j of b) set(j.month, { status: "busy", msg: undefined });
       try {
-        const r =
-          j.target === "sheet"
-            ? await postJson("/api/import-raw", { month: j.month, mr: j.mr?.raw ? j.mr.raw : null, sp: j.sp?.raw ?? null })
-            : await postJson("/api/history", { month: j.month, source: j.mr!.file, rows: j.mr!.rows });
+        const r = await postJson("/api/history", { months: b.map((j) => ({ month: j.month, source: j.mr!.file, rows: j.mr!.rows })) });
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(body.error ?? `Gagal (HTTP ${r.status})`);
-        set({ status: "done", msg: j.target === "sheet" ? body.message : undefined });
+        for (const j of b) set(j.month, { status: "done" });
       } catch (e) {
-        set({ status: "error", msg: (e as Error).message });
+        for (const j of b) set(j.month, { status: "error", msg: (e as Error).message });
+      }
+    }
+    for (const j of jobs.filter((x) => runnable(x) && x.target === "sheet")) {
+      set(j.month, { status: "busy", msg: undefined });
+      try {
+        const r = await postJson("/api/import-raw", { month: j.month, mr: j.mr?.raw ? j.mr.raw : null, sp: j.sp?.raw ?? null });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(body.error ?? `Gagal (HTTP ${r.status})`);
+        set(j.month, { status: "done", msg: body.message });
+      } catch (e) {
+        set(j.month, { status: "error", msg: (e as Error).message });
       }
     }
     setBusy(false);
