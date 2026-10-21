@@ -335,7 +335,10 @@ export class SheetsSource implements DataSource {
     for (const r of await this.historyRows()) {
       const month = normalizeText(r[0]);
       if (!/^\d{4}-\d{2}$/.test(month)) continue;
-      const x = m.get(month) ?? { month, lines: 0, qty: 0, net: 0, source: normalizeText(r[11]), updatedAt: normalizeText(r[12]), updatedBy: normalizeText(r[13]) };
+      const date = normalizeText(r[1]);
+      const x = m.get(month) ?? { month, firstDate: date, lastDate: date, lines: 0, qty: 0, net: 0, source: normalizeText(r[11]), updatedAt: normalizeText(r[12]), updatedBy: normalizeText(r[13]) };
+      if (date && (!x.firstDate || date < x.firstDate)) x.firstDate = date;
+      if (date > x.lastDate) x.lastDate = date;
       x.lines++;
       x.qty += parseNumber(r[8]);
       x.net += parseNumber(r[10]);
