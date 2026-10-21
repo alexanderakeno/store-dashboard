@@ -197,7 +197,7 @@ function Header({ storeCode, userName, isAdmin, fixture, onMenu, collapsed, onEx
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
           {isAdmin && (
-            <Link prefetch={false} href={sp.get("m") ? `/upload?m=${sp.get("m")}#import` : "/upload#import"} className="sd-hbtn" title="Import Raw MR & Sales Person">
+            <Link prefetch={false} href={sp.get("m") ? `/upload?m=${sp.get("m")}#import` : "/upload#import"} className="sd-hbtn" title="Import Data Penjualan">
               <Upload className="size-4" />
               <span className="max-sm:hidden">Import</span>
             </Link>
