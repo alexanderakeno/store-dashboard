@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, Moon, RefreshCw, Sun, Upload } from "lucide-react";
 import { NAV, isGroup, titleFor, type NavLink } from "./nav";
 import { NavIcon } from "./Icon";
+import { TableFit } from "./TableFit";
 
 export interface ShellProps {
   children: React.ReactNode;
@@ -64,6 +65,7 @@ export function Shell({ children, storeCode, storeName, userName, isAdmin, fixtu
       <main className="sd-main">
         <Header storeCode={storeCode} userName={userName} isAdmin={isAdmin} fixture={fixture} onMenu={() => setOpen(true)} collapsed={collapsed} onExpand={toggleCollapsed} />
         {children}
+        <TableFit />
       </main>
     </div>
   );
