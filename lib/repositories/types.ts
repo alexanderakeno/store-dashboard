@@ -86,7 +86,7 @@ export interface DataSource {
 
   audit(entry: Omit<AuditEntry, "ts">): Promise<void>;
 
-  /** Months of last-year Merchandise Report imported in the app (Data Upload → Data Tahun Lalu). */
+  /** Months of last-year Merchandise Report imported in the app (Data Upload → Import Data Penjualan). */
   listHistory(): Promise<HistorySummary[]>;
   /** MR lines of one imported month (empty when not imported). */
   getHistory(month: MonthKey): Promise<MerchLine[]>;
