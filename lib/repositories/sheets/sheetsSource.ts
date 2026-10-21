@@ -299,15 +299,25 @@ export class SheetsSource implements DataSource {
     await appendRows(this.master, MASTER_TABS.audit.name, [[new Date().toISOString(), entry.nik, entry.action, entry.detail]]);
   }
 
-  /** History rows are positional (header order) — faster than objects for ~1000 rows per month. */
-  private async historyRows(): Promise<unknown[][]> {
-    const t = MASTER_TABS.history.name;
-    try {
-      return (await readTab(this.master, t)).slice(1);
-    } catch (e) {
-      if (e instanceof SheetsError && e.status === 400) return []; // tab not created yet
-      throw e;
-    }
+  /**
+   * History rows are positional (header order) — faster than objects. With a year or more stored
+   * the tab holds 10k+ rows, and YTD / Compare ask for up to 12 months at once, so one read is
+   * shared for a few seconds instead of reading the whole tab per month.
+   */
+  private historyRead: { at: number; rows: Promise<unknown[][]> } | null = null;
+  private historyRows(): Promise<unknown[][]> {
+    if (this.historyRead && Date.now() - this.historyRead.at < 10_000) return this.historyRead.rows;
+    const rows = (async () => {
+      try {
+        return (await readTab(this.master, MASTER_TABS.history.name)).slice(1);
+      } catch (e) {
+        if (e instanceof SheetsError && e.status === 400) return []; // tab not created yet
+        throw e;
+      }
+    })();
+    this.historyRead = { at: Date.now(), rows };
+    rows.catch(() => (this.historyRead = null));
+    return rows;
   }
 
   async listHistory(): Promise<HistorySummary[]> {
@@ -344,10 +354,12 @@ export class SheetsSource implements DataSource {
 
   async saveHistory(month: MonthKey, rows: MerchLine[], source: string, by: string): Promise<void> {
     const now = new Date().toISOString();
+    this.historyRead = null; // read fresh before replacing a month
     const keep = (await this.historyRows()).filter((r) => normalizeText(r[0]) && normalizeText(r[0]) !== month);
     const add = rows.map((x) => [month, x.date, x.brand, x.division, x.productGroup, x.category, x.article, x.description, x.qty, x.discount, x.net, source, now, by]);
     const out = [...keep, ...add].sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])));
     await this.rewrite("history", out);
+    this.historyRead = null;
   }
 
   async logAccess(entries: AccessEntry[]): Promise<void> {
