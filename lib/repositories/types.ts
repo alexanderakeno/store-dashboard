@@ -125,6 +125,9 @@ export interface HistoryInput {
 
 export interface HistorySummary {
   month: MonthKey;
+  /** First / last sales date stored for the month (a file may stop mid-month). */
+  firstDate: string;
+  lastDate: string;
   lines: number;
   qty: number;
   net: number;
