@@ -90,8 +90,8 @@ export interface DataSource {
   listHistory(): Promise<HistorySummary[]>;
   /** MR lines of one imported month (empty when not imported). */
   getHistory(month: MonthKey): Promise<MerchLine[]>;
-  /** Replaces the stored MR lines of `month`. */
-  saveHistory(month: MonthKey, rows: MerchLine[], source: string, by: string): Promise<void>;
+  /** Replaces the stored MR lines of each given month, in one write. */
+  saveHistory(months: HistoryInput[], by: string): Promise<void>;
 
   /** Appends login / logout / page-view rows to the access log. */
   logAccess(entries: AccessEntry[]): Promise<void>;
@@ -115,6 +115,12 @@ export interface DataSource {
    * import never wipes the other). `qoala` replaces the Qoala tiers when non-empty.
    */
   savePriceList(input: PriceListInput, by: string): Promise<void>;
+}
+
+export interface HistoryInput {
+  month: MonthKey;
+  rows: MerchLine[];
+  source: string;
 }
 
 export interface HistorySummary {
