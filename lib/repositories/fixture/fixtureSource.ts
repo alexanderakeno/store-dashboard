@@ -5,7 +5,7 @@ import { monthEnd, prevMonth, todayIn, addDays } from "@/lib/domain/period";
 import { parseControlSheet } from "@/lib/parsers/controlSheet";
 import { parseTargetStore } from "@/lib/parsers/targetStore";
 import type { MonthKey, TrafficEntry } from "@/types/domain";
-import type { AppRecord, AppUser, AuditEntry, DataSource, HistorySummary, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
+import type { AppRecord, AppUser, AuditEntry, DataSource, HistoryInput, HistorySummary, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
 import type { MerchLine } from "@/types/domain";
 import { parseAccFocus, parsePromo, parseTracker } from "@/lib/parsers/extras";
 import { generateExtras, generateMonth } from "./generate";
@@ -156,8 +156,8 @@ export class FixtureSource implements DataSource {
   async getHistory(month: MonthKey) {
     return store().history[month]?.rows ?? [];
   }
-  async saveHistory(month: MonthKey, rows: MerchLine[], source: string, by: string) {
-    store().history[month] = { rows, source, updatedAt: new Date().toISOString(), updatedBy: by };
+  async saveHistory(months: HistoryInput[], by: string) {
+    for (const m of months) store().history[m.month] = { rows: m.rows, source: m.source, updatedAt: new Date().toISOString(), updatedBy: by };
   }
   async logAccess(entries: AccessEntry[]) {
     store().access.push(...entries);
