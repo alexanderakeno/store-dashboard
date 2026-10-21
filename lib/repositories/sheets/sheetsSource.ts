@@ -5,7 +5,7 @@ import { normalizeText, parseDate, parseNumber } from "@/lib/domain/normalize";
 import { parseControlSheet, type Grid } from "@/lib/parsers/controlSheet";
 import { parseTargetStore } from "@/lib/parsers/targetStore";
 import type { MonthKey, TrafficEntry } from "@/types/domain";
-import type { AppRecord, AppUser, AuditEntry, DataSource, HistorySummary, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
+import type { AppRecord, AppUser, AuditEntry, DataSource, HistoryInput, HistorySummary, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
 import type { MerchLine } from "@/types/domain";
 import { parseAccFocus, parsePromo, parseTracker, parseTrafficTab } from "@/lib/parsers/extras";
 import type { MonthExtras } from "@/types/extras";
@@ -34,6 +34,9 @@ export const MASTER_TABS = {
 } as const;
 
 type TabKey = keyof typeof MASTER_TABS;
+
+/** Rows per write request when rewriting a tab. */
+const REWRITE_BLOCK = 5000;
 
 const bool = (v: unknown) => v === true || /^(true|ya|yes|1)$/i.test(normalizeText(v));
 
@@ -99,8 +102,15 @@ export class SheetsSource implements DataSource {
     const t = MASTER_TABS[tab];
     const width = t.header.length;
     // pad every row to the header width so leftover cells of a longer old row are overwritten too
-    if (rows.length) await writeRange(this.master, t.name, "A2", rows.map((r) => [...r, ...Array(Math.max(0, width - r.length)).fill("")]));
-    await clearRange(this.master, t.name, `A${rows.length + 2}:Z`);
+    const padded = rows.map((r) => [...r, ...Array(Math.max(0, width - r.length)).fill("")]);
+    // big tabs (sales history: 10k+ rows) go in blocks so a single request stays small
+    for (let i = 0; i < padded.length; i += REWRITE_BLOCK) await writeRange(this.master, t.name, `A${i + 2}`, padded.slice(i, i + REWRITE_BLOCK));
+    try {
+      await clearRange(this.master, t.name, `A${rows.length + 2}:Z`);
+    } catch (e) {
+      // the write grew the tab to exactly its new end: there is nothing below to clear
+      if (!(e instanceof SheetsError && /exceeds grid limits/i.test(e.message))) throw e;
+    }
   }
 
   async listMonths(): Promise<MonthEntry[]> {
@@ -352,14 +362,19 @@ export class SheetsSource implements DataSource {
       .filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.date));
   }
 
-  async saveHistory(month: MonthKey, rows: MerchLine[], source: string, by: string): Promise<void> {
+  async saveHistory(months: HistoryInput[], by: string): Promise<void> {
+    if (!months.length) return;
     const now = new Date().toISOString();
-    this.historyRead = null; // read fresh before replacing a month
-    const keep = (await this.historyRows()).filter((r) => normalizeText(r[0]) && normalizeText(r[0]) !== month);
-    const add = rows.map((x) => [month, x.date, x.brand, x.division, x.productGroup, x.category, x.article, x.description, x.qty, x.discount, x.net, source, now, by]);
+    const replace = new Set(months.map((m) => m.month));
+    this.historyRead = null; // read fresh before replacing months
+    const keep = (await this.historyRows()).filter((r) => normalizeText(r[0]) && !replace.has(normalizeText(r[0])));
+    const add = months.flatMap((m) => m.rows.map((x) => [m.month, x.date, x.brand, x.division, x.productGroup, x.category, x.article, x.description, x.qty, x.discount, x.net, m.source, now, by]));
     const out = [...keep, ...add].sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[1]).localeCompare(String(b[1])));
-    await this.rewrite("history", out);
-    this.historyRead = null;
+    try {
+      await this.rewrite("history", out);
+    } finally {
+      this.historyRead = null;
+    }
   }
 
   async logAccess(entries: AccessEntry[]): Promise<void> {
