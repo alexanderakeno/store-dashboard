@@ -158,8 +158,9 @@ export function invalidateMonth(month: MonthKey, part: "raw" | "traffic" | "all"
 
 /* ---------------- last-year data imported from a Merchandise Report ---------------- */
 
+/** Key carries a version: bump it when HistorySummary changes shape, so a cached old shape is never served. */
 export async function getHistoryList(force = false): Promise<HistorySummary[]> {
-  const { value } = await cached("history:list", memTtl(), () => shared(["history-list"], ["history"], sharedSec(), () => dataSource().listHistory(), force), force);
+  const { value } = await cached("history:list", memTtl(), () => shared(["history-list", "v2"], ["history"], sharedSec(), () => dataSource().listHistory(), force), force);
   return value;
 }
 
