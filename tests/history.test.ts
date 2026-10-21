@@ -49,3 +49,17 @@ test("historyLines: MR lines classified like the current year (Apple LOB, Androi
   assert.equal(lobValue(lines).AirPods, 3999000);
   assert.equal(lines.find((l) => l.brand === "SAMSUNG")?.lob, "Samsung");
 });
+
+test("sameRange: a running / cut-off month is compared with last year on the same days", async () => {
+  const { sameRange, lastDay } = await import("@/lib/domain/history");
+  const mk = (month: string, days: number[]) => historyLines(days.map((d) => ({ date: `${month}-${String(d).padStart(2, "0")}`, brand: "APPLE", division: "", productGroup: "DEVICES", category: "PHONE", article: "A", description: "D", qty: 1, discount: 0, net: 100 })), DEFAULT_RULES);
+  const aug26 = mk("2026-08", [1, 10, 21]); // file ends on the 21st
+  const aug25 = mk("2025-08", [1, 10, 21, 25, 31]); // complete month
+  assert.equal(lastDay(aug26), 21);
+  const r = sameRange("2026-08", "2025-08", aug26, aug25);
+  assert.equal(r.upTo, 21);
+  assert.equal(r.prev!.length, 3); // 25th and 31st left out
+  assert.equal(r.cur!.length, 3);
+  const full = sameRange("2026-07", "2025-07", mk("2026-07", [1, 31]), mk("2025-07", [2, 31]));
+  assert.equal(full.upTo, null); // both complete → untouched
+});

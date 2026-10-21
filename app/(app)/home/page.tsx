@@ -5,6 +5,7 @@ import { CopyButton, LineChart, ParamSelect, PrintButton, WhatsAppButton } from 
 import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, linesIn, lobQty, lobValue, perfCards, staffStats, timeGonePct, vasSplit } from "@/lib/domain/extra";
 import { totals } from "@/lib/domain/kpi";
+import { sameRange } from "@/lib/domain/history";
 import { sameMonthLastYear } from "@/lib/domain/period";
 import { shareText } from "@/lib/domain/share";
 import { homeView } from "@/lib/domain/views";
@@ -437,9 +438,14 @@ async function Ytd({ snap, months }: { snap: MonthSnapshot; months: MonthEntry[]
   const mm = snap.month.slice(5);
   const cur = await loadYear(months, year, snap.month);
   const prev = await loadYear(months, prevYear, `${prevYear}-${mm}`);
-  const all = (m: Map<string, SalesLine[]>) => [...m.values()].flat();
-  const curLines = all(cur);
-  const prevLines = all(prev);
+  // fair YTD: only months that have data in both years, each cut to the same days when one side is
+  // incomplete (current month, or an imported file that ends mid-month)
+  const both = MONTH_NUMS.filter((n) => n <= mm && cur.has(`${year}-${n}`) && prev.has(`${prevYear}-${n}`));
+  const pairs = both.map((n) => ({ n, ...sameRange(`${year}-${n}`, `${prevYear}-${n}`, cur.get(`${year}-${n}`), prev.get(`${prevYear}-${n}`)) }));
+  const curLines = pairs.flatMap((x) => x.cur ?? []);
+  const prevLines = pairs.flatMap((x) => x.prev ?? []);
+  const cutNote = pairs.filter((x) => x.upTo).map((x) => `${monthShort(`${year}-${x.n}`).split(" ")[0]} tgl 1–${x.upTo}`);
+  const onlyOne = MONTH_NUMS.filter((n) => n <= mm && cur.has(`${year}-${n}`) !== prev.has(`${prevYear}-${n}`)).map((n) => monthShort(`${year}-${n}`).split(" ")[0]);
   const ct = totals(curLines);
   const pt = totals(prevLines);
   const cl = lobQty(curLines);
@@ -460,8 +466,12 @@ async function Ytd({ snap, months }: { snap: MonthSnapshot; months: MonthEntry[]
           <PrintButton />
         </div>
       </div>
-      <Panel title={`YTD ${prevYear} vs ${year}`} desc={`Januari – ${monthLabel(snap.month).split(" ")[0]}. Hanya bulan yang ada datanya (file bulanan, atau Merchandise Report untuk tahun lalu) yang dihitung.`}>
-        {missingCur > 0 && <p className="mb-4 text-sm text-amber-700">{missingCur} bulan {year} belum ada datanya — nilai YTD hanya dari bulan yang ada.</p>}
+      <Panel title={`YTD ${prevYear} vs ${year}`} desc={`Januari – ${monthLabel(snap.month).split(" ")[0]}, dibanding apple-to-apple: bulan & tanggal yang sama di kedua tahun.`}>
+        {missingCur > 0 && <p className="mb-4 text-sm text-amber-700">{missingCur} bulan {year} belum ada datanya.</p>}
+        <p className="mb-4 text-xs text-slate-500">
+          YTD dihitung dari {both.length} bulan yang datanya ada di kedua tahun{cutNote.length ? `; ${cutNote.join(", ")} dibanding pada tanggal yang sama` : ""}.
+          {onlyOne.length ? ` Tidak dihitung (data hanya ada di satu tahun): ${onlyOne.join(", ")}.` : ""}
+        </p>
         <div className="grid gap-4 lg:grid-cols-2">
           <YearCard year={prevYear} tone="blue" qty={pt.qty} value={pt.sales} lob={pl} lobV={pv} need={prev.size === 0} />
           <YearCard year={year} tone="green" qty={ct.qty} value={ct.sales} lob={cl} lobV={cv} growthQty={prev.size ? g(ct.qty, pt.qty) : null} growthValue={prev.size ? g(ct.sales, pt.sales) : null} lobPrev={prev.size ? pl : null} />
@@ -510,35 +520,44 @@ function YearCard({ year, tone, qty, value, lob, lobV, need, growthQty, growthVa
 }
 
 function MonthTable({ year, prevYear, cur, prev, upTo, deviceOnly = false }: { year: string; prevYear: string; cur: Map<string, SalesLine[]>; prev: Map<string, SalesLine[]>; upTo: string; deviceOnly?: boolean }) {
-  const pick = (lines?: SalesLine[]) => {
-    if (!lines) return null;
-    return totals(deviceOnly ? lines.filter((l) => l.type === "DEVICES") : lines);
-  };
+  const pick = (lines?: SalesLine[]) => (lines ? totals(deviceOnly ? lines.filter((l) => l.type === "DEVICES") : lines) : null);
+  const dash = <span className="text-slate-400">—</span>;
+  let anyPartial = false;
+  const rows = MONTH_NUMS.map((n) => {
+    const pm = `${prevYear}-${n}`;
+    const cm = `${year}-${n}`;
+    const curLines = n <= upTo ? cur.get(cm) : undefined;
+    const fair = sameRange(cm, pm, curLines, prev.get(pm));
+    if (fair.upTo) anyPartial = true;
+    return { n, a: pick(prev.get(pm)), b: pick(curLines), fa: pick(fair.prev), fb: pick(fair.cur), upTo: fair.upTo };
+  });
   return (
-    <div className="sd-table-wrap">
-      <table className="sd-table">
-        <thead>
-          <tr><th>Bulan</th><th className="n">{prevYear} Qty</th><th className="n">{prevYear} Value</th><th className="n">{year} Qty</th><th className="n">{year} Value</th><th className="n">Selisih Value</th><th className="n">Growth</th></tr>
-        </thead>
-        <tbody>
-          {MONTH_NUMS.map((n) => {
-            const a = pick(prev.get(`${prevYear}-${n}`));
-            const b = n <= upTo ? pick(cur.get(`${year}-${n}`)) : null;
-            return (
+    <>
+      <div className="sd-table-wrap">
+        <table className="sd-table">
+          <thead>
+            <tr><th>Bulan</th><th className="n">{prevYear} Qty</th><th className="n">{prevYear} Value</th><th className="n">{year} Qty</th><th className="n">{year} Value</th><th className="n">Selisih Value</th><th className="n">Growth</th></tr>
+          </thead>
+          <tbody>
+            {rows.map(({ n, a, b, fa, fb, upTo: d }) => (
               <tr key={n}>
-                <td className="font-bold">{monthShort(`${year}-${n}`).split(" ")[0]}</td>
-                <td className="n">{a ? num(a.qty) : <span className="text-slate-400">—</span>}</td>
-                <td className="n">{a ? rpf(a.sales) : <span className="text-slate-400">—</span>}</td>
-                <td className="n">{b ? num(b.qty) : <span className="text-slate-400">—</span>}</td>
-                <td className="n">{b ? rpf(b.sales) : <span className="text-slate-400">—</span>}</td>
-                <td className="n">{a && b ? rpf(b.sales - a.sales) : <span className="text-slate-400">—</span>}</td>
-                <td className="n">{a && b ? <Trend value={a.sales ? ((b.sales - a.sales) / a.sales) * 100 : null} digits={1} /> : <span className="text-slate-400">—</span>}</td>
+                <td className="font-bold">
+                  {monthShort(`${year}-${n}`).split(" ")[0]}
+                  {d && <span className="block text-[11px] font-semibold text-amber-600">tgl 1–{d}</span>}
+                </td>
+                <td className="n">{a ? num(a.qty) : dash}{d && fa && <div className="text-[11px] text-slate-400">1–{d}: {num(fa.qty)}</div>}</td>
+                <td className="n">{a ? rpf(a.sales) : dash}{d && fa && <div className="text-[11px] text-slate-400">1–{d}: {rpf(fa.sales)}</div>}</td>
+                <td className="n">{b ? num(b.qty) : dash}</td>
+                <td className="n">{b ? rpf(b.sales) : dash}{d && b && <div className="text-[11px] font-semibold text-amber-600">s/d tgl {d}</div>}</td>
+                <td className="n">{fa && fb ? rpf(fb.sales - fa.sales) : dash}</td>
+                <td className="n">{fa && fb ? <Trend value={fa.sales ? ((fb.sales - fa.sales) / fa.sales) * 100 : null} digits={1} /> : dash}</td>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {anyPartial && <p className="mt-2 text-xs text-slate-500">Bulan bertanda <b className="text-amber-600">tgl 1–N</b> datanya belum sebulan penuh (bulan berjalan, atau file yang di-upload berhenti di tengah bulan). Selisih & growth bulan itu dibanding tahun lalu pada tanggal yang sama; angka besar di kolom {prevYear} tetap total sebulan penuh.</p>}
+    </>
   );
 }
 
