@@ -13,6 +13,7 @@ import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList } from "@/types/pricelist";
 import type { PriceListInput } from "../types";
 import type { AccessEntry, AccessEvent } from "@/types/access";
+import type { PriceChange, PriceChangeType } from "@/lib/domain/priceHistory";
 import { ACCESS_EVENTS } from "@/types/access";
 
 /** Optional tabs of the monthly sheet. */
@@ -27,6 +28,7 @@ export const MASTER_TABS = {
   traffic: { name: "APP_Traffic", header: ["date", "traffic", "updatedAt", "updatedBy"] },
   audit: { name: "APP_Audit", header: ["ts", "nik", "action", "detail"] },
   history: { name: "APP_History", header: ["month", "date", "brand", "division", "group", "category", "article", "description", "qty", "discount", "net", "source", "updatedAt", "updatedBy"] },
+  priceHistory: { name: "APP_PriceHistory", header: ["ts", "kind", "date", "prevDate", "brand", "series", "name", "change", "oldNormal", "newNormal", "oldPromo", "newPromo", "oldCredit", "newCredit", "oldStatus", "newStatus", "by"] },
   access: { name: "APP_Access", header: ["ts", "nik", "name", "role", "event", "path", "ip", "location", "device"] },
   records: { name: "APP_Records", header: ["kind", "date", "key", "data", "updatedAt", "updatedBy"] },
   soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy"] },
@@ -378,6 +380,58 @@ export class SheetsSource implements DataSource {
     } finally {
       this.historyRead = null;
     }
+  }
+
+  async logPriceChanges(lines: PriceChange[]): Promise<void> {
+    if (!lines.length) return;
+    const t = MASTER_TABS.priceHistory.name;
+    const n = (v: number | null) => (v == null ? "" : v);
+    const rows = lines.map((l) => [l.ts, l.kind, l.date, l.prevDate, l.brand, l.series, l.name, l.change, n(l.oldNormal), n(l.newNormal), n(l.oldPromo), n(l.newPromo), n(l.oldCredit), n(l.newCredit), l.oldStatus, l.newStatus, l.by]);
+    try {
+      await appendRows(this.master, t, rows);
+    } catch (e) {
+      if (!(e instanceof SheetsError) || e.status !== 400) throw e;
+      this.ensured = null;
+      await this.ensureTabs();
+      await appendRows(this.master, t, rows);
+    }
+  }
+
+  /** Newest `limit` lines only (column A counts the rows first) — the history only grows. */
+  async listPriceChanges(limit: number): Promise<PriceChange[]> {
+    const t = MASTER_TABS.priceHistory.name;
+    let last: number;
+    try {
+      last = (await readTab(this.master, t, "A:A")).length;
+    } catch (e) {
+      if (e instanceof SheetsError && e.status === 400) return [];
+      throw e;
+    }
+    if (last < 2) return [];
+    const first = Math.max(2, last - limit + 1);
+    const num = (v: unknown) => (v === "" || v == null ? null : parseNumber(v));
+    return (await readTab(this.master, t, `A${first}:Q${last}`))
+      .map((r) => ({
+        ts: normalizeText(r[0]),
+        kind: (normalizeText(r[1]) === "apple" ? "apple" : "android") as PriceChange["kind"],
+        date: normalizeText(r[2]),
+        prevDate: normalizeText(r[3]),
+        brand: normalizeText(r[4]),
+        series: normalizeText(r[5]),
+        name: normalizeText(r[6]),
+        change: normalizeText(r[7]) as PriceChangeType,
+        oldNormal: num(r[8]),
+        newNormal: num(r[9]),
+        oldPromo: num(r[10]),
+        newPromo: num(r[11]),
+        oldCredit: num(r[12]),
+        newCredit: num(r[13]),
+        oldStatus: normalizeText(r[14]),
+        newStatus: normalizeText(r[15]),
+        by: normalizeText(r[16]),
+      }))
+      .filter((x) => x.ts && x.change)
+      .reverse();
   }
 
   async logAccess(entries: AccessEntry[]): Promise<void> {
