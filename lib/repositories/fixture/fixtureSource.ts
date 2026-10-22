@@ -13,6 +13,7 @@ import type { SohSnapshot } from "@/types/soh";
 import type { PriceList } from "@/types/pricelist";
 import type { PriceListInput } from "../types";
 import type { AccessEntry } from "@/types/access";
+import type { PriceChange } from "@/lib/domain/priceHistory";
 
 /**
  * In-memory data source with synthetic data — local development only.
@@ -25,6 +26,7 @@ interface Store {
   users: AppUser[];
   audit: AuditEntry[];
   access: AccessEntry[];
+  priceHistory: PriceChange[];
   history: Record<string, { rows: MerchLine[]; source: string; updatedAt: string; updatedBy: string }>;
   records: AppRecord[];
   soh: SohSnapshot | null;
@@ -51,7 +53,7 @@ function store(): Store {
     const end = m.month === cur ? addDays(today, -1) : monthEnd(m.month);
     for (let d = `${m.month}-01`; d <= end; d = addDays(d, 1)) traffic.push({ date: d, traffic: 60 + ((Number(d.slice(8)) * 37) % 40) });
   }
-  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], access: [], history: {}, records: [], soh: null, priceList: null };
+  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], access: [], priceHistory: [], history: {}, records: [], soh: null, priceList: null };
   return g.__fixtureStore;
 }
 
@@ -158,6 +160,12 @@ export class FixtureSource implements DataSource {
   }
   async saveHistory(months: HistoryInput[], by: string) {
     for (const m of months) store().history[m.month] = { rows: m.rows, source: m.source, updatedAt: new Date().toISOString(), updatedBy: by };
+  }
+  async logPriceChanges(lines: PriceChange[]) {
+    store().priceHistory.push(...lines);
+  }
+  async listPriceChanges(limit: number) {
+    return store().priceHistory.slice(-limit).reverse();
   }
   async logAccess(entries: AccessEntry[]) {
     store().access.push(...entries);

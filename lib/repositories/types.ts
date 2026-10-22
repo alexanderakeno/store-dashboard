@@ -5,6 +5,7 @@ import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList, QoalaTier } from "@/types/pricelist";
 import type { AccessEntry } from "@/types/access";
+import type { PriceChange } from "@/lib/domain/priceHistory";
 
 /** A monthly spreadsheet registered in the app (master sheet `APP_Months`). */
 export interface MonthEntry {
@@ -92,6 +93,11 @@ export interface DataSource {
   getHistory(month: MonthKey): Promise<MerchLine[]>;
   /** Replaces the stored MR lines of each given month, in one write. */
   saveHistory(months: HistoryInput[], by: string): Promise<void>;
+
+  /** Appends the changes found by a price list import (master sheet `APP_PriceHistory`). */
+  logPriceChanges(lines: PriceChange[]): Promise<void>;
+  /** The most recent price history lines (at most `limit`), newest first. */
+  listPriceChanges(limit: number): Promise<PriceChange[]>;
 
   /** Appends login / logout / page-view rows to the access log. */
   logAccess(entries: AccessEntry[]): Promise<void>;

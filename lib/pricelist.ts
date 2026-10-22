@@ -12,3 +12,9 @@ export async function getPriceList(): Promise<PriceList | null> {
   // an empty answer may be a cache from before the first import (another server instance) — re-read it
   return value ?? (await dataSource().getPriceList());
 }
+
+/** Newest price history lines (cached a minute; an import expires the "pricehistory" tag). */
+export async function getPriceHistory(limit = 4000) {
+  const { value } = await cached("pricehistory:latest", TTL_SEC * 1000, () => shared(["pricehistory", String(limit)], ["pricehistory"], TTL_SEC, () => dataSource().listPriceChanges(limit)));
+  return value;
+}
