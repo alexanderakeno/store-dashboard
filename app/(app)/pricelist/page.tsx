@@ -5,20 +5,25 @@ import { PriceBoard } from "@/components/modules/PriceBoard";
 import { requireSession } from "@/lib/auth/session";
 import { priceModels } from "@/lib/domain/pricelist";
 import { dmy, timeAgo } from "@/lib/format";
-import { getPriceList } from "@/lib/pricelist";
+import { getPriceHistory, getPriceList } from "@/lib/pricelist";
+import { PriceHistory } from "@/components/modules/PriceHistory";
+import { groupUpdates } from "@/lib/domain/priceHistory";
+import { appConfig } from "@/config/app";
 import { getSoh } from "@/lib/soh";
 import type { SearchParams } from "@/lib/page";
 import type { PriceKind, PriceList } from "@/types/pricelist";
 import type { SohSnapshot } from "@/types/soh";
 
-const TABS: Array<{ key: PriceKind; label: string }> = [
-  { key: "android", label: "Android" },
-  { key: "apple", label: "Apple" },
+const TABS: Array<{ key: PriceKind | "history"; label: string; href: string }> = [
+  { key: "android", label: "Android", href: "/pricelist" },
+  { key: "apple", label: "Apple", href: "/pricelist?k=apple" },
+  { key: "history", label: "Riwayat Harga", href: "/pricelist?k=history" },
 ];
 
 export default async function PriceListPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireSession();
   const q = await searchParams;
+  if (q.k === "history") return <HistoryTab />;
   const kind: PriceKind = q.k === "apple" ? "apple" : "android";
   const isAdmin = session.role === "admin";
   const update = isAdmin ? <Link href={`/upload#pricelist-${kind}`} prefetch={false} className="sd-btn primary">Update Price List {kind === "apple" ? "Apple" : "Android"}</Link> : undefined;
@@ -57,13 +62,7 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
         desc={date || updated ? `Price list ${label} ${date ? dmy(date) : ""}${updated ? ` · diimport ${timeAgo(Date.parse(updated))}` : ""}${soh?.date ? ` · SOH ${dmy(soh.date)}` : ""}` : `Harga normal, promo, dan stok per tipe.`}
         actions={update}
       />
-      <nav className="sd-tabs grid-cols-2" aria-label="Jenis price list">
-        {TABS.map((t) => (
-          <Link key={t.key} href={t.key === "android" ? "/pricelist" : "/pricelist?k=apple"} prefetch={false} className="sd-tab" aria-current={kind === t.key ? "page" : undefined}>
-            {t.label}
-          </Link>
-        ))}
-      </nav>
+      <Tabs current={kind} />
       {models.length ? (
         <PriceBoard key={kind} models={models} qoala={list?.qoala ?? []} hasSoh={!!soh} initialBrand={typeof q.b === "string" ? q.b : ""} initialModel={typeof q.t === "string" ? q.t : ""} />
       ) : (
@@ -73,6 +72,35 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
           </EmptyBlock>
         </Panel>
       )}
+    </div>
+  );
+}
+
+function Tabs({ current }: { current: PriceKind | "history" }) {
+  return (
+    <nav className="sd-tabs grid-cols-3" aria-label="Jenis price list">
+      {TABS.map((t) => (
+        <Link key={t.key} href={t.href} prefetch={false} className="sd-tab" aria-current={current === t.key ? "page" : undefined}>
+          {t.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+/** "Riwayat Harga": what changed at every price list import (Android & Apple). */
+async function HistoryTab() {
+  let error: string | null = null;
+  const lines = await getPriceHistory().catch((e: Error) => {
+    error = e.message;
+    return [];
+  });
+  return (
+    <div className="sd-content">
+      <PageIntro title="Price List" desc="Riwayat harga: apa saja yang berubah di setiap update price list." />
+      <Tabs current="history" />
+      {error && <div className="alert error">Riwayat harga tidak bisa dibaca: {error}</div>}
+      <PriceHistory updates={groupUpdates(lines).slice(0, 40)} timeZone={appConfig().timeZone} />
     </div>
   );
 }
