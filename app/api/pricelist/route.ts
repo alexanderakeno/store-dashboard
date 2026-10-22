@@ -4,6 +4,7 @@ import { BadRequest, assertSameOrigin, handle, jsonBody } from "@/lib/http";
 import { dataSource } from "@/lib/repositories";
 import { invalidate } from "@/lib/cache";
 import type { PriceItem, PriceKind, QoalaTier } from "@/types/pricelist";
+import { diffPrices, type PriceChange } from "@/lib/domain/priceHistory";
 
 const MAX_ITEMS = 3_000;
 const KINDS: PriceKind[] = ["apple", "android"];
@@ -46,10 +47,26 @@ export async function POST(req: Request) {
 
     if (only && items.some((x) => x.kind !== only)) throw new BadRequest(`Price list ${only === "apple" ? "Apple" : "Android"} berisi baris jenis lain — upload di bagian yang sesuai`);
     const kinds = [...new Set(items.map((x) => x.kind))];
+    // what changed vs the stored list → price history (read before it is replaced)
+    const prev = await dataSource().getPriceList().catch(() => null);
+    const ts = new Date().toISOString();
+    const changes: PriceChange[] = prev
+      ? kinds.flatMap((k) => (prev.items.some((x) => x.kind === k) ? diffPrices(prev.items, items, { ts, kind: k, date: date ?? "", prevDate: prev.dates[k] ?? "", by: s.nik }) : []))
+      : [];
     await dataSource().savePriceList({ kinds, date, source: str(b.source, 200), items, qoala }, s.nik);
+    let historyNote = "";
+    try {
+      await dataSource().logPriceChanges(changes);
+      invalidate("pricehistory");
+    } catch (e) {
+      historyNote = ` · riwayat harga gagal dicatat: ${(e as Error).message}`;
+    }
+    const moved = changes.filter((c) => c.change !== "import");
+    const cnt = (t: PriceChange["change"]) => moved.filter((c) => c.change === t).length;
+    const summary = changes.length ? ` · ${moved.length ? `${cnt("turun")} turun, ${cnt("naik")} naik, ${cnt("baru")} baru, ${cnt("hilang")} hilang` : "tidak ada perubahan harga"}` : "";
     await dataSource().audit({ nik: s.nik, action: "import.pricelist", detail: `${date ?? "-"}: ${kinds.join("+")} ${items.length} tipe, qoala ${qoala.length}` }).catch(() => {});
     invalidate("pricelist:");
     const label = kinds.map((k) => (k === "apple" ? "Apple" : "Android")).join(" & ");
-    return NextResponse.json({ ok: true, message: `${label}: ${items.length} tipe${qoala.length ? ` · ${qoala.length} tier Qoala` : ""} tersimpan` });
+    return NextResponse.json({ ok: true, message: `${label}: ${items.length} tipe${qoala.length ? ` · ${qoala.length} tier Qoala` : ""} tersimpan${summary}${historyNote}` });
   });
 }
