@@ -75,7 +75,7 @@ export function StockKosong({ groups, text, range }: { groups: EmptyGroup[]; tex
                   <li key={it.article} className="flex items-start justify-between gap-3 px-3 py-2.5">
                     <span className="min-w-0 text-[13px] leading-snug">
                       <span className="block font-semibold text-slate-800 dark:text-slate-100">{it.description || it.article}</span>
-                      <span className="mt-0.5 block font-mono text-[11px] text-slate-400">{it.article} · terakhir terjual {dm(it.lastSold)}</span>
+                      <span className="mt-0.5 block text-[11px] text-slate-400"><span className="font-mono">{it.article}</span> · terakhir terjual {dm(it.lastSold)}</span>
                       {it.alt.length > 0 && (
                         <span className="mt-1 block text-[11px] text-emerald-700 dark:text-emerald-400">
                           Warna lain ready: {it.alt.map((a) => `${a.color} ${a.qty}`).join(" · ")}

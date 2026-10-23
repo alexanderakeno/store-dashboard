@@ -133,8 +133,8 @@ export async function FocusPage({ searchParams, path, group, title, desc, itemLa
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
           <Panel title={<span className="flex items-center gap-2">{sel.key}<span className={`sd-badge ${statusTone[statusOf(sel.ach, tg)]}`}>{statusOf(sel.ach, tg)}</span></span>} desc={`${itemLabel.toUpperCase()} DIPILIH`}>
             <div className="grid grid-cols-2 gap-4">
-              <div><p className="text-xs text-slate-500">Target Value</p><p className="text-lg font-black">{sel.target ? rpf(sel.target) : <NeedData />}</p></div>
-              <div><p className="text-xs text-slate-500">Achievement</p><p className="text-lg font-black">{rpf(sel.actual)}</p></div>
+              <div><p className="text-xs text-slate-500">Target Value</p><p className="sd-num font-black sm:!text-lg">{sel.target ? rpf(sel.target) : <NeedData />}</p></div>
+              <div><p className="text-xs text-slate-500">Achievement</p><p className="sd-num font-black sm:!text-lg">{rpf(sel.actual)}</p></div>
               <div><p className="text-xs text-slate-500">Achievement %</p><p className="text-lg font-black">{sel.ach == null ? "—" : pct(sel.ach)}</p></div>
               <div><p className="text-xs text-slate-500">Actual Qty</p><p className="text-lg font-black">{num(sel.qty)} unit</p></div>
             </div>
