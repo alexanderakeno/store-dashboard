@@ -105,3 +105,6 @@ export function Stat({ label, value, sub, tone, need }: { label: ReactNode; valu
     </div>
   );
 }
+
+/** Size class for a KPI value: short values (qty, %) stay big; long rupiah amounts shrink with the screen. */
+export const numClass = (v: ReactNode) => (typeof v === "string" && v.length > 10 ? "sd-num" : "text-lg sm:text-xl");
