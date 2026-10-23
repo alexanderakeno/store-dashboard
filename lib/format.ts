@@ -11,11 +11,11 @@ export const rp = (n: number | null | undefined) => (n == null ? "–" : `${n < 
 export function rpc(n: number | null | undefined): string {
   if (n == null) return "–";
   const a = Math.abs(n);
-  const s = n < 0 ? "-" : "";
-  if (a >= 1e12) return `${s}Rp${nf2.format(a / 1e12)} T`;
-  if (a >= 1e9) return `${s}Rp${nf2.format(a / 1e9)} M`;
-  if (a >= 1e6) return `${s}Rp${nf1.format(a / 1e6)} jt`;
-  if (a >= 1e3) return `${s}Rp${nf0.format(a / 1e3)} rb`;
+  const s = n < 0 ? "-\u2060" : ""; // word joiner: the minus never wraps away from "Rp"
+  if (a >= 1e12) return `${s}Rp${nf2.format(a / 1e12)}\u00a0T`;
+  if (a >= 1e9) return `${s}Rp${nf2.format(a / 1e9)}\u00a0M`;
+  if (a >= 1e6) return `${s}Rp${nf1.format(a / 1e6)}\u00a0jt`;
+  if (a >= 1e3) return `${s}Rp${nf0.format(a / 1e3)}\u00a0rb`;
   return `${s}Rp${nf0.format(a)}`;
 }
 
@@ -47,7 +47,7 @@ export function tone(p: number | null | undefined): "good" | "warn" | "bad" | "n
 }
 
 /** Full rupiah with a space, reference style: "Rp 3.913.258.501" · "-Rp 12.000". */
-export const rpf = (n: number | null | undefined) => (n == null ? "–" : `${n < 0 ? "-" : ""}Rp ${nf0.format(Math.abs(Math.round(n)))}`);
+export const rpf = (n: number | null | undefined) => (n == null ? "–" : `${n < 0 ? "-\u2060" : ""}Rp\u00a0${nf0.format(Math.abs(Math.round(n)))}`);
 
 /** Signed percentage with a triangle: "▲ 12,5%" / "▼ 3,0%". */
 export const pctArrow = (n: number | null | undefined, d: 0 | 1 = 1) => (n == null || !Number.isFinite(n) ? "–" : `${n >= 0 ? "▲" : "▼"} ${pct(Math.abs(n), d)}`);
