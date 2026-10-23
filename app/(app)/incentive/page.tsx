@@ -8,7 +8,7 @@ import { staffNames } from "@/components/modules/staffList";
 import { clampRange, linesIn } from "@/lib/domain/extra";
 import { DEVICE_LOBS, incentiveView, nameKey, type IncentiveRow } from "@/lib/domain/incentive";
 import { monthStart } from "@/lib/domain/period";
-import { num, rp } from "@/lib/format";
+import { dmy, num, rp, rpc } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 
@@ -104,10 +104,10 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
       <div className="sd-hero p-5 sm:p-6">
         <p className="text-xs font-black tracking-[.12em] text-white/80 uppercase">Total Est. Incentive{pick ? ` · ${pick.name}` : ""}</p>
         <p className="mt-2 text-3xl font-black tabular-nums">{rp(shown.all)}</p>
-        <p className="mt-1 text-sm text-white/80">{from} – {to}</p>
-        <div className="mt-5 grid max-w-xl grid-cols-3 gap-2 text-sm sm:gap-3">
+        <p className="mt-1 text-sm text-white/80">{dmy(from)} – {dmy(to)}</p>
+        <div className="mt-5 grid max-w-xl grid-cols-3 gap-2 text-[13px] sm:gap-3 sm:text-sm">
           {[["Device", shown.device], ["Aksesoris", shown.acc], ["Qoala", shown.qoala]].map(([k, v]) => (
-            <div key={k} className="rounded-2xl bg-white/15 p-3"><p className="text-white/80">{k}</p><p className="font-black tabular-nums">{rp(v as number)}</p></div>
+            <div key={k} className="min-w-0 rounded-2xl bg-white/15 px-2.5 py-3 sm:p-3"><p className="text-white/80">{k}</p><p className="font-black tabular-nums"><span className="sm:hidden">{rpc(v as number)}</span><span className="max-sm:hidden">{rp(v as number)}</span></p></div>
           ))}
         </div>
       </div>
