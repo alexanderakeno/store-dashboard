@@ -89,7 +89,7 @@ export function fulfillmentText(groups: EmptyGroup[], meta: { store: string; fro
   const out = [`*Need fulfillment ${meta.store}*`.trim(), `Stok kosong di SOH${meta.sohDate ? ` ${d(meta.sohDate)}` : ""}, terjual ${d(meta.from)}–${d(meta.to)}:`];
   for (const g of groups) {
     out.push("", `*${g.category}*`);
-    for (const it of g.items) out.push(`- ${it.description || it.article} (${it.article}) · sold ${it.sold}`);
+    for (const it of g.items) out.push(`- ${it.description || it.article} (${it.article}) · sold ${it.sold} · terakhir terjual ${d(it.lastSold)}`);
   }
   return out.join("\n");
 }
