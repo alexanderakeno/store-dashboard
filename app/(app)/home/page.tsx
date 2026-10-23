@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { appConfig } from "@/config/app";
-import { EmptyBlock, NeedData, Panel, Progress, SectionHead, Trend, achColor } from "@/components/kit";
+import { EmptyBlock, NeedData, Panel, Progress, SectionHead, Trend, achColor, numClass } from "@/components/kit";
 import { CopyButton, LineChart, ParamSelect, PrintButton, WhatsAppButton } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, linesIn, lobQty, lobValue, perfCards, staffStats, timeGonePct, vasSplit } from "@/lib/domain/extra";
@@ -137,15 +137,15 @@ const cards = [total, grpCard("apple", "Apple", grp.Apple), grpCard("android", "
 
       <div className="space-y-4">
         <SectionHead title="Store Performance" desc="Actual vs target bulan terpilih." />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
           {cards.map((c, i) => (
-            <article key={c.key} className={`sd-block-card relative p-5 ${c.key === "total" ? "sm:col-span-2 xl:col-span-4" : ""}`} data-tone={TONES[i]}>
+            <article key={c.key} className={`sd-block-card relative p-5 ${c.key === "total" ? "sm:col-span-2 2xl:col-span-4" : ""}`} data-tone={TONES[i]}>
 {details[c.key] && <CardDetail id={`detail-${c.key}`} title={c.label} detail={details[c.key]!} total={c.actual} tg={tg} drillQuery={`m=${p.month}&d=${p.asOf}&g=${c.key}`} />}
               <p className="text-xs font-black tracking-[.08em] text-slate-500 uppercase">{c.label}</p>
               <p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{rpf(c.actual)}</p>
               <div className="mt-4 space-y-2 border-t border-slate-200 pt-3 text-[13px] dark:border-slate-700">
                 <div className="flex justify-between gap-2"><span className="text-slate-500">Target {rpf(c.target)}</span><b className={c.achievementPct != null && c.achievementPct < tg ? "text-rose-600" : "text-slate-900"}>{c.achievementPct == null ? "—" : `${c.achievementPct >= tg ? "▲" : "▼"} ${pct(c.achievementPct, 0)}`}</b></div>
-                <div className="flex justify-between gap-2"><span className="font-semibold whitespace-nowrap text-blue-600">Est. {rpf(c.estimate)}{c.target > 0 && <span className="ml-1">({pct((c.estimate / c.target) * 100, 0)})</span>}</span><b className="whitespace-nowrap text-slate-900">{dec(c.points, 1).replace(",0", "")}/{c.pointsMax} pts</b></div>
+                <div className="flex flex-wrap justify-between gap-x-2"><span className="font-semibold whitespace-nowrap text-blue-600">Est. {rpf(c.estimate)}{c.target > 0 && <span className="ml-1">({pct((c.estimate / c.target) * 100, 0)})</span>}</span><b className="whitespace-nowrap text-slate-900">{dec(c.points, 1).replace(",0", "")}/{c.pointsMax} pts</b></div>
                 <div className="flex justify-between gap-2"><span className="text-slate-500">Variance</span><b className={c.variance >= 0 ? "text-emerald-600" : "text-rose-600"}>{rpf(c.variance)}</b></div>
 {details[c.key] && <p className="pt-1 text-xs font-semibold text-blue-600">Klik untuk rincian ›</p>}
               </div>
@@ -155,7 +155,7 @@ const cards = [total, grpCard("apple", "Apple", grp.Apple), grpCard("android", "
       </div>
 
       <Panel title="Team Performance">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
           <Mini label="Total Staff" value={num(people.length)} />
           <Mini label="Productive" value={num(productive.length)} />
           <Mini label="Need Push" value={num(needPush.length)} />
@@ -389,7 +389,7 @@ function Kv({ label, value }: { label: React.ReactNode; value: React.ReactNode }
   return (
     <div className="min-w-0">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-[15px] font-black text-slate-950 sm:text-lg">{value}</p>
+      <p className="sd-num mt-1 font-black text-slate-950 sm:!text-lg">{value}</p>
     </div>
   );
 }
@@ -398,7 +398,7 @@ function Mini({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-slate-200 p-3.5 dark:border-slate-700">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-black text-slate-950">{value}</p>
+      <p className={`${numClass(value)} mt-1 font-black text-slate-950`}>{value}</p>
     </div>
   );
 }
@@ -530,7 +530,8 @@ function MonthTable({ year, prevYear, cur, prev, upTo, deviceOnly = false }: { y
     const fair = sameRange(cm, pm, curLines, prev.get(pm));
     if (fair.upTo) anyPartial = true;
     return { n, a: pick(prev.get(pm)), b: pick(curLines), fa: pick(fair.prev), fb: pick(fair.cur), upTo: fair.upTo };
-  });
+  }).filter((r) => r.a || r.b); // a month with no data in either year is just a row of dashes
+  if (!rows.length) return <p className="text-sm text-slate-500">Belum ada data bulan apa pun untuk {prevYear} maupun {year}.</p>;
   return (
     <>
       <div className="sd-table-wrap">

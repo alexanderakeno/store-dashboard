@@ -6,7 +6,7 @@ import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, clampRange, linesIn, lobQty, lobValue, perfCards, staffStats, timeGonePct, vasSplit } from "@/lib/domain/extra";
 import { monthStart } from "@/lib/domain/period";
 import { homeView } from "@/lib/domain/views";
-import { dec, monthLabel, num, pct, rpf } from "@/lib/format";
+import { dec, dmy, monthLabel, num, pct, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 
@@ -38,9 +38,9 @@ export default async function MadingPage({ searchParams }: { searchParams: Searc
           {range && <ParamDate param="from" label="Dari" value={from} min={monthStart(p.month)} max={p.asOf} />}
           {range && <ParamDate param="to" label="Sampai" value={to} min={monthStart(p.month)} max={p.asOf} />}
         </div>
-        <p className="text-xs text-slate-500">Periode aktif: <b>{range ? `${from} s/d ${to}` : p.month}</b></p>
+        <p className="text-xs text-slate-500">Periode aktif: <b>{range ? `${dmy(from)} s/d ${dmy(to)}` : monthLabel(p.month)}</b></p>
       </section>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         {cards.map((c, i) => (
           <article key={c.key} className="sd-block-card p-5" data-tone={TONES[i]}>
             <p className="text-xs font-black tracking-[.08em] text-slate-500 uppercase">{c.key === "total" ? "Amount" : c.label}</p>

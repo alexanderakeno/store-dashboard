@@ -458,19 +458,25 @@ html.dark .sd-log-acct[aria-current="true"] { border-color: #1e3a8a; background:
 .sd-fit-stack .sd-table, .sd-fit-stack .sd-table tbody, .sd-fit-stack .sd-table tfoot { display: block; width: 100%; }
 .sd-fit-stack .sd-table thead { display: none; }
 .sd-fit-stack .sd-table tr {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px 14px;
-  margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--block-border); border-radius: 14px; background: var(--block-surface);
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--fit-col, 118px)), 1fr)); gap: 6px 12px;
+  margin-bottom: 6px; padding: 9px 12px; border: 1px solid var(--block-border); border-radius: 14px; background: var(--block-surface);
 }
+.sd-fit-measure .sd-table td { white-space: nowrap !important; }
+.sd-fit-stack .sd-table td[data-fit-hide] { display: none; }
+.sd-fit-stack .sd-table td input, .sd-fit-stack .sd-table td select { width: 100%; max-width: 100%; min-width: 0; }
 .sd-fit-stack .sd-table tbody tr:nth-child(2n), .sd-fit-stack .sd-table tbody tr:hover { background: var(--block-surface); }
 .sd-fit-stack .sd-table tfoot tr { background: var(--block-surface-soft); }
 .sd-fit-stack .sd-table td, .sd-fit-stack .sd-table tfoot td {
   display: block; min-width: 0; padding: 0; border: 0; background: transparent; white-space: normal; text-align: left; overflow-wrap: anywhere;
 }
 .sd-fit-stack .sd-table td::before {
-  content: attr(data-label); display: block; margin-bottom: 1px;
-  font-size: 10px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--block-text-secondary);
+  content: attr(data-label); display: block; margin-bottom: 0;
+  font-size: 9.5px; line-height: 1.25; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--block-text-secondary);
 }
 .sd-fit-stack .sd-table td:empty, .sd-fit-stack .sd-table td[data-label=""]::before { display: none; }
 /* first cell = the row's name (staff, product, date…): full-width title without a label */
 .sd-fit-stack .sd-table td:first-child, .sd-fit-stack .sd-table td[data-fit-wide] { grid-column: 1 / -1; font-size: 14px; font-weight: 800; }
 .sd-fit-stack .sd-table td:first-child::before, .sd-fit-stack .sd-table td[data-fit-wide]::before { display: none; }
+
+/* big amounts in narrow tiles: shrink with the screen instead of breaking "Rp" from the number */
+.sd-num { font-size: clamp(13.5px, 3.9vw, 18px); line-height: 1.25; font-variant-numeric: tabular-nums; }

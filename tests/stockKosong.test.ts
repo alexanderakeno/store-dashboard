@@ -35,5 +35,5 @@ test("emptyStock: sold in window and missing / zero in SOH, grouped per category
   assert.deepEqual(g[0].items[0].alt, [{ color: "BLACK", qty: 3 }]);
   assert.equal(g[0].items[0].lastSold, "2026-10-20");
   const txt = fulfillmentText(g, { store: "QF10", from: "2026-09-23", to: "2026-10-22", sohDate: "2026-10-23" });
-  assert.match(txt, /\*iPhone\*\n- IPHONE 17 256GB BLUE \(IP-BLU\) · sold 2/);
+  assert.match(txt, /\*iPhone\*\n- IPHONE 17 256GB BLUE \(IP-BLU\) · sold 2 · terakhir terjual 20\/10/);
 });

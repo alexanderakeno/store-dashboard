@@ -100,12 +100,13 @@ function Kpis({ v }: { v: MtmView }) {
   return (
     <div className="space-y-4">
       <SectionHead title={`${monthShort(v.base.month)} vs ${b}`} desc={`Tanggal 1–${v.day}. Angka besar = ${monthShort(v.base.month)}, di bawahnya ${b}.`} />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {items.map((it) => (
-          <article key={it.label} className="sd-block-card p-5" data-tone={it.tone}>
-            <p className="text-xs font-black tracking-[.08em] text-slate-500 uppercase">{it.label}</p>
-            <p className="mt-2 text-2xl font-black tracking-tight text-slate-950">{it.cur}</p>
-            <div className="mt-3 flex justify-between gap-2 border-t border-slate-200 pt-3 text-[13px] dark:border-slate-700">
+      {/* phone: the two money cards full width, the four small KPIs two per row */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
+        {items.map((it, i) => (
+          <article key={it.label} className={`sd-block-card p-4 sm:p-5 ${i < 2 ? "col-span-2 sm:col-span-1" : ""}`} data-tone={it.tone}>
+            <p className="text-[11px] font-black tracking-[.08em] text-slate-500 uppercase sm:text-xs">{it.label}</p>
+            <p className={`mt-2 font-black tracking-tight text-slate-950 ${i < 2 ? "text-2xl" : it.cur.length > 8 ? "sd-num sm:!text-2xl" : "text-xl sm:text-2xl"}`}>{it.cur}</p>
+            <div className="mt-3 flex flex-wrap justify-between gap-x-2 gap-y-1 border-t border-slate-200 pt-3 text-[12px] sm:text-[13px] dark:border-slate-700">
               <span className="text-slate-500">{b} {it.prev}</span>
               {it.g !== null ? <Trend value={it.g} digits={1} /> : it.sub && <span className="text-slate-500">{it.sub}</span>}
             </div>

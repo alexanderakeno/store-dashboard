@@ -44,7 +44,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
   const lyHistory = history.filter((h) => h.month.startsWith(lastYear));
   const priceCount = (k: "apple" | "android") => price?.items.filter((i) => i.kind === k).length ?? 0;
   const sources = [
-    { name: "Control MR & SP (sales)", ok: true, detail: `${s.lines.length} baris SP · ${s.merch.length} baris MR · data s/d ${s.lastDataDate ?? "–"}` },
+    { name: "Control MR & SP (sales)", ok: true, detail: `${s.lines.length} baris SP · ${s.merch.length} baris MR · data s/d ${s.lastDataDate ? dmy(s.lastDataDate) : "–"}` },
     { name: "Target Store", ok: !!s.target, detail: s.target ? `${s.target.staff.length} staff · ${Object.keys(s.target.sections).length} section` : "Tab Target Store belum terbaca" },
     { name: "Traffic (CVR)", ok: s.traffic.length > 0, detail: s.traffic.length ? `${s.traffic.length} hari (${s.trafficFromApp} input aplikasi, sisanya tab Traffic)` : "Tab Traffic belum berisi bulan ini — input di Settings → Traffic" },
     { name: "CX & Google Review", ok: !!(x.cx || x.gr), detail: x.cx || x.gr ? `Tab CX&GR Tracker · ${x.cx?.days.length ?? 0} hari · ${(x.cx?.staff ?? []).length} staff` : "Tab CX&GR Tracker tidak ditemukan" },
@@ -141,12 +141,12 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
       <Panel title="Sumber Data">
         <ul className="divide-y divide-slate-200 dark:divide-slate-700">
           {sources.map((x) => (
-            <li key={x.name} className="flex flex-wrap items-center justify-between gap-3 py-3">
-              <div className="flex items-center gap-3">
-                {x.ok ? <CheckCircle2 className="size-5 text-emerald-500" /> : <CircleDashed className="size-5 text-amber-500" />}
-                <div><p className="font-bold text-slate-950">{x.name}</p><p className="text-sm text-slate-500">{x.detail}</p></div>
+            <li key={x.name} className="flex items-start justify-between gap-3 py-3">
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                {x.ok ? <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-500" /> : <CircleDashed className="mt-0.5 size-5 shrink-0 text-amber-500" />}
+                <div className="min-w-0"><p className="font-bold text-slate-950">{x.name}</p><p className="text-sm text-slate-500">{x.detail}</p></div>
               </div>
-              {x.ok ? <span className="sd-badge green">Terhubung</span> : <NeedData />}
+              <span className="shrink-0">{x.ok ? <span className="sd-badge green">OK</span> : <NeedData />}</span>
             </li>
           ))}
         </ul>

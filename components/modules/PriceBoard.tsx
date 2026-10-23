@@ -5,7 +5,7 @@ import { displayName, qoalaFor, type PriceModel } from "@/lib/domain/pricelist";
 import type { QoalaTier } from "@/types/pricelist";
 
 const nf = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
-const rp = (n: number) => `Rp ${nf.format(Math.round(n))}`;
+const rp = (n: number) => `Rp\u00a0${nf.format(Math.round(n))}`;
 const isEol = (s: string) => /EOL/i.test(s);
 
 /** Keeps brand / model in the address bar (shareable, survives reload) without a server round trip. */

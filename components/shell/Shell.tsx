@@ -191,7 +191,7 @@ function Header({ storeCode, userName, isAdmin, fixture, onMenu, collapsed, onEx
           <span className="text-slate-400 max-sm:hidden">{storeCode}</span>
           <ChevronRight className="size-3.5 text-slate-400 max-sm:hidden" />
           <b className="truncate">{titleFor(path)}</b>
-          {fixture && <span className="sd-badge amber ml-1">DATA SINTETIS</span>}
+          {fixture && <span className="sd-badge amber ml-1 max-sm:hidden">DATA SINTETIS</span>}
         </div>
         <div className="flex items-center gap-2">
           {msg && <span className="text-xs font-semibold text-rose-600 max-md:hidden" role="alert">{msg}</span>}

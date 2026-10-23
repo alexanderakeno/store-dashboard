@@ -10,7 +10,7 @@ import { displayName } from "@/lib/domain/normalize";
 import { daysInMonth, monthEnd, monthStart } from "@/lib/domain/period";
 import { shareText } from "@/lib/domain/share";
 import { dayDetail, homeView } from "@/lib/domain/views";
-import { dateLong, dec, num, pct, rpf, timeAgo } from "@/lib/format";
+import { dateLong, dec, dmy, num, pct, rpf, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 
 export default async function DailySalesPage({ searchParams }: { searchParams: SearchParams }) {
@@ -43,7 +43,7 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
     <div className="sd-content">
       <PageIntro
         title="Daily Sales"
-        desc={`Seluruh data mengikuti tanggal terpilih: ${day}.`}
+        desc={`Seluruh data mengikuti tanggal terpilih: ${dmy(day)}.`}
         actions={
           <>
             <ParamDate param="d" value={day} min={monthStart(p.month)} max={s.lastDataDate ?? monthEnd(p.month)} className="w-44" />
@@ -53,7 +53,7 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
       />
       <p className="inline-flex w-fit flex-wrap items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500 dark:border-slate-700">
         <span className="size-2 rounded-full bg-emerald-500" />
-        Aktivitas data terakhir: <b className="text-slate-700">dibaca {timeAgo(s.loadedAt)}</b> • {s.sourceTitle} • data s/d {s.lastDataDate ?? "–"}
+        Aktivitas data terakhir: <b className="text-slate-700">dibaca {timeAgo(s.loadedAt)}</b> • {s.sourceTitle} • data s/d {s.lastDataDate ? dmy(s.lastDataDate) : "–"}
       </p>
 
       <Panel title="Share Report" desc="Pilih report yang ingin dibagikan ke WhatsApp." right={<div className="flex flex-wrap gap-2"><CopyButton text={text} label="Salin Teks" /><WhatsAppButton text={text} label="Share WhatsApp ›" /></div>} />
@@ -68,7 +68,7 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
                 <p className="text-sm font-bold text-slate-500">{c.label}</p>
                 <span className={`grid size-9 place-items-center rounded-[14px] ${c.ic}`}><Icon className="size-4" /></span>
               </div>
-              <p className="mt-4 text-xl leading-tight font-black text-slate-950 sm:text-2xl">{rpf(c.actual)} / {rpf(c.target)}</p>
+              <p className="mt-4 leading-tight font-black text-slate-950"><span className="block text-xl sm:text-2xl">{rpf(c.actual)}</span><span className="block text-sm font-bold text-slate-500">dari target {rpf(c.target)}</span></p>
               <p className="mt-3 text-xs font-bold text-slate-500">{pct(a ?? 0, 0)}</p>
               <div className="mt-2"><Progress value={a} color={c.color} label={c.label} /></div>
             </article>

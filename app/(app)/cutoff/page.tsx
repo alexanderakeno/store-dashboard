@@ -1,7 +1,7 @@
 import { appConfig } from "@/config/app";
 import { PageIntro, Panel } from "@/components/kit";
 import { PageStatus } from "@/components/layout/PageStatus";
-import { dayShort, num, rpf, timeAgo } from "@/lib/format";
+import { dayShort, dmy, num, rpf, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 
 export default async function CutoffPage({ searchParams }: { searchParams: SearchParams }) {
@@ -23,7 +23,7 @@ export default async function CutoffPage({ searchParams }: { searchParams: Searc
         <Panel title="Sumber data">
           <dl className="grid grid-cols-[8rem_1fr] gap-y-2 text-sm">
             <dt className="text-slate-500">File</dt><dd className="font-semibold">{s.sourceTitle}</dd>
-            <dt className="text-slate-500">Data s/d</dt><dd>{s.lastDataDate ?? "–"}</dd>
+            <dt className="text-slate-500">Data s/d</dt><dd>{s.lastDataDate ? dmy(s.lastDataDate) : "–"}</dd>
             <dt className="text-slate-500">Dibaca</dt><dd>{new Date(s.loadedAt).toLocaleString("id-ID", { timeZone: appConfig().timeZone })} ({timeAgo(s.loadedAt)})</dd>
             <dt className="text-slate-500">Baris</dt><dd>{num(s.lines.length)} Sales Person · {num(s.merch.length)} Merchandise Report{s.skippedOtherMonth ? ` · ${num(s.skippedOtherMonth)} baris bulan lain dilewati` : ""}</dd>
             <dt className="text-slate-500">Target</dt><dd>{s.target ? rpf(s.target.total) : "tidak terbaca"}</dd>

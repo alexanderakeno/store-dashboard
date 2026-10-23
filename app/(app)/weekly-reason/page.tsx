@@ -7,8 +7,11 @@ import { PageStatus } from "@/components/layout/PageStatus";
 import { staffStats, typeQty } from "@/lib/domain/extra";
 import { totals } from "@/lib/domain/kpi";
 import { daysInMonth, eachDay, weeksOfMonth } from "@/lib/domain/period";
-import { dateShort, num, pct, rpf } from "@/lib/format";
+import { dateShort, dmy, num, pct, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
+import { getSoh, stockKosong } from "@/lib/soh";
+import type { MonthSnapshot } from "@/lib/services/dashboard";
+import Link from "next/link";
 
 export default async function WeeklyReasonPage({ searchParams }: { searchParams: SearchParams }) {
   const p = await loadPage(searchParams);
@@ -54,10 +57,45 @@ export default async function WeeklyReasonPage({ searchParams }: { searchParams:
               {!moves.length && <tr><td colSpan={3} className="text-center text-slate-500">Belum ada penjualan.</td></tr>}</tbody>
           </table></div>
         </Panel>
-        <Panel title="Kondisi SOH">
-          <EmptyBlock title="Kondisi SOH">Butuh file SOH (stock on hand) per artikel — upload di Data Upload setelah format disepakati.</EmptyBlock>
-        </Panel>
+        <SohCondition snap={s} />
       </div>
     </div>
+  );
+}
+
+/** Latest SOH per category plus what sold but is now empty (same rule as SOH → Stock Kosong). */
+async function SohCondition({ snap }: { snap: MonthSnapshot }) {
+  const soh = await getSoh().catch(() => undefined);
+  if (!soh)
+    return (
+      <Panel title="Kondisi SOH">
+        <EmptyBlock title="Kondisi SOH">{soh === null ? "Belum ada SOH — upload PDF Stock On Hand di Data Upload." : "SOH gagal dibaca saat ini, coba Perbarui."}</EmptyBlock>
+      </Panel>
+    );
+  const { groups } = await stockKosong(soh, snap);
+  const perCat = soh.categories.map((c) => ({ c, qty: soh.items.filter((x) => x.category === c).reduce((a, x) => a + x.qty, 0) }));
+  const empty = groups.flatMap((g) => g.items.map((it) => ({ ...it, category: g.category }))).sort((a, b) => b.sold - a.sold);
+  return (
+    <Panel title="Kondisi SOH" desc={`Stok per ${soh.date ? dmy(soh.date) : "update terakhir"}.`} right={<Link href="/soh" prefetch={false} className="sd-btn">Buka SOH</Link>}>
+      <div className="flex flex-wrap gap-1.5">
+        {perCat.map(({ c, qty }) => <span key={c} className={`sd-badge ${qty ? "slate" : "red"}`}>{c} {num(qty)}</span>)}
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <p className="text-sm font-bold text-slate-900 dark:text-white">Stock kosong yang laku (30 hari)</p>
+        <Link href="/soh?v=kosong" prefetch={false} className="shrink-0 text-sm font-semibold text-blue-600 hover:underline">{empty.length} artikel ›</Link>
+      </div>
+      {empty.length ? (
+        <ul className="mt-2 divide-y divide-slate-200 text-[13px] dark:divide-slate-700">
+          {empty.slice(0, 8).map((it) => (
+            <li key={it.article} className="flex justify-between gap-3 py-2">
+              <span className="min-w-0"><span className="block truncate font-semibold">{it.description || it.article}</span><span className="text-[11px] text-slate-400">{it.category}</span></span>
+              <span className="shrink-0 tabular-nums">sold <b>{num(it.sold)}</b></span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm text-slate-500">Semua device yang laku masih ada stoknya.</p>
+      )}
+    </Panel>
   );
 }

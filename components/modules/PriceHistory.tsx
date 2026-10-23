@@ -3,7 +3,7 @@ import type { PriceChange, PriceUpdate } from "@/lib/domain/priceHistory";
 import { dmy } from "@/lib/format";
 
 const nf = new Intl.NumberFormat("id-ID");
-const rp = (n: number | null) => (n == null ? "–" : `Rp ${nf.format(n)}`);
+const rp = (n: number | null) => (n == null ? "–" : `Rp\u00a0${nf.format(n)}`);
 const pays = (promo: number | null, normal: number | null) => (promo && promo > 0 ? promo : normal);
 
 function ChangeRow({ c }: { c: PriceChange }) {
