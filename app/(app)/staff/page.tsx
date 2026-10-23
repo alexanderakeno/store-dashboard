@@ -157,8 +157,8 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
               <p className="text-xs text-slate-500">Target {rpf(r.target)} · Gap <span className={r.gap > 0 ? "text-rose-600" : "text-emerald-600"}>{rpf(r.gap)}</span></p>
               <div className="mt-2"><Progress value={r.achievementPct} tick={tg} color={achColor(r.achievementPct, tg)} label={`Achievement ${r.name}`} /></div>
               <dl className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1 text-xs">
-                <div><dt className="text-slate-400">Accessories</dt><dd className="font-semibold">{rpf(r.acc)}</dd></div>
-                <div><dt className="text-slate-400">VAS</dt><dd className="font-semibold">{rpf(r.vas)}</dd></div>
+                <div><dt className="text-slate-400">Accessories</dt><dd className="font-semibold">{rpc(r.acc)}</dd></div>
+                <div><dt className="text-slate-400">VAS</dt><dd className="font-semibold">{rpc(r.vas)}</dd></div>
                 <div><dt className="text-slate-400">Trx</dt><dd className="font-semibold">{num(r.totals.invoices)}</dd></div>
                 <div><dt className="text-slate-400">UPT</dt><dd className="font-semibold">{dec(r.totals.upt, 1).replace(",", ".")}</dd></div>
                 <div className="col-span-2"><dt className="text-slate-400">ATV</dt><dd className="font-semibold">{rpf(r.totals.atv)}</dd></div>
@@ -202,8 +202,8 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
           {[...rows.map((r) => ({ key: r.key, name: r.name, q: qtyOf(byKey.get(r.key) ?? []) })), { key: "__total", name: "TOTAL", q: qtyOf(staffLines) }].map(({ key, name, q }) => (
             <li key={key} className="py-2">
               <div className="flex justify-between gap-2"><p className="font-bold text-slate-950">{name}</p><p className="font-black">{num(q.device)} unit</p></div>
-              <p className="text-xs text-slate-500"><b className="text-slate-700 dark:text-slate-200">Apple {num(q.apple)}</b> · {APPLE_LOBS.map((k) => `${k === "Mac" ? "MacBook" : k} ${num(q.lob[k])}`).join(" · ")}</p>
-              <p className="text-xs text-slate-500"><b className="text-slate-700 dark:text-slate-200">Android {num(q.android)}</b>{androidCols.filter((c) => q.brand(c.key)).map((c) => ` · ${c.label} ${num(q.brand(c.key))}`).join("")}</p>
+              <p className="text-xs text-slate-500"><b className="text-slate-700 dark:text-slate-200">Apple {num(q.apple)}</b> · {APPLE_LOBS.map((k) => `${k === "Mac" ? "MacBook" : k}\u00a0${num(q.lob[k])}`.replace(/ /g, "\u00a0")).join(" · ")}</p>
+              <p className="text-xs text-slate-500"><b className="text-slate-700 dark:text-slate-200">Android {num(q.android)}</b>{androidCols.filter((c) => q.brand(c.key)).map((c) => ` · ${`${c.label} ${num(q.brand(c.key))}`.replace(/ /g, "\u00a0")}`).join("")}</p>
             </li>
           ))}
         </ul>
