@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { NeedData, Panel, Trend } from "@/components/kit";
+import { NeedData, Panel, Trend, numClass } from "@/components/kit";
 import { LineChart, ParamDate, ParamSelect } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, clampRange, dayRows, deviceOf, linesIn, lobQty, rangeConversion, typeQty } from "@/lib/domain/extra";
@@ -130,8 +130,9 @@ export default async function DailySummaryPage({ searchParams }: { searchParams:
             <thead>
               <tr>
                 <th>Tanggal</th><th>Hari</th><th className="n">Total Sales</th><th className="n">Device</th><th className="n">ACC</th><th className="n">VAS</th><th className="n">Invoice</th><th className="n">Qty</th><th className="n">UPT</th><th className="n">ATV</th><th className="n">CVR</th>
-                <th className="n">MacBook</th><th className="n">iPad</th><th className="n">iPhone</th><th className="n">Apple Watch</th><th className="n">AirPods</th>
-                {VAS_PROVIDERS.map((v) => <th key={v} className="n">{v}</th>)}
+                {/* per-LOB / provider columns are left out of the phone cards — tap the date for the full day */}
+                <th className="n" data-fit-hide="1">MacBook</th><th className="n" data-fit-hide="1">iPad</th><th className="n" data-fit-hide="1">iPhone</th><th className="n" data-fit-hide="1">Apple Watch</th><th className="n" data-fit-hide="1">AirPods</th>
+                {VAS_PROVIDERS.map((v) => <th key={v} className="n" data-fit-hide="1">{v}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -168,7 +169,7 @@ function Box({ label, value, sub, flat }: { label: string; value: React.ReactNod
   return (
     <div className={`${flat ? "rounded-2xl border border-slate-200 dark:border-slate-700" : "sd-panel"} p-4`}>
       <p className="text-[11px] font-black tracking-[.08em] text-slate-500 uppercase">{label}</p>
-      <div className="mt-1.5 text-lg font-black text-slate-950 sm:text-xl">{value}</div>
+      <div className={`${numClass(value)} mt-1.5 font-black text-slate-950 sm:!text-xl`}>{value}</div>
       {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
     </div>
   );
