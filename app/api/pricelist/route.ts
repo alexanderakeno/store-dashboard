@@ -35,8 +35,13 @@ export async function POST(req: Request) {
         if (Number.isNaN(credit)) throw new BadRequest(`Harga cicilan tidak valid: ${it.name}`);
         it.credit = credit;
       }
-      const note = str(r?.note, 160);
+      const note = str(r?.note, 400);
       if (note) it.note = note;
+      // Android Excel: articles (colours) behind this row — stock is matched on them
+      if (Array.isArray(r?.articles)) {
+        const articles = (r.articles as unknown[]).slice(0, 60).map((a) => str(a, 40).toUpperCase()).filter(Boolean);
+        if (articles.length) it.articles = articles;
+      }
       return it;
     });
     const qoala: QoalaTier[] = (Array.isArray(b.qoala) ? b.qoala : []).slice(0, 30).map((q: Record<string, unknown>) => ({
