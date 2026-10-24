@@ -142,3 +142,18 @@ test("target store parser + staff aggregation", () => {
   assert.equal(p.max, 100);
   assert.ok(p.total <= 100);
 });
+
+test("target store: Android brand targets from the Total Target block (fallback to the Android section)", async () => {
+  const { parseTargetStore } = await import("@/lib/parsers/targetStore");
+  const grid = [
+    ["QF10", "Target Store"],
+    ["", "100%", "68%", "22%"],
+    ["Total Target", "Apple", "Android", "Accessories", "VAS", "", "Samsung", "Xiaomi", "Huawei", "Oppo"],
+    [1000, 600, 300, 60, 40, "-", "150.000.000", 80, 40, 30],
+  ];
+  const t = parseTargetStore(grid, "2026-10");
+  assert.equal(t.byGroup.Android, 300);
+  assert.deepEqual(t.brands, { Samsung: 150000000, Xiaomi: 80, Huawei: 40, Oppo: 30 });
+  // no brand columns → no `brands`, the Android section is used instead
+  assert.equal(parseTargetStore(grid.map((r) => r.slice(0, 5)), "2026-10").brands, undefined);
+});

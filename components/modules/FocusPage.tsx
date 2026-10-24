@@ -20,15 +20,21 @@ interface Props {
   title: string;
   desc: string;
   itemLabel: string; // "Product" / "Supplier" / "Provider"
+  /** Optional group tabs on one page (LOB: Apple · Android), chosen with `?g=`; the first is the default. */
+  tabs?: Array<{ key: string; label: string; group: Group; itemLabel: string; desc: string }>;
 }
 
 type Status = "On Track" | "Warning" | "Critical" | "No Target";
 const statusOf = (ach: number | null, tg: number): Status => (ach == null ? "No Target" : ach >= tg ? "On Track" : ach >= tg * 0.7 ? "Warning" : "Critical");
 const statusTone: Record<Status, string> = { "On Track": "green", Warning: "amber", Critical: "red", "No Target": "slate" };
 
-export async function FocusPage({ searchParams, path, group, title, desc, itemLabel }: Props) {
+export async function FocusPage({ searchParams, path, group: baseGroup, title, desc: baseDesc, itemLabel: baseItemLabel, tabs }: Props) {
   const p = await loadPage(searchParams);
   if (p.state !== "ok") return <PageStatus title={title} p={p} />;
+  const tab = tabs?.find((t) => t.key === p.q.g) ?? tabs?.[0];
+  const group = tab?.group ?? baseGroup;
+  const desc = tab?.desc ?? baseDesc;
+  const itemLabel = tab?.itemLabel ?? baseItemLabel;
   const s = p.snap;
   const cfg = appConfig();
   const dim = daysInMonth(p.month);
@@ -45,7 +51,11 @@ export async function FocusPage({ searchParams, path, group, title, desc, itemLa
   const tg = to < from ? 0 : (eachDay(from, to).length / periodDays) * 100;
   const ls = s.lines.filter((l) => l.date >= from && l.date <= to);
 
-  const section = s.target?.sections[group];
+  // Android: store targets per brand come from the "Total Target" block of Target Store when it lists them;
+  // otherwise (and for the other groups) from the group's section
+  const brandTargets = group === "Android" && s.target?.brands && Object.keys(s.target.brands).length ? s.target.brands : null;
+  const sheetSection = s.target?.sections[group];
+  const section = brandTargets ? { group, columns: Object.keys(brandTargets), columnTargets: brandTargets, total: Object.values(brandTargets).reduce((a, b) => a + b, 0) } : sheetSection;
   const cols = section?.columns ?? [];
   const pool = group === "ACC" ? s.rules.supplierOrder : group === "VAS" ? [...VAS_PROVIDERS] : [];
   const extra = pool.filter((x) => !cols.some((c) => nameKey(c) === nameKey(x)));
@@ -76,7 +86,7 @@ export async function FocusPage({ searchParams, path, group, title, desc, itemLa
 
   const periodLabel = per === "week" ? `${wk.label} (${dateShort(wk.start)} – ${dateShort(wk.end)})` : per === "range" ? `${dateShort(from)} – ${dateShort(to)}` : monthLabel(p.month);
   const share = [
-    `*${cfg.storeName || "Store"} — ${title}*`,
+    `*${cfg.storeName || "Store"} — ${title}${tab ? ` ${tab.label}` : ""}*`,
     `Periode: ${periodLabel}`,
     `Target ${rpf(totalTarget)} · Ach ${rpf(totalActual)} (${pct(totalAch ?? 0, 1)}) · Gap ${rpf(totalTarget - totalActual)}`,
     "",
@@ -86,6 +96,15 @@ export async function FocusPage({ searchParams, path, group, title, desc, itemLa
   return (
     <div className="sd-content">
       <PageIntro eyebrow={`${cfg.storeCode || "STORE"} • Target Fokus`} title={title} desc={desc} />
+      {tabs && tab && (
+        <nav className={`sd-tabs ${tabs.length === 3 ? "grid-cols-3" : "grid-cols-2"}`} aria-label="Kategori">
+          {tabs.map((t) => (
+            <Link key={t.key} href={withQuery(path, p.q, { g: t.key === tabs[0].key ? null : t.key, item: null })} prefetch={false} className="sd-tab" aria-current={t.key === tab.key ? "page" : undefined}>
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+      )}
       <section className="sd-panel space-y-4 p-5">
         <div className="inline-flex rounded-2xl bg-slate-100 p-1 dark:bg-slate-800">
           {(["week", "month", "range"] as const).map((k) => (

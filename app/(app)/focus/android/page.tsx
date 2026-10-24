@@ -1,6 +1,10 @@
-import { FocusPage } from "@/components/modules/FocusPage";
+import { redirect } from "next/navigation";
 import type { SearchParams } from "@/lib/page";
 
-export default function Page({ searchParams }: { searchParams: SearchParams }) {
-  return <FocusPage searchParams={searchParams} path="/focus/android" group="Android" title="Android Fokus" desc="Pencapaian Android per brand. Target utama menggunakan Value." itemLabel="Brand" />;
+/** Android Fokus moved into LOB Target Fokus (tab Android); old links keep working. */
+export default async function Page({ searchParams }: { searchParams: SearchParams }) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) if (typeof v === "string" && v) q.set(k, v);
+  q.set("g", "android");
+  redirect(`/focus/lob?${q.toString()}`);
 }
