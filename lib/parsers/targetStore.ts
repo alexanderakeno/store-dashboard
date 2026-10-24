@@ -27,6 +27,7 @@ function emptyGroups(): Record<Group, number> {
 export function parseTargetStore(grid: Grid, month: MonthKey): StoreTarget {
   const byGroup = emptyGroups();
   let total = 0;
+  const brands: Record<string, number> = {};
 
   for (let r = 0; r < grid.length; r++) {
     const row = grid[r] ?? [];
@@ -36,7 +37,14 @@ export function parseTargetStore(grid: Grid, month: MonthKey): StoreTarget {
     total = parseNumber(values[c]);
     for (let k = c + 1; k < row.length; k++) {
       const g = SECTION_TITLES[lower(row[k])];
-      if (g) byGroup[g] = parseNumber(values[k]);
+      if (g) {
+        byGroup[g] = parseNumber(values[k]);
+        continue;
+      }
+      // after the group columns the block lists the Android brand targets ("Samsung | Xiaomi | …")
+      const label = t(row[k]);
+      const v = parseNumber(values[k]);
+      if (label && label !== "-" && /[a-z]/i.test(label) && v > 0) brands[label] = v;
     }
     break;
   }
@@ -101,5 +109,5 @@ export function parseTargetStore(grid: Grid, month: MonthKey): StoreTarget {
   for (const g of GROUPS) if (!byGroup[g] && sections[g]) byGroup[g] = sections[g]!.total;
   if (!total) total = GROUPS.reduce((a, g) => a + byGroup[g], 0);
 
-  return { month, total, byGroup, sections, staff: [...staffMap.values()] };
+  return { month, total, byGroup, sections, staff: [...staffMap.values()], ...(Object.keys(brands).length ? { brands } : {}) };
 }
