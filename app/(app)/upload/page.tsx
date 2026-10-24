@@ -7,6 +7,8 @@ import { dmy, monthLabel, num, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { getSoh } from "@/lib/soh";
 import { getPriceList } from "@/lib/pricelist";
+import { getSamsungPromo } from "@/lib/samsungPromo";
+import { SamsungPromoForm } from "@/components/modules/SamsungPromoForm";
 import { PriceListImportForm } from "@/components/modules/PriceListImportForm";
 import { ApplePriceListImportForm } from "@/components/modules/ApplePriceListImportForm";
 import { SalesImportForm } from "@/components/modules/SalesImportForm";
@@ -26,6 +28,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
   } catch (e) {
     sohError = (e as Error).message;
   }
+  const promo = await getSamsungPromo().catch(() => null);
   let price: Awaited<ReturnType<typeof getPriceList>> = null;
   let priceError: string | null = null;
   try {
@@ -132,6 +135,11 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
             {isAdmin ? <PriceListImportForm current={price?.dates.android ?? null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
           </Panel>
         </div>
+      </div>
+      <div id="promo-samsung" className="scroll-mt-20">
+        <Panel title="Import Promo Samsung" desc="Upload file Excel List Promo Aktif Samsung → menu Promo Samsung & kartu Price List Samsung." right={promo ? <Link href="/promo-samsung" prefetch={false} className="sd-btn">Lihat Promo</Link> : undefined}>
+          {isAdmin ? <SamsungPromoForm current={promo ? promo.source || promo.title : null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
+        </Panel>
       </div>
       <div id="pricelist-apple" className="scroll-mt-20">
         <Panel title="Import Price List Apple" desc="Upload 2 PDF price list Apple sekaligus → Dashboard › Price List › Apple." right={priceCount("apple") ? <Link href="/pricelist?k=apple" prefetch={false} className="sd-btn">Lihat Apple</Link> : undefined}>
