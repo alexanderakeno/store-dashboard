@@ -1,7 +1,9 @@
 "use client";
 import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
+import Link from "next/link";
 import { displayName, qoalaFor, type PriceModel } from "@/lib/domain/pricelist";
+import type { VariantPromo } from "@/lib/domain/samsungPromo";
 import type { QoalaTier } from "@/types/pricelist";
 
 const nf = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
@@ -29,7 +31,7 @@ function Chip({ active, onClick, children, sub, tone = "dark" }: { active: boole
   );
 }
 
-export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel }: { models: PriceModel[]; qoala: QoalaTier[]; hasSoh: boolean; initialBrand: string; initialModel: string }) {
+export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel, promos = {}, today = "" }: { models: PriceModel[]; qoala: QoalaTier[]; hasSoh: boolean; initialBrand: string; initialModel: string; promos?: Record<string, VariantPromo>; today?: string }) {
   const brands = useMemo(() => [...new Set(models.map((m) => m.brand))], [models]);
   const [brand, setBrand] = useState(brands.includes(initialBrand) ? initialBrand : brands[0]);
   const [modelKey, setModelKey] = useState(models.some((m) => m.key === initialModel) ? initialModel : "");
@@ -184,7 +186,8 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel }
                 </div>
               )}
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-dashed border-slate-300 pt-3 dark:border-slate-600">
+            {promos[variant.id] && <PromoBox vp={promos[variant.id]} price={variant.promo} today={today} model={model.model} />}
+          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-dashed border-slate-300 pt-3 dark:border-slate-600">
               {[12, 24].map((n) => (
                 <div key={n}>
                   <p className="text-[11px] font-black tracking-[.12em] text-slate-500 uppercase">{n} Bulan</p>
@@ -223,6 +226,7 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel }
                         <button type="button" className="min-w-0 text-left text-[13px] leading-snug font-semibold text-slate-800 hover:text-blue-600 dark:text-slate-100" onClick={() => { pickModel(m); setVariantId(v.id); setTimeout(() => card.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }}>
                           {v.name}
                           {isEol(v.status) && <span className="ml-1.5 text-[10px] font-extrabold text-slate-400">EOL</span>}
+                          {promos[v.id]?.items.some((x) => x.state === "aktif") && <span className="ml-1.5 rounded bg-emerald-50 px-1 text-[10px] font-extrabold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">PROMO</span>}
                         </button>
                         <span className="shrink-0 text-right tabular-nums">
                           <b className="block text-sm text-slate-950">{rp(v.promo)}</b>
@@ -252,5 +256,42 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel }
         </section>
       )}
     </>
+  );
+}
+
+const KIND_LABEL: Record<string, string> = { PWP: "PWP", "TRADE IN": "Trade In", "TAMBAHAN TRADE IN": "Tambahan Trade In", EIP: "EIP (kartu kredit)", LAIN: "Promo" };
+const short = (d: string) => `${Number(d.slice(8))}/${Number(d.slice(5, 7))}`;
+
+/** Samsung promos of the selected variant (from the imported promo workbook) and the best nett price. */
+function PromoBox({ vp, price, today, model }: { vp: VariantPromo; price: number; today: string; model: string }) {
+  const kinds = vp.cash.kinds.map((k) => KIND_LABEL[k].replace(" (kartu kredit)", "")).join(" + ");
+  return (
+    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-black tracking-[.12em] text-emerald-800 uppercase dark:text-emerald-300">Promo Samsung</p>
+        <Link href={`/promo-samsung?f=all&s=${encodeURIComponent(model)}`} prefetch={false} className="text-xs font-semibold text-blue-600 hover:underline">Detail ›</Link>
+      </div>
+      <ul className="mt-1.5 space-y-1">
+        {vp.items.map((it) => {
+          const now = it.ranges.find((r) => r.from <= today && today <= r.to);
+          const when = it.state === "aktif" ? (now ? `s/d ${short(now.to)}` : "") : `mulai ${short(it.ranges.filter((r) => r.from > today).map((r) => r.from).sort()[0] ?? "")}`;
+          return (
+            <li key={`${it.kind}-${it.code}-${it.value}`} className={`flex items-baseline justify-between gap-2 text-[13px] ${it.state === "aktif" ? "" : "opacity-60"}`}>
+              <span className="min-w-0"><b>{KIND_LABEL[it.kind]}</b> <code className="text-[11px] text-slate-500">{it.code}</code> <span className="text-[11px] text-slate-500">{when}</span></span>
+              <b className="shrink-0 tabular-nums text-emerald-700 dark:text-emerald-400">{rp(it.value)}</b>
+            </li>
+          );
+        })}
+        {vp.info.length > 0 && <li className="text-[12px] text-slate-500">Ada promo lain di {vp.info.join(", ")} — lihat ketentuan.</li>}
+      </ul>
+      {vp.cash.total > 0 && (
+        <div className="mt-2 border-t border-dashed border-emerald-300 pt-2 dark:border-emerald-800">
+          <p className="text-[11px] font-black tracking-[.12em] text-slate-500 uppercase">Nett s/d</p>
+          <p className="text-xl font-black text-emerald-700 dark:text-emerald-400">{rp(price - vp.cash.total)}</p>
+          <p className="text-[11px] text-slate-500">Promo price − {kinds} (syarat berlaku: barang lama untuk trade in, kartu kredit untuk EIP).</p>
+        </div>
+      )}
+      {vp.pwp > 0 && <p className="mt-1.5 text-[12px] text-slate-600 dark:text-slate-300">+ PWP: barang pasangan s/d <b>{rp(vp.pwp)}</b> (bukan potongan harga HP).</p>}
+    </div>
   );
 }
