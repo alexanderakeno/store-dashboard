@@ -1,16 +1,36 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, FileText, Loader2, Upload, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, FileText, Loader2, Upload, X } from "lucide-react";
 import { parsePriceListPdf, type PriceListParse } from "@/lib/parsers/pricelist";
 import { isApplePriceListPdf } from "@/lib/parsers/applePricelist";
+import { isAndroidPriceListXlsx, parseAndroidPriceListXlsx, type Sheet } from "@/lib/parsers/androidXlsx";
 import { loadPdfJs, readPdfTexts } from "./pdfText";
+import { loadSheetJS } from "./ImportRawForm";
 import { postJson } from "./postJson";
 
 const dmy = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
 
-/** Android price list (1 PDF). Apple has its own 2-PDF form (ApplePriceListImportForm). */
-export function PriceListImportForm({ current }: { current: string | null }) {
+type Fmt = "pdf" | "xlsx";
+const ACCEPT: Record<Fmt, string> = { pdf: ".pdf,application/pdf", xlsx: ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" };
+
+/** Every sheet of an Excel file as cell grids (browser only). */
+async function readSheets(file: File): Promise<Sheet[]> {
+  const XLSX = await loadSheetJS();
+  try {
+    const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+    return wb.SheetNames.map((name) => ({ name, rows: XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: null, blankrows: true }) as unknown[][] }));
+  } catch (e) {
+    throw new Error(`Gagal membaca ${file.name}: ${(e as Error).message}`);
+  }
+}
+
+/**
+ * Android price list: the PDF, or the DIGIPLUS Excel ("PRICE LIST PROMO DIGIPLUS … .xlsx" — per article, so stock is
+ * matched by article code and the Price List shows only types in stock). Apple has its own 2-PDF form.
+ */
+export function PriceListImportForm({ current, storeCode = "" }: { current: string | null; storeCode?: string }) {
+  const [fmt, setFmt] = useState<Fmt>("pdf");
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -20,8 +40,8 @@ export function PriceListImportForm({ current }: { current: string | null }) {
 
   useEffect(() => {
     const idle = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 1500));
-    idle(() => void loadPdfJs().catch(() => {}));
-  }, []);
+    idle(() => void (fmt === "pdf" ? loadPdfJs() : loadSheetJS()).catch(() => {}));
+  }, [fmt]);
 
   const pick = async (f: File | null) => {
     setFile(f);
@@ -30,6 +50,17 @@ export function PriceListImportForm({ current }: { current: string | null }) {
     if (!f) return setState("idle");
     setState("reading");
     try {
+      if (/\.xlsx?$/i.test(f.name)) {
+        setFmt("xlsx");
+        const sheets = await readSheets(f);
+        if (!isAndroidPriceListXlsx(sheets)) throw new Error('Bukan file price list DIGIPLUS (sheet "PRICE LIST DIGIPLUS NASIONAL" / "MASTER" tidak ada).');
+        const r = parseAndroidPriceListXlsx(sheets, storeCode);
+        if (!r.items.length) throw new Error(r.warnings[0] ?? "Tidak ada harga terbaca di file ini.");
+        setParsed(r);
+        setState("idle");
+        return;
+      }
+      setFmt("pdf");
       const texts = await readPdfTexts(f);
       if (isApplePriceListPdf(texts)) throw new Error("Ini PDF price list Apple — upload di bagian Import Price List Apple (2 PDF).");
       const all = parsePriceListPdf(texts);
@@ -77,27 +108,53 @@ export function PriceListImportForm({ current }: { current: string | null }) {
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-500">
-        PDF <b className="text-slate-700 dark:text-slate-200">Price List Android</b> (kolom Normal Price · Promotion Price · Product Remarks). Menimpa price list Android saja — Apple tidak berubah.
+        {fmt === "pdf" ? (
+          <>PDF <b className="text-slate-700 dark:text-slate-200">Price List Android</b> (kolom Normal Price · Promotion Price · Product Remarks).</>
+        ) : (
+          <>Excel <b className="text-slate-700 dark:text-slate-200">PRICE LIST PROMO DIGIPLUS</b> (sheet Nasional · per artikel){storeCode ? <> + promo khusus toko {storeCode}</> : null}. Price List hanya menampilkan tipe yang <b>ada stoknya</b> di SOH.</>
+        )}{" "}
+        Menimpa price list Android saja — Apple tidak berubah.
         {" "}Saat ini: Android {current ? dmy(current) : "belum ada"} · tab <b>APP_PriceList</b> di master sheet
       </p>
 
+      <div className="inline-flex rounded-2xl bg-slate-100 p-1 dark:bg-slate-800" role="radiogroup" aria-label="Jenis file price list Android">
+        {(["pdf", "xlsx"] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="radio"
+            aria-checked={fmt === k}
+            disabled={busy}
+            onClick={() => {
+              if (fmt === k) return;
+              setFmt(k);
+              clear();
+            }}
+            className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold ${fmt === k ? "bg-white text-slate-950 shadow-sm dark:bg-slate-600 dark:text-white" : "text-slate-500"}`}
+          >
+            {k === "pdf" ? <FileText className="size-4" /> : <FileSpreadsheet className="size-4" />}
+            {k === "pdf" ? "PDF" : "Excel"}
+          </button>
+        ))}
+      </div>
+
       <div className={`relative rounded-2xl border-2 border-dashed p-4 transition ${bad ? "border-rose-400 bg-rose-50/60 dark:bg-rose-950/20" : ok ? "border-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/20" : "border-slate-300 dark:border-slate-700"}`}>
         <label className="flex min-h-[72px] cursor-pointer items-center gap-3">
-          <input ref={input} type="file" accept=".pdf,application/pdf" className="sr-only" disabled={busy} onChange={(e) => void pick(e.target.files?.[0] ?? null)} />
+          <input ref={input} type="file" accept={ACCEPT[fmt]} className="sr-only" disabled={busy} onChange={(e) => void pick(e.target.files?.[0] ?? null)} />
           <span className={`grid size-12 shrink-0 place-items-center rounded-xl ${bad ? "bg-rose-500 text-white" : ok ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-500 dark:bg-slate-800"}`}>
-            {state === "reading" ? <Loader2 className="size-6 animate-spin" /> : <FileText className="size-6" />}
+            {state === "reading" ? <Loader2 className="size-6 animate-spin" /> : fmt === "pdf" ? <FileText className="size-6" /> : <FileSpreadsheet className="size-6" />}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-bold text-slate-950">Price List Android (PDF)</span>
-            {!file && <span className="block text-sm text-slate-500">Ketuk untuk pilih file .pdf</span>}
+            <span className="block font-bold text-slate-950">Price List Android ({fmt === "pdf" ? "PDF" : "Excel"})</span>
+            {!file && <span className="block text-sm text-slate-500">Ketuk untuk pilih file {fmt === "pdf" ? ".pdf" : ".xlsx"}</span>}
             {file && (
               <span className={`block truncate text-sm ${bad ? "text-rose-700 dark:text-rose-300" : "text-emerald-700 dark:text-emerald-400"}`}>
                 {file.name}
                 {state === "reading" ? " · membaca…" : ""}
-                {parsed ? ` · ${parsed.items.length} tipe${parsed.date ? ` · ${dmy(parsed.date)}` : ""}` : ""}
+                {parsed ? ` · ${parsed.items.length} tipe${fmt === "xlsx" ? ` · ${parsed.items.reduce((a, x) => a + (x.articles?.length ?? 0), 0)} artikel` : ""}${parsed.date ? ` · ${dmy(parsed.date)}` : ""}` : ""}
               </span>
             )}
-            {bad ? <span className="block text-xs font-semibold text-rose-700 dark:text-rose-300">{msg}</span> : <span className="block text-xs text-slate-400">Tipe · harga normal · harga promo · status (ACTIVE/EOL) · tabel Qoala</span>}
+            {bad ? <span className="block text-xs font-semibold text-rose-700 dark:text-rose-300">{msg}</span> : <span className="block text-xs text-slate-400">{fmt === "pdf" ? "Tipe · harga normal · harga promo · status (ACTIVE/EOL) · tabel Qoala" : "Artikel · tipe · harga original · harga current · promo & free gift · status"}</span>}
           </span>
         </label>
         {file && !busy && (
