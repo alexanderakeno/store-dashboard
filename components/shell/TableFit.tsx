@@ -46,15 +46,37 @@ export function TableFit() {
 function fit(wrap: HTMLElement) {
   const table = wrap.querySelector<HTMLTableElement>(":scope > table");
   if (!table || wrap.offsetParent === null) return; // hidden (e.g. desktop table on a phone)
+  // Re-fit only when the available width changed (or the table is new). The body observer also
+  // fires when the page just gets taller — e.g. opening an invoice — and briefly un-stacking the
+  // tables above would shrink the page and make the browser jump the scroll position.
+  const key = `${wrap.parentElement?.clientWidth ?? 0}|${table.rows.length}|${table.textContent?.length ?? 0}`;
+  if (wrap.dataset.fitKey === key && wrap.dataset.fitTable === tableId(table)) return;
+  wrap.dataset.fitKey = key;
+  wrap.dataset.fitTable = tableId(table);
+  delete table.dataset.fitLabels; // rows may have been re-rendered: label new cells
+  const y = window.scrollY;
   wrap.classList.remove("sd-fit-compact", "sd-fit-stack");
-  if (table.scrollWidth <= wrap.clientWidth + 1) return;
+  const done = () => {
+    if (window.scrollY !== y) window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior });
+  };
+  if (table.scrollWidth <= wrap.clientWidth + 1) return done();
   wrap.classList.add("sd-fit-compact");
-  if (table.scrollWidth <= wrap.clientWidth + 1) return;
+  if (table.scrollWidth <= wrap.clientWidth + 1) return done();
   wrap.classList.remove("sd-fit-compact");
   label(table);
   wrap.classList.add("sd-fit-stack", "sd-fit-measure");
   wrap.style.setProperty("--fit-col", `${columnWidth(table)}px`);
   wrap.classList.remove("sd-fit-measure");
+  done();
+}
+
+/** Identity of a rendered table (React may swap the table element inside the same wrapper). */
+const ids = new WeakMap<HTMLTableElement, string>();
+let nextId = 0;
+function tableId(t: HTMLTableElement): string {
+  let id = ids.get(t);
+  if (!id) ids.set(t, (id = String(++nextId)));
+  return id;
 }
 
 /**
