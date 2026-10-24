@@ -71,6 +71,8 @@ export interface StoreTarget {
   byGroup: Record<Group, number>;
   sections: Partial<Record<Group, TargetSection>>;
   staff: StaffTarget[];
+  /** Store target per Android brand from the "Total Target" block at the top of Target Store (Samsung, Xiaomi, …). */
+  brands?: Record<string, number>;
 }
 
 export interface StaffMember {
