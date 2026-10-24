@@ -96,3 +96,53 @@ test("exclusions + bestCash + variantPromo: EIP excludes extra trade in, PWP kep
   assert.deepEqual(variantPromo("GALAXY TAB Z 12/256GB", r, "2026-10-24", "QF10", excl)?.info, ["PWP Tab Z"]);
   assert.equal(variantPromo("GALAXY Y 8/128GB", r, "2026-10-24", "QF10", excl), null);
 });
+
+test("seriesOf: Galaxy Z / S / A vs Tab S / Tab A, Watch, Buds", async () => {
+  const { seriesOf } = await import("@/lib/domain/samsungPromo");
+  assert.deepEqual(seriesOf(["Z FLIP 8, Z FOLD 8"]), ["Galaxy Z"]);
+  assert.deepEqual(seriesOf(["S26FE 5G"]), ["Galaxy S"]);
+  assert.deepEqual(seriesOf(["TAB S10 FE 5G & TAB S10 LITE"]), ["Tab S"]);
+  assert.deepEqual(seriesOf(["TAB A11 & TAB A11 PLUS SERIES"]), ["Tab A"]);
+  assert.deepEqual(seriesOf(["A07 - A07 5G SERIES & A17"]), ["Galaxy A"]);
+  assert.deepEqual(seriesOf(["Watch 6 Classic, A26 5G, TAB A9, TAB S10 PLUS, BUDS 3"]), ["Galaxy A", "Tab S", "Tab A", "Watch", "Buds"]);
+  assert.deepEqual(seriesOf(["PROMO LAIN"]), []);
+});
+
+test("variantPromo: two values of one kind for one price row are labelled by what differs", () => {
+  const promo = {
+    title: "", programs: [], pairs: [], sheets: [], warnings: [], source: "", updatedAt: "", updatedBy: "",
+    articles: [
+      { sheet: "PWP TAB", kind: "PWP" as const, article: "SSUSM-X133NZAAXID", description: "GALAXY TAB A11 4/64GB GRAY WIFI", value: 300000, code: "PWPTAB300", normal: null, ranges: [], stores: [] },
+      { sheet: "PWP TAB", kind: "PWP" as const, article: "SSUSM-X135GZAAXID", description: "GALAXY TAB A11 4/64GB GRAY", value: 899000, code: "PWPTAB899", normal: null, ranges: [], stores: [] },
+    ],
+  };
+  const v = variantPromo("GALAXY TAB A11 4/64G", promo, "2026-10-24", "QF10")!;
+  assert.deepEqual(v.items.map((i) => [i.code, i.label]), [["PWPTAB899", "tanpa WIFI"], ["PWPTAB300", "WIFI"]]);
+});
+
+test("etpPromos: model + storage named in ETP cashback programs", async () => {
+  const { etpPromos, modelKeys } = await import("@/lib/domain/samsungPromo");
+  const prog = (no: number, type: string, name: string, extra: Partial<{ stores: string[]; ranges: Array<{ from: string; to: string }> }> = {}) =>
+    ({ no, type, name, mechanism: "BR di ETP", period: "", ranges: [{ from: "2026-10-01", to: "2026-10-31" }], combine: "", stores: [], codes: [], ...extra });
+  const programs = [
+    prog(16, "CASHBACK di ETP", "S26 ULTRA 16/1TB"),
+    prog(17, "CASHBACK di ETP", "S26 - S26 PLUS - S26 ULTRA 12/256GB - S26 ULTRA 12/512GB"),
+    prog(6, "CASHBACK", "TAB S10 FE 5G & TAB S10 FE PLUS 5G"),
+    prog(8, "CASHBACK", "A07 - A07 5G SERIES & A17 - A17 5G SERIES"),
+    prog(29, "CASHBACK", "S25 - S25 ULTRA", { ranges: [{ from: "2026-10-01", to: "2026-10-15" }] }),
+    prog(28, "CASHBACK di ETP", "WATCH 9 & WATCH ULTRA 2", { stores: ["QA05"] }),
+  ];
+  const nos = (n: string) => etpPromos(n, programs, "2026-10-24", "QF10").map((p) => p.no);
+  assert.deepEqual([...modelKeys("S26 ULTRA 12/256GB - S26 ULTRA 12/512GB").get("S26ULTRA")!.storages], ["12/256GB", "12/512GB"]);
+  assert.deepEqual(nos("GALAXY S26 ULTRA 16/1TB"), [16]);
+  assert.deepEqual(nos("GALAXY S26 ULTRA 12/256GB"), [17]);
+  assert.deepEqual(nos("GALAXY S26 12/512GB"), [17]);
+  assert.deepEqual(nos("GALAXY S26 FE 8/256GB"), []);
+  assert.deepEqual(nos("GALAXY TAB S10 FE PLUS 5G 12/256G"), [6]);
+  assert.deepEqual(nos("GALAXY TAB S10 FE WIFI 8/128G"), []); // the program names the 5G models
+  assert.deepEqual(etpPromos("GALAXY TAB S11 5G ULTRA 12/256G", [prog(13, "CASHBACK", "TAB S11 5G")], "2026-10-24", "QF10"), []);
+  assert.deepEqual(etpPromos("GALAXY TAB S11 5G 12/256G", [prog(13, "CASHBACK", "TAB S11 5G")], "2026-10-24", "QF10").map((p) => p.no), [13]);
+  assert.deepEqual(nos("GALAXY A17 5G 8/256GB"), [8]);
+  assert.deepEqual(nos("GALAXY S25 ULTRA 12/256GB"), []); // ended 15 Oct
+  assert.deepEqual(nos("GALAXY WATCH 9 44MM"), []); // other stores only
+});
