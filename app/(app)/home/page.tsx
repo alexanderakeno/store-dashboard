@@ -520,14 +520,17 @@ function YearCard({ year, tone, qty, value, lob, lobV, need, growthQty, growthVa
 }
 
 function MonthTable({ year, prevYear, cur, prev, upTo, deviceOnly = false }: { year: string; prevYear: string; cur: Map<string, SalesLine[]>; prev: Map<string, SalesLine[]>; upTo: string; deviceOnly?: boolean }) {
-  const pick = (lines?: SalesLine[]) => (lines ? totals(deviceOnly ? lines.filter((l) => l.type === "DEVICES") : lines) : null);
+  const pickLines = (lines?: SalesLine[]) => (lines ? (deviceOnly ? lines.filter((l) => l.type === "DEVICES") : lines) : undefined);
+  const pick = (lines?: SalesLine[]) => (lines ? totals(pickLines(lines)!) : null);
   const dash = <span className="text-slate-400">—</span>;
   let anyPartial = false;
+  const fairOf = new Map<string, ReturnType<typeof sameRange>>();
   const rows = MONTH_NUMS.map((n) => {
     const pm = `${prevYear}-${n}`;
     const cm = `${year}-${n}`;
     const curLines = n <= upTo ? cur.get(cm) : undefined;
     const fair = sameRange(cm, pm, curLines, prev.get(pm));
+    fairOf.set(n, fair);
     if (fair.upTo) anyPartial = true;
     return { n, a: pick(prev.get(pm)), b: pick(curLines), fa: pick(fair.prev), fb: pick(fair.cur), upTo: fair.upTo };
   }).filter((r) => r.a || r.b); // a month with no data in either year is just a row of dashes
@@ -543,7 +546,17 @@ function MonthTable({ year, prevYear, cur, prev, upTo, deviceOnly = false }: { y
             {rows.map(({ n, a, b, fa, fb, upTo: d }) => (
               <tr key={n}>
                 <td className="font-bold">
-                  {monthShort(`${year}-${n}`).split(" ")[0]}
+                  <MonthDetail
+                    id={`cmp-${deviceOnly ? "dev" : "all"}-${n}`}
+                    label={monthShort(`${year}-${n}`).split(" ")[0]}
+                    year={year}
+                    prevYear={prevYear}
+                    upTo={d}
+                    deviceOnly={deviceOnly}
+                    cur={pickLines(fairOf.get(n)?.cur)}
+                    prev={pickLines(fairOf.get(n)?.prev)}
+                    prevFull={pickLines(prev.get(`${prevYear}-${n}`))}
+                  />
                   {d && <span className="block text-[11px] font-semibold text-amber-600">tgl 1–{d}</span>}
                 </td>
                 <td className="n">{a ? num(a.qty) : dash}{d && fa && <div className="text-[11px] text-slate-400">1–{d}: {num(fa.qty)}</div>}</td>
@@ -557,7 +570,69 @@ function MonthTable({ year, prevYear, cur, prev, upTo, deviceOnly = false }: { y
           </tbody>
         </table>
       </div>
+      <p className="mt-2 text-xs text-slate-400">Klik nama bulan untuk rincian per kategori (Apple · Android · Accessories · VAS).</p>
       {anyPartial && <p className="mt-2 text-xs text-slate-500">Bulan bertanda <b className="text-amber-600">tgl 1–N</b> datanya belum sebulan penuh (bulan berjalan, atau file yang di-upload berhenti di tengah bulan). Selisih & growth bulan itu dibanding tahun lalu pada tanggal yang sama; angka besar di kolom {prevYear} tetap total sebulan penuh.</p>}
+    </>
+  );
+}
+
+const CMP_GROUPS: Array<{ key: string; label: string; f: (l: SalesLine) => boolean }> = [
+  { key: "Apple", label: "Apple", f: (l) => l.group === "Apple" },
+  { key: "Android", label: "Android", f: (l) => l.group === "Android" },
+  { key: "ACC", label: "Accessories", f: (l) => l.group === "ACC" },
+  { key: "VAS", label: "VAS", f: (l) => l.group === "VAS" },
+];
+
+/**
+ * Month name → popup with the month split per category, last year vs this year on the same days
+ * (the same numbers the row's Selisih & Growth use). Native popover: no client JS.
+ */
+function MonthDetail({ id, label, year, prevYear, upTo, deviceOnly, cur, prev, prevFull }: { id: string; label: string; year: string; prevYear: string; upTo: number | null; deviceOnly: boolean; cur?: SalesLine[]; prev?: SalesLine[]; prevFull?: SalesLine[] }) {
+  if (!cur && !prev) return <>{label}</>;
+  const sum = (ls: SalesLine[] | undefined, f: (l: SalesLine) => boolean) => (ls ? totals(ls.filter(f)) : null);
+  const empty = (t: ReturnType<typeof totals> | null) => !t || (t.sales === 0 && t.qty === 0);
+  // Device Only also holds devices booked in ACC (Samsung/Xiaomi watches, AirPods): that row shows when it has data,
+  // so the groups always add up to Total
+  const rows = [...CMP_GROUPS, { key: "Total", label: "Total", f: () => true }]
+    .map((g) => ({ ...g, label: deviceOnly && g.key === "ACC" ? "ACC (device)" : g.label, a: sum(prev, g.f), b: sum(cur, g.f), full: sum(prevFull, g.f) }))
+    .filter((r) => r.key === "Total" || !deviceOnly || !empty(r.a) || !empty(r.b));
+  const dash = <span className="text-slate-400">—</span>;
+  const growth = (a: number, b: number) => (a ? ((b - a) / Math.abs(a)) * 100 : null);
+  return (
+    <>
+      <button type="button" popoverTarget={id} className="text-left font-bold text-blue-600 underline-offset-2 hover:underline">{label} ›</button>
+      <div id={id} popover="auto" className="m-auto w-[min(94vw,560px)] rounded-2xl border border-slate-200 bg-white p-4 text-left font-normal text-slate-900 shadow-2xl backdrop:bg-slate-900/40 sm:p-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <p className="text-base font-black">{label} {prevYear} vs {year}{deviceOnly ? " · Device" : ""}</p>
+          <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>
+        </div>
+        <p className="mb-3 text-xs text-slate-500">{upTo ? `Periode sama: tanggal 1–${upTo}.` : "Sebulan penuh."} Growth = value {year} dibanding {prevYear}.</p>
+        {/* plain grid (not .sd-table): stays a 4-column table on phones too */}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 text-sm dark:border-slate-700">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-2 bg-slate-50 sm:gap-x-3 px-3 py-2 text-[11px] font-black tracking-wide text-slate-500 uppercase dark:bg-slate-800/60">
+            <span className="whitespace-nowrap">Grup</span><span className="w-[4.6rem] text-right sm:w-24">{prevYear}</span><span className="w-[4.6rem] text-right sm:w-24">{year}</span><span className="w-[4.2rem] text-right sm:w-20">Growth</span>
+          </div>
+          {rows.map((r) => (
+            <div key={r.key} className={`grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-start gap-x-2 border-t sm:gap-x-3 border-slate-200 px-3 py-2 tabular-nums dark:border-slate-700 ${r.key === "Total" ? "bg-slate-50 font-black dark:bg-slate-800/40" : ""}`}>
+              <span className="min-w-0 font-bold">{r.key === "ACC" && !deviceOnly ? <><span className="sm:hidden">ACC</span><span className="max-sm:hidden">{r.label}</span></> : r.label}</span>
+              <span className="w-[4.6rem] text-right sm:w-24">
+                {r.a ? <>{rpc(r.a.sales)}<span className="block text-[11px] font-normal text-slate-400">{num(r.a.qty)} unit</span></> : dash}
+                {upTo && r.full && <span className="block text-[11px] font-normal text-slate-400">sebulan {rpc(r.full.sales)}</span>}
+              </span>
+              <span className="w-[4.6rem] text-right sm:w-24">{r.b ? <>{rpc(r.b.sales)}<span className="block text-[11px] font-normal text-slate-400">{num(r.b.qty)} unit</span></> : dash}</span>
+              <span className="w-[4.2rem] text-right sm:w-20">
+                {r.a && r.b ? (
+                  <>
+                    <Trend value={growth(r.a.sales, r.b.sales)} digits={1} className="text-xs" />
+                    <span className={`block text-[11px] font-normal ${r.b.sales - r.a.sales >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{r.b.sales - r.a.sales >= 0 ? "+" : ""}{rpc(r.b.sales - r.a.sales)}</span>
+                  </>
+                ) : dash}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-slate-500">{deviceOnly ? "Device = tipe produk DEVICES. Jam tangan Samsung/Xiaomi & AirPods tercatat di grup ACC." : "AirPods masuk Accessories/ACC (sama seperti di Overview)."}</p>
+      </div>
     </>
   );
 }
