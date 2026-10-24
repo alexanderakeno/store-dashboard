@@ -3,7 +3,7 @@ import { appConfig } from "@/config/app";
 import { PageIntro, Panel } from "@/components/kit";
 import { ParamDate, ParamSelect, PrintButton } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
-import { APPLE_LOBS, VAS_PROVIDERS, clampRange, linesIn, lobQty, lobValue, perfCards, staffStats, timeGonePct, vasSplit } from "@/lib/domain/extra";
+import { APPLE_LOBS, VAS_PROVIDERS, androidBrands, clampRange, linesIn, lobQty, lobValue, perfCards, staffStats, timeGonePct, vasSplit } from "@/lib/domain/extra";
 import { monthStart } from "@/lib/domain/period";
 import { homeView } from "@/lib/domain/views";
 import { dec, dmy, monthLabel, num, pct, rpf } from "@/lib/format";
@@ -25,6 +25,7 @@ export default async function MadingPage({ searchParams }: { searchParams: Searc
   const lq = lobQty(ls);
   const lv = lobValue(ls);
   const vs = vasSplit(ls);
+  const ab = androidBrands(ls, s.target?.sections.Android?.columns ?? []);
   return (
     <div className="sd-content">
       <PageIntro eyebrow={`${appConfig().storeCode || "STORE"} • Mading`} title="Mading Performance" desc="Ringkasan performa store, staff, LOB dan VAS." actions={<PrintButton />} />
@@ -57,8 +58,8 @@ export default async function MadingPage({ searchParams }: { searchParams: Searc
       <div className="grid gap-5 xl:grid-cols-2">
         <Panel title="Pencapaian Staff • Value">
           <div className="sd-table-wrap"><table className="sd-table">
-            <thead><tr><th>Staff</th><th className="n">Value</th><th className="n">Target</th><th className="n">%</th></tr></thead>
-            <tbody>{staff.map((r) => <tr key={r.key}><td className="font-bold">{r.name}</td><td className="n">{rpf(r.totals.sales)}</td><td className="n">{rpf(r.target)}</td><td className="n">{pct(r.achievementPct ?? 0, 0)}</td></tr>)}</tbody>
+            <thead><tr><th>Staff</th><th className="n">Target</th><th className="n">Value</th><th className="n">%</th></tr></thead>
+            <tbody>{staff.map((r) => <tr key={r.key}><td className="font-bold">{r.name}</td><td className="n">{rpf(r.target)}</td><td className="n">{rpf(r.totals.sales)}</td><td className="n">{pct(r.achievementPct ?? 0, 0)}</td></tr>)}</tbody>
           </table></div>
         </Panel>
         <div className="space-y-5">
@@ -66,6 +67,16 @@ export default async function MadingPage({ searchParams }: { searchParams: Searc
             <div className="sd-table-wrap"><table className="sd-table">
               <thead><tr><th>LOB</th><th className="n">Qty</th><th className="n">Value</th></tr></thead>
               <tbody>{APPLE_LOBS.map((k) => <tr key={k}><td className="font-bold">{k}</td><td className="n">{num(lq[k])}</td><td className="n">{rpf(lv[k])}</td></tr>)}</tbody>
+            </table></div>
+          </Panel>
+          <Panel title="LOB Android • Qty / Value">
+            <div className="sd-table-wrap"><table className="sd-table">
+              <thead><tr><th>Brand</th><th className="n">Qty</th><th className="n">Value</th></tr></thead>
+              <tbody>
+                {ab.map((r) => <tr key={r.brand}><td className="font-bold">{r.brand}</td><td className="n">{num(r.qty)}</td><td className="n">{rpf(r.value)}</td></tr>)}
+                {!ab.length && <tr><td colSpan={3} className="text-center text-slate-500">Belum ada penjualan Android.</td></tr>}
+              </tbody>
+              {ab.length > 1 && <tfoot><tr><td>Total</td><td className="n">{num(ab.reduce((a, r) => a + r.qty, 0))}</td><td className="n">{rpf(ab.reduce((a, r) => a + r.value, 0))}</td></tr></tfoot>}
             </table></div>
           </Panel>
           <Panel title="VAS • Qty / Value">
