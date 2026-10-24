@@ -157,3 +157,20 @@ test("target store: Android brand targets from the Total Target block (fallback 
   // no brand columns → no `brands`, the Android section is used instead
   assert.equal(parseTargetStore(grid.map((r) => r.slice(0, 5)), "2026-10").brands, undefined);
 });
+
+test("staff target per Android brand follows the Total Target brand split", async () => {
+  const { staffItemTarget } = await import("@/lib/domain/targets");
+  const base = { month: "2026-10", total: 0, byGroup: { Apple: 0, Android: 300, ACC: 0, VAS: 0 }, sections: { Android: { group: "Android" as const, columns: ["Samsung", "Oppo"], columnTargets: { Samsung: 200, Oppo: 100 }, total: 300 } } };
+  const staff = [
+    { name: "Ana", sharePct: 0.5, byGroup: { Apple: 0, Android: 150, ACC: 0, VAS: 0 }, byColumn: { "Android:Samsung": 100, "Android:Oppo": 50 }, total: 150 },
+    { name: "Budi", sharePct: 0.5, byGroup: { Apple: 0, Android: 150, ACC: 0, VAS: 0 }, byColumn: { "Android:Samsung": 100, "Android:Oppo": 50 }, total: 150 },
+  ];
+  // brand block 240 / 60 → each staff's Android target split 80% / 20%; the staff sum equals the store brand target
+  const t = { ...base, staff, brands: { Samsung: 240, Oppo: 60 } };
+  assert.equal(staffItemTarget(t, "ana", "Android", "SAMSUNG"), 120);
+  assert.equal(staffItemTarget(t, "Ana", "Android", "Oppo") + staffItemTarget(t, "Budi", "Android", "Oppo"), 60);
+  assert.equal(staffItemTarget(t, "Ana", "Android", "Vivo"), 0);
+  // without the brand block the section column is used
+  assert.equal(staffItemTarget({ ...base, staff }, "Ana", "Android", "Samsung"), 100);
+  assert.equal(staffItemTarget({ ...base, staff }, "Nobody", "Android", "Samsung"), 0);
+});
