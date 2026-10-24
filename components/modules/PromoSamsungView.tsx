@@ -188,25 +188,6 @@ function Card({ c, store, today, hasSoh, terms, pairHits }: { c: PromoCard; stor
 
       {c.sheets.map((s) => (
         <div key={s.name} className="mt-3 space-y-2">
-          {s.articles.length > 0 && (
-            <details open={terms.length > 0 && s.articles.some((a) => has(terms, `${a.article} ${a.description} ${a.code}`.toUpperCase()))} className="rounded-2xl border border-slate-200 dark:border-slate-700">
-              <summary className="cursor-pointer px-3 py-2 text-sm font-bold">{s.articles.length} artikel · {s.name}</summary>
-              <ul className="divide-y divide-slate-200 border-t border-slate-200 dark:divide-slate-700 dark:border-slate-700">
-                {s.articles.map((a, i) => (
-                  <li key={`${a.article}-${a.code}-${i}`} className={`flex items-start justify-between gap-3 px-3 py-2 ${terms.length && has(terms, `${a.article} ${a.description} ${a.code}`.toUpperCase()) ? "bg-yellow-50 dark:bg-yellow-950/20" : ""}`}>
-                    <span className="min-w-0 text-[13px] leading-snug">
-                      <span className="block font-semibold">{a.description || a.article}</span>
-                      <span className="block text-[11px] text-slate-400"><span className="font-mono">{a.article}</span>{a.code ? <> · <b className="text-slate-600 dark:text-slate-300">{a.code}</b></> : null}{a.normal ? ` · normal ${rp(a.normal)}` : ""}</span>
-                    </span>
-                    <span className="shrink-0 text-right">
-                      {a.value > 0 ? <b className="block text-sm tabular-nums text-emerald-700 dark:text-emerald-400">{rp(a.value)}</b> : <span className="block text-xs text-slate-400">lihat ketentuan</span>}
-                      {hasSoh && a.soh !== null && <span className={`block text-[10px] font-bold ${a.soh > 0 ? "text-slate-500" : "text-rose-500"}`}>SOH {a.soh}</span>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
           {s.pairs.length > 0 && (
             <details open={pairHits > 0} className="rounded-2xl border border-slate-200 dark:border-slate-700">
               <summary className="cursor-pointer px-3 py-2 text-sm font-bold">{s.pairs.length} barang pasangan PWP{pairHits ? <span className="ml-1 text-amber-600">· {pairHits} cocok</span> : null}</summary>
