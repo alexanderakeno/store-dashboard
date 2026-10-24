@@ -8,6 +8,7 @@ import { displayName, nameKey } from "@/lib/domain/normalize";
 import { VAS_PROVIDERS, clampRange, linesByStaff } from "@/lib/domain/extra";
 import { daysInMonth, eachDay, monthStart, weeksOfMonth } from "@/lib/domain/period";
 import { focusKey } from "@/lib/domain/views";
+import { staffItemTarget } from "@/lib/domain/targets";
 import { dateShort, monthLabel, num, pct, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
@@ -72,17 +73,15 @@ export async function FocusPage({ searchParams, path, group: baseGroup, title, d
   const counted = items.filter((x) => !(group === "Apple" && x.key === "AirPods"));
   const totalTarget = counted.reduce((a, x) => a + x.target, 0);
   const totalActual = counted.reduce((a, x) => a + x.actual, 0);
-  const totalQty = items.reduce((a, x) => a + x.qty, 0);
+  // same items as Total Target / Achievement (AirPods are shown in the Apple LOB but counted in ACC)
+  const totalQty = counted.reduce((a, x) => a + x.qty, 0);
   const totalAch = totalTarget ? (totalActual / totalTarget) * 100 : null;
   const sel = items.find((x) => x.key === p.q.item) ?? items[0];
   const selLines = sel ? ls.filter((l) => focusKey(group, l) != null && nameKey(focusKey(group, l)) === nameKey(sel.key)) : [];
   const perStaff = [...linesByStaff(selLines).entries()]
     .map(([k, xs]) => ({ k, name: displayName(xs[0].staffName), value: xs.reduce((a, l) => a + l.amount, 0), qty: xs.reduce((a, l) => a + l.qty, 0) }))
     .sort((a, b) => b.value - a.value);
-  const staffTargetCol = (name: string) => {
-    const st = s.target?.staff.find((x) => nameKey(x.name) === nameKey(name));
-    return st && sel ? (st.byColumn[`${group}:${sel.key}`] ?? 0) * scale : 0;
-  };
+  const staffTargetCol = (name: string) => (sel ? staffItemTarget(s.target, name, group, sel.key) * scale : 0);
 
   const periodLabel = per === "week" ? `${wk.label} (${dateShort(wk.start)} – ${dateShort(wk.end)})` : per === "range" ? `${dateShort(from)} – ${dateShort(to)}` : monthLabel(p.month);
   const share = [
@@ -134,7 +133,11 @@ export async function FocusPage({ searchParams, path, group: baseGroup, title, d
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
           <span>Total Target: <b>{rpf(totalTarget)}</b></span>
           <span>Achievement: <b>{rpf(totalActual)}</b> ({pct(totalAch ?? 0)})</span>
-          <span>Gap: <b>{rpf(Math.max(0, totalTarget - totalActual))}</b></span>
+          {totalActual > totalTarget && totalTarget > 0 ? (
+            <span>Surplus: <b className="text-emerald-600">{rpf(totalActual - totalTarget)}</b></span>
+          ) : (
+            <span>Gap: <b>{rpf(totalTarget - totalActual)}</b></span>
+          )}
           <span>Actual Qty: <b>{num(totalQty)} unit</b></span>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">

@@ -25,7 +25,7 @@ export default async function MadingPage({ searchParams }: { searchParams: Searc
   const lq = lobQty(ls);
   const lv = lobValue(ls);
   const vs = vasSplit(ls);
-  const ab = androidBrands(ls, s.target?.sections.Android?.columns ?? []);
+  const ab = androidBrands(ls, s.target?.brands ? Object.keys(s.target.brands) : (s.target?.sections.Android?.columns ?? []));
   return (
     <div className="sd-content">
       <PageIntro eyebrow={`${appConfig().storeCode || "STORE"} • Mading`} title="Mading Performance" desc="Ringkasan performa store, staff, LOB dan VAS." actions={<PrintButton />} />
