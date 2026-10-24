@@ -68,7 +68,7 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
                 <p className="text-sm font-bold text-slate-500">{c.label}</p>
                 <span className={`grid size-9 place-items-center rounded-[14px] ${c.ic}`}><Icon className="size-4" /></span>
               </div>
-              <p className="mt-4 leading-tight font-black text-slate-950"><span className="block text-xl sm:text-2xl">{rpf(c.actual)}</span><span className="block text-sm font-bold text-slate-500">dari target {rpf(c.target)}</span></p>
+              <p className="mt-4 leading-tight font-black text-slate-950"><span className="block text-xl sm:text-2xl xl:text-xl 2xl:text-2xl">{rpf(c.actual)}</span><span className="block text-sm font-bold text-slate-500">dari target {rpf(c.target)}</span></p>
               <p className="mt-3 text-xs font-bold text-slate-500">{pct(a ?? 0, 0)}</p>
               <div className="mt-2"><Progress value={a} color={c.color} label={c.label} /></div>
             </article>
