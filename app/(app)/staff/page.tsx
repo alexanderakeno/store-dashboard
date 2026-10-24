@@ -5,6 +5,7 @@ import { ParamDate, ParamSelect } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, clampRange, linesByStaff, linesIn, lobQty, staffStats, timeGonePct } from "@/lib/domain/extra";
 import { focusKey } from "@/lib/domain/views";
+import { staffItemTarget } from "@/lib/domain/targets";
 import { totals } from "@/lib/domain/kpi";
 import { nameKey } from "@/lib/domain/normalize";
 import { daysInMonth, eachDay, monthStart } from "@/lib/domain/period";
@@ -54,12 +55,9 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
   // staff target per item comes from that group's section of Target Store
   const breakdownOf = (group: Group, cols: Col[]) => {
     const tcols = s.target?.sections[group]?.columns ?? [];
-    const targetOf = (name: string, key: string) => {
-      const st = staffTarget(name);
-      const col = tcols.find((c) => nameKey(c) === nameKey(key));
-      return st && col ? (st.byColumn[`${group}:${col}`] ?? 0) * scale : 0;
-    };
-    return { ...table(cols, (l) => focusKey(group, l), targetOf, group === "VAS"), hasTarget: tcols.length > 0 };
+    const targetOf = (name: string, key: string) => staffItemTarget(s.target, name, group, key) * scale;
+    const brandTargets = group === "Android" && !!s.target?.brands && Object.keys(s.target.brands).length > 0;
+    return { ...table(cols, (l) => focusKey(group, l), targetOf, group === "VAS"), hasTarget: tcols.length > 0 || brandTargets };
   };
   const groupTable = { ...table(GROUPS.map((g) => ({ key: g, label: g })), (l) => l.group, (name, g) => (staffTarget(name)?.byGroup[g as Group] ?? 0) * scale), hasTarget: !!s.target?.staff.length };
   const vasTable = breakdownOf("VAS", VAS_PROVIDERS.map((k) => ({ key: k, label: k })));
@@ -81,7 +79,7 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
     androidSold.set(nameKey(k), e);
   }
   const androidCols = [...androidSold.values()].filter((x) => x.value !== 0).sort((a, b) => b.value - a.value).map((x) => ({ key: x.label, label: x.label }));
-  for (const c of s.target?.sections.Android?.columns ?? []) if (!androidCols.some((x) => nameKey(x.key) === nameKey(c))) androidCols.push({ key: c, label: c });
+  for (const c of s.target?.brands ? Object.keys(s.target.brands) : (s.target?.sections.Android?.columns ?? [])) if (!androidCols.some((x) => nameKey(x.key) === nameKey(c))) androidCols.push({ key: c, label: c });
   const androidTable = breakdownOf("Android", androidCols);
   // TOTAL rows add up the staff shown (online channel accounts and the staff filter excluded), like the value tables
   const staffLines = rows.flatMap((r) => byKey.get(r.key) ?? []);
