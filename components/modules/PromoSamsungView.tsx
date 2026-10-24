@@ -2,7 +2,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { EmptyBlock } from "@/components/kit";
-import type { PromoState } from "@/lib/domain/samsungPromo";
+import { CATEGORIES, SERIES, categoryOf, type PromoState } from "@/lib/domain/samsungPromo";
 import type { PromoKind, PromoRange } from "@/types/samsungPromo";
 
 export interface PromoSheetCard {
@@ -16,6 +16,8 @@ export interface PromoSheetCard {
 export interface PromoCard {
   key: string;
   no: number;
+  /** Series the promo covers (Galaxy Z, Galaxy S, Tab A, Watch, …); empty = other. */
+  series: string[];
   type: string;
   name: string;
   period: string;
@@ -55,14 +57,24 @@ const has = (terms: string[], s: string) => terms.every((t) => s.includes(t));
  * Promo Samsung: one card per promo of the summary sheet, with the articles, PWP pair items and
  * terms of its detail sheet(s). Filter by state, search by type / article / code / PWP pair.
  */
-export function PromoSamsungView({ cards, store, today, hasSoh, initialFilter, initialSearch }: { cards: PromoCard[]; store: string; today: string; hasSoh: boolean; initialFilter: string; initialSearch: string }) {
+const OTHER = "Lainnya";
+const catsOf = (c: PromoCard) => (c.series.length ? [...new Set(c.series.map((x) => categoryOf(x)!))] : [OTHER]);
+
+export function PromoSamsungView({ cards, store, today, hasSoh, initialFilter, initialCat, initialSeries, initialSearch }: { cards: PromoCard[]; store: string; today: string; hasSoh: boolean; initialFilter: string; initialCat: string; initialSeries: string; initialSearch: string }) {
   const [filter, setFilter] = useState(FILTERS.some((f) => f.key === initialFilter) ? initialFilter : "");
+  const [cat, setCat] = useState<string>([...CATEGORIES, OTHER].includes(initialCat as never) ? initialCat : "");
+  const [series, setSeries] = useState<string>(SERIES.some((x) => x.key === initialSeries) ? initialSeries : "");
   const [search, setSearch] = useState(initialSearch);
   const q = useDeferredValue(search);
   const terms = q.toUpperCase().split(/\s+/).filter(Boolean);
 
   const shown = useMemo(() => {
-    const byState = cards.filter((c) => (filter === "all" ? true : filter === "akan" ? c.state === "akan" : c.state === "aktif" && !c.otherStore));
+    const byState = cards.filter(
+      (c) =>
+        (filter === "all" ? true : filter === "akan" ? c.state === "akan" : c.state === "aktif" && !c.otherStore) &&
+        (!cat || catsOf(c).includes(cat as never)) &&
+        (!series || c.series.includes(series)),
+    );
     if (!terms.length) return byState.map((c) => ({ c, pairHits: 0 }));
     return byState
       .map((c) => {
@@ -73,9 +85,33 @@ export function PromoSamsungView({ cards, store, today, hasSoh, initialFilter, i
       })
       .filter((x) => x.ok);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cards, filter, q]);
+  }, [cards, filter, cat, series, q]);
 
-  const count = (k: string) => cards.filter((c) => (k === "all" ? true : k === "akan" ? c.state === "akan" : c.state === "aktif" && !c.otherStore)).length;
+  const inState = (c: PromoCard, k = filter) => (k === "all" ? true : k === "akan" ? c.state === "akan" : c.state === "aktif" && !c.otherStore);
+  const count = (k: string) => cards.filter((c) => inState(c, k) && (!cat || catsOf(c).includes(cat as never)) && (!series || c.series.includes(series))).length;
+  const catCount = (k: string) => cards.filter((c) => inState(c) && (!k || catsOf(c).includes(k as never))).length;
+  const seriesCount = (k: string) => cards.filter((c) => inState(c) && (k ? c.series.includes(k) : !cat || catsOf(c).includes(cat as never))).length;
+  const cats = [...CATEGORIES, OTHER].filter((k) => cards.some((c) => catsOf(c).includes(k as never)));
+  const seriesList = cat && cat !== OTHER ? SERIES.filter((x) => x.category === cat && cards.some((c) => c.series.includes(x.key))) : [];
+  const pickCat = (k: string) => {
+    setCat(k);
+    setSeries("");
+    syncUrl({ c: k || null, r: null });
+  };
+  const pickSeries = (k: string) => {
+    setSeries(k);
+    syncUrl({ r: k || null });
+  };
+  // grouped by the first series each promo covers (series order: Z, S, A, Tab S, Tab A, Watch, Buds)
+  const groups = useMemo(() => {
+    const order = [...SERIES.map((x) => x.key), OTHER];
+    const m = new Map<string, typeof shown>();
+    for (const x of shown) {
+      const first = series || (cat && cat !== OTHER ? x.c.series.find((k) => categoryOf(k) === cat) : x.c.series[0]) || OTHER;
+      m.set(first, [...(m.get(first) ?? []), x]);
+    }
+    return [...m.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+  }, [shown, series, cat]);
 
   return (
     <>
@@ -84,6 +120,25 @@ export function PromoSamsungView({ cards, store, today, hasSoh, initialFilter, i
         <input value={search} onChange={(e) => { setSearch(e.target.value); syncUrl({ s: e.target.value.trim() || null }); }} className="sd-input flex-1" placeholder="Cari tipe, kode promo, atau barang pasangan PWP…" aria-label="Cari promo" />
         {search && <button type="button" className="sd-btn" onClick={() => { setSearch(""); syncUrl({ s: null }); }} aria-label="Hapus pencarian"><X className="size-4" /></button>}
       </form>
+
+      <section className="sd-panel space-y-2 p-2.5 sm:p-3" aria-label="Kategori & seri">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
+          {["", ...cats].map((k) => (
+            <button key={k || "all"} type="button" aria-pressed={cat === k} onClick={() => pickCat(k)} className={`rounded-xl px-2.5 py-1.5 text-xs font-bold sm:px-4 sm:py-2 sm:text-sm ${cat === k ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300"}`}>
+              {k || "Semua kategori"} <span className="opacity-70">{catCount(k)}</span>
+            </button>
+          ))}
+        </div>
+        {seriesList.length > 1 && (
+          <div className="flex flex-wrap gap-1.5 border-t border-slate-200 pt-2 sm:gap-2 dark:border-slate-700">
+            {[{ key: "" }, ...seriesList].map((x) => (
+              <button key={x.key || "all"} type="button" aria-pressed={series === x.key} onClick={() => pickSeries(x.key)} className={`rounded-xl px-2.5 py-1 text-xs font-semibold sm:px-3 sm:py-1.5 ${series === x.key ? "bg-slate-500 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
+                {x.key || `Semua ${cat}`} <span className="opacity-70">{seriesCount(x.key)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
       <section className="sd-panel flex flex-wrap gap-1.5 p-2.5 sm:gap-2 sm:p-3" aria-label="Filter promo">
         {FILTERS.map((f) => (
           <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => { setFilter(f.key); syncUrl({ f: f.key || null }); }} className={`rounded-xl px-2.5 py-1.5 text-xs font-semibold sm:px-4 sm:py-2 sm:text-sm ${filter === f.key ? "bg-slate-500 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
@@ -93,9 +148,14 @@ export function PromoSamsungView({ cards, store, today, hasSoh, initialFilter, i
       </section>
 
       {shown.length ? (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {shown.map(({ c, pairHits }) => <Card key={c.key} c={c} store={store} today={today} hasSoh={hasSoh} terms={terms} pairHits={pairHits} />)}
-        </div>
+        groups.map(([g, list]) => (
+          <section key={g} className="space-y-3">
+            <h2 className="px-1 text-sm font-black tracking-wide text-slate-500 uppercase">{g} <span className="font-semibold normal-case">· {list.length} promo</span></h2>
+            <div className="grid gap-4 xl:grid-cols-2">
+              {list.map(({ c, pairHits }) => <Card key={c.key} c={c} store={store} today={today} hasSoh={hasSoh} terms={terms} pairHits={pairHits} />)}
+            </div>
+          </section>
+        ))
       ) : (
         <div className="sd-panel p-5"><EmptyBlock title="Tidak ada promo" need={false}>{terms.length ? "Tidak ada promo yang cocok dengan pencarian." : filter === "akan" ? "Tidak ada promo yang akan dimulai." : "Tidak ada promo aktif hari ini."}</EmptyBlock></div>
       )}
@@ -114,6 +174,7 @@ function Card({ c, store, today, hasSoh, terms, pairHits }: { c: PromoCard; stor
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="sd-badge violet">{c.type}</span>
         <span className={`sd-badge ${st.cls}`}>{st.label}</span>
+        {c.series.length > 1 && <span className="sd-badge slate">{c.series.join(" · ")}</span>}
         {endsSoon && <span className="sd-badge amber">Segera berakhir</span>}
         {c.stores.length > 0 && <span className={`sd-badge ${c.otherStore ? "red" : "slate"}`}>Khusus {c.stores.join(", ")}{c.otherStore && store ? ` · bukan ${store}` : ""}</span>}
       </div>
