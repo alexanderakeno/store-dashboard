@@ -12,6 +12,7 @@ import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList } from "@/types/pricelist";
 import type { PriceListInput } from "../types";
+import type { SamsungPromo } from "@/types/samsungPromo";
 import type { AccessEntry, AccessEvent } from "@/types/access";
 import type { PriceChange, PriceChangeType } from "@/lib/domain/priceHistory";
 import { ACCESS_EVENTS } from "@/types/access";
@@ -33,6 +34,7 @@ export const MASTER_TABS = {
   records: { name: "APP_Records", header: ["kind", "date", "key", "data", "updatedAt", "updatedBy"] },
   soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy"] },
   priceList: { name: "APP_PriceList", header: ["kind", "brand", "series", "name", "normal", "promo", "status", "extra", "date", "source", "updatedAt", "updatedBy"] },
+  samsungPromo: { name: "APP_SamsungPromo", header: ["kind", "data", "source", "updatedAt", "updatedBy"] },
 } as const;
 
 type TabKey = keyof typeof MASTER_TABS;
@@ -304,6 +306,47 @@ export class SheetsSource implements DataSource {
     for (const x of input.items) out.push([x.kind, x.brand, x.series, x.name, x.normal, x.promo, x.status, extra(x), input.date ?? "", input.source, now, by]);
     for (const q of input.qoala) out.push(["qoala", q.tier, q.range, "", "", "", "", JSON.stringify(q.fees), input.date ?? "", input.source, now, by]);
     await this.rewrite("priceList", out);
+  }
+
+  /** One row per program / article / pair / sheet, the record itself as JSON in `data`. */
+  async getSamsungPromo(): Promise<SamsungPromo | null> {
+    const rows = await this.rows("samsungPromo");
+    if (!rows.length) return null;
+    const out: SamsungPromo = { title: "", programs: [], articles: [], pairs: [], sheets: [], warnings: [], source: "", updatedAt: "", updatedBy: "" };
+    for (const r of rows) {
+      let d: unknown;
+      try {
+        d = JSON.parse(String(r.data || "null"));
+      } catch {
+        continue;
+      }
+      if (d == null) continue;
+      const kind = normalizeText(r.kind);
+      if (kind === "meta") {
+        const m = d as { title?: string; warnings?: string[] };
+        out.title = String(m.title ?? "");
+        out.warnings = Array.isArray(m.warnings) ? m.warnings.map(String) : [];
+        out.source = normalizeText(r.source);
+        out.updatedAt = normalizeText(r.updatedAt);
+        out.updatedBy = normalizeText(r.updatedBy);
+      } else if (kind === "program") out.programs.push(d as SamsungPromo["programs"][number]);
+      else if (kind === "article") out.articles.push(d as SamsungPromo["articles"][number]);
+      else if (kind === "pair") out.pairs.push(d as SamsungPromo["pairs"][number]);
+      else if (kind === "sheet") out.sheets.push(d as SamsungPromo["sheets"][number]);
+    }
+    return out.programs.length || out.articles.length ? out : null;
+  }
+
+  async saveSamsungPromo(p: Omit<SamsungPromo, "updatedAt" | "updatedBy">, by: string): Promise<void> {
+    const now = new Date().toISOString();
+    const row = (kind: string, data: unknown) => [kind, JSON.stringify(data), p.source, now, by];
+    await this.rewrite("samsungPromo", [
+      row("meta", { title: p.title, warnings: p.warnings }),
+      ...p.programs.map((x) => row("program", x)),
+      ...p.articles.map((x) => row("article", x)),
+      ...p.pairs.map((x) => row("pair", x)),
+      ...p.sheets.map((x) => row("sheet", x)),
+    ]);
   }
 
   async audit(entry: Omit<AuditEntry, "ts">): Promise<void> {
