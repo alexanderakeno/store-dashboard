@@ -6,6 +6,7 @@ import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList, QoalaTier } from "@/types/pricelist";
 import type { AccessEntry } from "@/types/access";
 import type { PriceChange } from "@/lib/domain/priceHistory";
+import type { SamsungPromo } from "@/types/samsungPromo";
 
 /** A monthly spreadsheet registered in the app (master sheet `APP_Months`). */
 export interface MonthEntry {
@@ -121,6 +122,11 @@ export interface DataSource {
    * import never wipes the other). `qoala` replaces the Qoala tiers when non-empty.
    */
   savePriceList(input: PriceListInput, by: string): Promise<void>;
+
+  /** Latest imported Samsung promo workbook (null = never imported). */
+  getSamsungPromo(): Promise<SamsungPromo | null>;
+  /** Replaces the stored Samsung promo. */
+  saveSamsungPromo(promo: Omit<SamsungPromo, "updatedAt" | "updatedBy">, by: string): Promise<void>;
 }
 
 export interface HistoryInput {
