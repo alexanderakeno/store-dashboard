@@ -67,7 +67,9 @@ export default async function MadingPage({ searchParams }: { searchParams: Searc
             <div className="sd-table-wrap"><table className="sd-table">
               <thead><tr><th>LOB</th><th className="n">Qty</th><th className="n">Value</th></tr></thead>
               <tbody>{APPLE_LOBS.map((k) => <tr key={k}><td className="font-bold">{k}</td><td className="n">{num(lq[k])}</td><td className="n">{rpf(lv[k])}</td></tr>)}</tbody>
+              <tfoot><tr><td>Total</td><td className="n">{num(APPLE_LOBS.reduce((a, k) => a + lq[k], 0))}</td><td className="n">{rpf(APPLE_LOBS.reduce((a, k) => a + lv[k], 0))}</td></tr></tfoot>
             </table></div>
+            <p className="mt-2 text-xs text-slate-500">Total termasuk AirPods. Tanpa AirPods (device Apple saja): {num(APPLE_LOBS.reduce((a, k) => a + (k === "AirPods" ? 0 : lq[k]), 0))} unit · {rpf(APPLE_LOBS.reduce((a, k) => a + (k === "AirPods" ? 0 : lv[k]), 0))}.</p>
           </Panel>
           <Panel title="LOB Android • Qty / Value">
             <div className="sd-table-wrap"><table className="sd-table">
@@ -83,6 +85,7 @@ export default async function MadingPage({ searchParams }: { searchParams: Searc
             <div className="sd-table-wrap"><table className="sd-table">
               <thead><tr><th>Provider</th><th className="n">Qty</th><th className="n">Value</th></tr></thead>
               <tbody>{VAS_PROVIDERS.map((k) => <tr key={k}><td className="font-bold">{k}</td><td className="n">{num(vs[k].qty)}</td><td className="n">{rpf(vs[k].value)}</td></tr>)}</tbody>
+              <tfoot><tr><td>Total</td><td className="n">{num(VAS_PROVIDERS.reduce((a, k) => a + vs[k].qty, 0))}</td><td className="n">{rpf(VAS_PROVIDERS.reduce((a, k) => a + vs[k].value, 0))}</td></tr></tfoot>
             </table></div>
           </Panel>
         </div>
