@@ -48,7 +48,6 @@ export const NAV: NavEntry[] = [
       { href: "/focus/lob", label: "LOB Target Fokus", icon: "gauge", color: "text-rose-400" },
       { href: "/focus/3pp", label: "Product Fokus 3PP", icon: "sheet", color: "text-yellow-400" },
       { href: "/focus/vas", label: "VAS Fokus", icon: "sparkles", color: "text-fuchsia-400" },
-      { href: "/focus/android", label: "Android Fokus", icon: "trending", color: "text-orange-300" },
     ],
   },
   {
