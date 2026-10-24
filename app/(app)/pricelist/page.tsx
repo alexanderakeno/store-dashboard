@@ -53,7 +53,11 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
     soh = await getSoh();
   } catch {}
 
-  const models = list ? priceModels(list.items, kind, soh?.items ?? []) : [];
+  // Excel rows (with articles): only types in stock, unless "Tampilkan semua" is on; needs a readable SOH
+  const all = q.semua === "1";
+  const byArticle = !!list?.items.some((x) => x.kind === kind && x.articles?.length);
+  const models = list ? priceModels(list.items, kind, soh?.items ?? [], { inStockOnly: !!soh && byArticle && !all }) : [];
+  const hidden = byArticle && soh && !all ? (list ? priceModels(list.items, kind, soh.items).reduce((a, m) => a + m.variants.length, 0) : 0) - models.reduce((a, m) => a + m.variants.length, 0) : 0;
   // Samsung promos (PWP / trade in / EIP) per price-list row — optional, never blocks the prices
   const promos: Record<string, VariantPromo> = {};
   const today = todayIn(appConfig().timeZone);
@@ -82,6 +86,17 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
         actions={update}
       />
       <Tabs current={kind} />
+      {byArticle && (
+        <p className="text-xs text-slate-500">
+          {!soh ? (
+            "Data SOH belum terbaca — semua tipe ditampilkan."
+          ) : all ? (
+            <>Menampilkan semua tipe, termasuk yang stoknya kosong. <Link href={kind === "apple" ? "/pricelist?k=apple" : "/pricelist"} prefetch={false} className="font-semibold text-blue-600">Hanya yang ada stok</Link></>
+          ) : (
+            <>Hanya tipe yang ada stoknya di SOH{hidden > 0 ? ` (${hidden} tipe stok kosong disembunyikan)` : ""}. <Link href={kind === "apple" ? "/pricelist?k=apple&semua=1" : "/pricelist?semua=1"} prefetch={false} className="font-semibold text-blue-600">Tampilkan semua</Link></>
+          )}
+        </p>
+      )}
       {models.length ? (
         <PriceBoard key={kind} models={models} qoala={list?.qoala ?? []} hasSoh={!!soh} promos={promos} today={today} initialBrand={typeof q.b === "string" ? q.b : ""} initialModel={typeof q.t === "string" ? q.t : ""} />
       ) : (
