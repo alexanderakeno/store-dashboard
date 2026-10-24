@@ -16,8 +16,10 @@ export interface PriceItem {
   status: string;
   /** Apple only: "Promotion Cicilan Price" (installment); `promo` holds the cash price. */
   credit?: number;
-  /** Apple only: text printed in brackets after the description (colours, strap). */
+  /** Apple: text in brackets after the description (colours, strap). Android Excel: promo remark / free gift. */
   note?: string;
+  /** Android Excel price list: SAP articles (one per colour) — stock is matched on these codes. */
+  articles?: string[];
 }
 
 /** Qoala protection fee per price tier and tenor. */
