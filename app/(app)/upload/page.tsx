@@ -10,6 +10,7 @@ import { getPriceList } from "@/lib/pricelist";
 import { getSamsungPromo } from "@/lib/samsungPromo";
 import { SamsungPromoForm } from "@/components/modules/SamsungPromoForm";
 import { PriceListImportForm } from "@/components/modules/PriceListImportForm";
+import { appConfig } from "@/config/app";
 import { ApplePriceListImportForm } from "@/components/modules/ApplePriceListImportForm";
 import { SalesImportForm } from "@/components/modules/SalesImportForm";
 import { getHistoryList } from "@/lib/services/dashboard";
@@ -131,8 +132,8 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
       </div>
       <div id="pricelist" className="scroll-mt-20">
         <div id="pricelist-android" className="scroll-mt-20">
-          <Panel title="Import Price List Android" desc="Upload PDF price list Android (Samsung, Oppo, Xiaomi, …) → Dashboard › Price List › Android." right={priceCount("android") ? <Link href="/pricelist" prefetch={false} className="sd-btn">Lihat Android</Link> : undefined}>
-            {isAdmin ? <PriceListImportForm current={price?.dates.android ?? null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
+          <Panel title="Import Price List Android" desc="Upload PDF atau Excel price list Android (Samsung, Oppo, Xiaomi, …) → Dashboard › Price List › Android." right={priceCount("android") ? <Link href="/pricelist" prefetch={false} className="sd-btn">Lihat Android</Link> : undefined}>
+            {isAdmin ? <PriceListImportForm current={price?.dates.android ?? null} storeCode={appConfig().storeCode} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
           </Panel>
         </div>
       </div>

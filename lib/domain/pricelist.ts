@@ -139,7 +139,25 @@ function appleModels(items: PriceItem[], sohItems: SohItem[]): PriceModel[] {
 }
 
 /** Price-list rows of one kind grouped per model (brand → series order kept as in the PDF). */
-export function priceModels(stored: PriceItem[], kind: PriceKind, soh: SohItem[]): PriceModel[] {
+/** Android Excel rows carry their SAP articles: stock is read per article, the colour is what follows the name. */
+export function matchArticles(name: string, articles: string[], soh: SohItem[]): PriceStock[] {
+  const want = norm(name);
+  const set = new Set(articles.map((a) => a.toUpperCase()));
+  return soh
+    .filter((s) => set.has(s.article.toUpperCase()))
+    .map((s) => {
+      const have = norm(s.description);
+      const prefix = have.length > want.length && want.every((t, i) => have[i] === t);
+      return { article: s.article, color: (prefix ? have.slice(want.length) : have).join(" ") || "—", qty: s.qty };
+    })
+    .sort((a, b) => b.qty - a.qty || a.color.localeCompare(b.color));
+}
+
+/**
+ * `inStockOnly`: rows that list their articles (Android Excel) are shown only when SOH has stock for one of them.
+ * Rows without articles (PDF imports) are always shown.
+ */
+export function priceModels(stored: PriceItem[], kind: PriceKind, soh: SohItem[], opts: { inStockOnly?: boolean } = {}): PriceModel[] {
   // fixes apply to data already in the sheet too: rows printed twice are shown once, "IPHONE 17E" reads "iPhone 17e"
   const items = stored.map((it) => (it.kind === "apple" ? { ...it, name: iphoneName(it.name) } : it));
   dedupeItems(items, []);
@@ -147,10 +165,12 @@ export function priceModels(stored: PriceItem[], kind: PriceKind, soh: SohItem[]
   const map = new Map<string, PriceModel>();
   items.forEach((it, i) => {
     if (it.kind !== kind) return;
+    const stock = it.articles?.length ? matchArticles(it.name, it.articles, soh) : matchStock(it.name, soh);
+    if (opts.inStockOnly && it.articles?.length && !stock.some((x) => x.qty > 0)) return;
     const { model, variant } = modelOf(it.name);
     const key = `${it.brand}|${model}`;
     const m = map.get(key) ?? { key, brand: it.brand, series: it.series, model, variants: [] };
-    m.variants.push({ ...it, id: String(i), variant: variant || "Standar", stock: matchStock(it.name, soh) });
+    m.variants.push({ ...it, id: String(i), variant: variant || "Standar", stock });
     map.set(key, m);
   });
   return [...map.values()];

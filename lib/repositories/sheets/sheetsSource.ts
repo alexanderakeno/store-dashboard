@@ -282,9 +282,10 @@ export class SheetsSource implements DataSource {
       const item: PriceItem = { kind: k, brand: normalizeText(r.brand), series: normalizeText(r.series), name: normalizeText(r.name), normal: parseNumber(r.normal), promo: parseNumber(r.promo), status: normalizeText(r.status) || "ACTIVE" };
       // Apple rows keep the installment price + bracket note as JSON in `extra`
       try {
-        const x = r.extra ? (JSON.parse(String(r.extra)) as { credit?: unknown; note?: unknown }) : {};
+        const x = r.extra ? (JSON.parse(String(r.extra)) as { credit?: unknown; note?: unknown; articles?: unknown }) : {};
         if (typeof x.credit === "number" && Number.isFinite(x.credit)) item.credit = x.credit;
         if (typeof x.note === "string" && x.note) item.note = x.note;
+        if (Array.isArray(x.articles)) item.articles = x.articles.filter((a): a is string => typeof a === "string" && !!a);
       } catch {}
       out.items.push(item);
       out.dates[k] ??= parseDate(r.date);
@@ -302,7 +303,10 @@ export class SheetsSource implements DataSource {
       return k === "qoala" ? !replaceQoala : !input.kinds.includes(k as PriceKind);
     });
     const out: unknown[][] = keep.map((r) => MASTER_TABS.priceList.header.map((h) => r[h] ?? ""));
-    const extra = (x: PriceItem) => (x.credit != null || x.note ? JSON.stringify({ ...(x.credit != null ? { credit: x.credit } : {}), ...(x.note ? { note: x.note } : {}) }) : "");
+    const extra = (x: PriceItem) =>
+      x.credit != null || x.note || x.articles?.length
+        ? JSON.stringify({ ...(x.credit != null ? { credit: x.credit } : {}), ...(x.note ? { note: x.note } : {}), ...(x.articles?.length ? { articles: x.articles } : {}) })
+        : "";
     for (const x of input.items) out.push([x.kind, x.brand, x.series, x.name, x.normal, x.promo, x.status, extra(x), input.date ?? "", input.source, now, by]);
     for (const q of input.qoala) out.push(["qoala", q.tier, q.range, "", "", "", "", JSON.stringify(q.fees), input.date ?? "", input.source, now, by]);
     await this.rewrite("priceList", out);
