@@ -10,6 +10,9 @@ import { PriceHistory } from "@/components/modules/PriceHistory";
 import { groupUpdates } from "@/lib/domain/priceHistory";
 import { appConfig } from "@/config/app";
 import { getSoh } from "@/lib/soh";
+import { getSamsungPromo } from "@/lib/samsungPromo";
+import { exclusions, variantPromo, type VariantPromo } from "@/lib/domain/samsungPromo";
+import { todayIn } from "@/lib/domain/period";
 import type { SearchParams } from "@/lib/page";
 import type { PriceKind, PriceList } from "@/types/pricelist";
 import type { SohSnapshot } from "@/types/soh";
@@ -51,6 +54,21 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
   } catch {}
 
   const models = list ? priceModels(list.items, kind, soh?.items ?? []) : [];
+  // Samsung promos (PWP / trade in / EIP) per price-list row — optional, never blocks the prices
+  const promos: Record<string, VariantPromo> = {};
+  const today = todayIn(appConfig().timeZone);
+  if (kind === "android") {
+    const promo = await getSamsungPromo().catch(() => null);
+    if (promo) {
+      const excl = exclusions(promo.programs);
+      for (const m of models)
+        if (/samsung/i.test(m.brand))
+          for (const v of m.variants) {
+            const vp = variantPromo(v.name, promo, today, appConfig().storeCode, excl);
+            if (vp) promos[v.id] = vp;
+          }
+    }
+  }
   const date = list?.dates[kind];
   const updated = list?.updatedAt[kind];
   const label = kind === "apple" ? "Apple" : "Android";
@@ -64,7 +82,7 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
       />
       <Tabs current={kind} />
       {models.length ? (
-        <PriceBoard key={kind} models={models} qoala={list?.qoala ?? []} hasSoh={!!soh} initialBrand={typeof q.b === "string" ? q.b : ""} initialModel={typeof q.t === "string" ? q.t : ""} />
+        <PriceBoard key={kind} models={models} qoala={list?.qoala ?? []} hasSoh={!!soh} promos={promos} today={today} initialBrand={typeof q.b === "string" ? q.b : ""} initialModel={typeof q.t === "string" ? q.t : ""} />
       ) : (
         <Panel>
           <EmptyBlock title={`Price list ${label}`}>
