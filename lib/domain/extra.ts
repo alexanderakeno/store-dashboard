@@ -240,3 +240,22 @@ export function clampRange(month: MonthKey, asOf: ISODate, from?: string, to?: s
 export function linesIn(m: MonthInput, from: ISODate, to: ISODate): SalesLine[] {
   return m.lines.filter((l) => l.date >= from && l.date <= to);
 }
+
+/** Android qty / value per brand (Samsung, Oppo, …), best-selling first; `extra` brands (e.g. the target sheet's columns) show with 0. */
+export function androidBrands(lines: SalesLine[], extra: string[] = []): Array<{ brand: string; qty: number; value: number }> {
+  const m = new Map<string, { brand: string; qty: number; value: number }>();
+  const get = (b: string) => {
+    const k = b.trim().toUpperCase();
+    let e = m.get(k);
+    if (!e) m.set(k, (e = { brand: b.trim(), qty: 0, value: 0 }));
+    return e;
+  };
+  for (const l of lines) {
+    if (l.group !== "Android" || !l.lob) continue;
+    const e = get(l.lob);
+    if (l.countsInQty) e.qty += l.qty;
+    e.value += l.amount;
+  }
+  for (const b of extra) if (b.trim()) get(b);
+  return [...m.values()].sort((a, b) => b.value - a.value || b.qty - a.qty || a.brand.localeCompare(b.brand));
+}
