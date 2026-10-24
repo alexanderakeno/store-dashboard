@@ -226,7 +226,7 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel, 
                         <button type="button" className="min-w-0 text-left text-[13px] leading-snug font-semibold text-slate-800 hover:text-blue-600 dark:text-slate-100" onClick={() => { pickModel(m); setVariantId(v.id); setTimeout(() => card.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }}>
                           {v.name}
                           {isEol(v.status) && <span className="ml-1.5 text-[10px] font-extrabold text-slate-400">EOL</span>}
-                          {promos[v.id]?.items.some((x) => x.state === "aktif") && <span className="ml-1.5 rounded bg-emerald-50 px-1 text-[10px] font-extrabold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">PROMO</span>}
+                          {(promos[v.id]?.items.some((x) => x.state === "aktif") || promos[v.id]?.etp.some((x) => x.state === "aktif")) && <span className="ml-1.5 rounded bg-emerald-50 px-1 text-[10px] font-extrabold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">PROMO</span>}
                         </button>
                         <span className="shrink-0 text-right tabular-nums">
                           <b className="block text-sm text-slate-950">{rp(v.promo)}</b>
@@ -276,12 +276,17 @@ function PromoBox({ vp, price, today, model }: { vp: VariantPromo; price: number
           const now = it.ranges.find((r) => r.from <= today && today <= r.to);
           const when = it.state === "aktif" ? (now ? `s/d ${short(now.to)}` : "") : `mulai ${short(it.ranges.filter((r) => r.from > today).map((r) => r.from).sort()[0] ?? "")}`;
           return (
-            <li key={`${it.kind}-${it.code}-${it.value}`} className={`flex items-baseline justify-between gap-2 text-[13px] ${it.state === "aktif" ? "" : "opacity-60"}`}>
-              <span className="min-w-0"><b>{KIND_LABEL[it.kind]}</b> <code className="text-[11px] text-slate-500">{it.code}</code> <span className="text-[11px] text-slate-500">{when}</span></span>
+            <li key={`${it.kind}-${it.code}-${it.value}-${it.label}`} className={`flex items-baseline justify-between gap-2 text-[13px] ${it.state === "aktif" ? "" : "opacity-60"}`}>
+              <span className="min-w-0"><b>{KIND_LABEL[it.kind]}</b>{it.label ? <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300"> ({displayName(it.label)})</span> : null} <code className="text-[11px] text-slate-500">{it.code}</code> <span className="text-[11px] text-slate-500">{when}</span></span>
               <b className="shrink-0 tabular-nums text-emerald-700 dark:text-emerald-400">{rp(it.value)}</b>
             </li>
           );
         })}
+        {vp.etp.map((e) => (
+          <li key={e.no} className={`text-[13px] ${e.state === "aktif" ? "" : "opacity-60"}`}>
+            <b>{displayName(e.type.replace(/ di ETP$/i, "").toUpperCase())}</b> <span className="text-[11px] text-slate-500">· nilai sesuai ETP{e.state === "akan" ? " · belum mulai" : ""}{e.period ? ` · ${e.period.toLowerCase()}` : ""}</span>
+          </li>
+        ))}
         {vp.info.length > 0 && <li className="text-[12px] text-slate-500">Ada promo lain di {vp.info.join(", ")} — lihat ketentuan.</li>}
       </ul>
       {vp.cash.total > 0 && (

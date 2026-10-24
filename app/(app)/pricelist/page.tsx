@@ -11,7 +11,7 @@ import { groupUpdates } from "@/lib/domain/priceHistory";
 import { appConfig } from "@/config/app";
 import { getSoh } from "@/lib/soh";
 import { getSamsungPromo } from "@/lib/samsungPromo";
-import { exclusions, variantPromo, type VariantPromo } from "@/lib/domain/samsungPromo";
+import { etpPromos, exclusions, variantPromo, type VariantPromo } from "@/lib/domain/samsungPromo";
 import { todayIn } from "@/lib/domain/period";
 import type { SearchParams } from "@/lib/page";
 import type { PriceKind, PriceList } from "@/types/pricelist";
@@ -65,7 +65,8 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
         if (/samsung/i.test(m.brand))
           for (const v of m.variants) {
             const vp = variantPromo(v.name, promo, today, appConfig().storeCode, excl);
-            if (vp) promos[v.id] = vp;
+            const etp = etpPromos(v.name, promo.programs, today, appConfig().storeCode);
+            if (vp || etp.length) promos[v.id] = { ...(vp ?? { items: [], cash: { total: 0, kinds: [] }, pwp: 0, info: [] }), etp };
           }
     }
   }

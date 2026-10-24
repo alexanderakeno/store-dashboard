@@ -5,7 +5,7 @@ import { PromoSamsungView, type PromoCard } from "@/components/modules/PromoSams
 import { appConfig } from "@/config/app";
 import { requireSession } from "@/lib/auth/session";
 import { todayIn } from "@/lib/domain/period";
-import { forStore, promoState, type PromoState } from "@/lib/domain/samsungPromo";
+import { forStore, promoState, seriesOf, type PromoState } from "@/lib/domain/samsungPromo";
 import { timeAgo } from "@/lib/format";
 import { getSamsungPromo } from "@/lib/samsungPromo";
 import { getSoh } from "@/lib/soh";
@@ -74,11 +74,13 @@ export default async function PromoSamsungPage({ searchParams }: { searchParams:
     // codes & values as the detail sheets have them (the summary text can be out of date)
     const fromDetail = [...new Map(sheets.flatMap((s) => s.articles).filter((a) => a.code).map((a) => [`${a.code}|${a.value}`, { code: a.code, value: a.value }])).values()];
     const codes = fromDetail.length ? fromDetail : p.codes.map((code) => ({ code, value: 0 }));
-    return { key: `p${p.no}`, no: p.no, type: p.type, name: p.name, period: p.period, ranges, state: promoState(ranges, today) as PromoState, mechanism: p.mechanism, combine: p.combine, codes, stores: p.stores, otherStore: !forStore({ stores: p.stores, value: 1 }, store), sheets };
+    const series = seriesOf([p.name, ...sheets.flatMap((s) => s.articles.map((a) => a.description))]);
+    return { key: `p${p.no}`, no: p.no, series, type: p.type, name: p.name, period: p.period, ranges, state: promoState(ranges, today) as PromoState, mechanism: p.mechanism, combine: p.combine, codes, stores: p.stores, otherStore: !forStore({ stores: p.stores, value: 1 }, store), sheets };
   });
   // detail sheets the summary does not mention
   for (const s of promo.sheets.filter((x) => x.program == null && promo.articles.some((a) => a.sheet === x.name))) {
-    cards.push({ key: `s${s.name}`, no: 0, type: s.kind, name: s.name, period: "", ranges: s.ranges, state: promoState(s.ranges, today), mechanism: "", combine: "", codes: [...new Map(promo.articles.filter((a) => a.sheet === s.name && a.code).map((a) => [`${a.code}|${a.value}`, { code: a.code, value: a.value }])).values()], stores: [], otherStore: false, sheets: [sheetCard(s.name)] });
+    const card = sheetCard(s.name);
+    cards.push({ key: `s${s.name}`, no: 0, series: seriesOf([s.name, ...card.articles.map((a) => a.description)]), type: s.kind, name: s.name, period: "", ranges: s.ranges, state: promoState(s.ranges, today), mechanism: "", combine: "", codes: [...new Map(promo.articles.filter((a) => a.sheet === s.name && a.code).map((a) => [`${a.code}|${a.value}`, { code: a.code, value: a.value }])).values()], stores: [], otherStore: false, sheets: [card] });
   }
 
   return (
@@ -94,7 +96,7 @@ export default async function PromoSamsungPage({ searchParams }: { searchParams:
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{promo.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
         </details>
       )}
-      <PromoSamsungView cards={cards} store={store} today={today} hasSoh={!!soh} initialFilter={typeof q.f === "string" ? q.f : ""} initialSearch={typeof q.s === "string" ? q.s : ""} />
+      <PromoSamsungView cards={cards} store={store} today={today} hasSoh={!!soh} initialFilter={typeof q.f === "string" ? q.f : ""} initialCat={typeof q.c === "string" ? q.c : ""} initialSeries={typeof q.r === "string" ? q.r : ""} initialSearch={typeof q.s === "string" ? q.s : ""} />
     </div>
   );
 }
