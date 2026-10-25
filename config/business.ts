@@ -33,6 +33,8 @@ export interface IncentiveRules {
   perUnit: Record<string, number>;
   /** Qoala fee per policy by policy price: the highest tier whose `min` ≤ price applies. */
   qoalaTiers: Array<{ min: number; fee: number }>;
+  /** Online sales accounts (Digiplus.co.id, Mapemall): a flat rupiah per Apple device, no Qoala. */
+  online: { accounts: string[]; perUnit: number };
 }
 
 export const DEFAULT_RULES: BusinessRules = {
@@ -70,5 +72,6 @@ export const DEFAULT_RULES: BusinessRules = {
       { min: 1_500_000, fee: 60_000 }, // the "1,9–2 jt" tier: Tier 6 1.890.000, Diamond 1.970.000 (nothing is priced 1,5–1,85 jt)
       { min: 2_000_000, fee: 80_000 }, // 2 jt and up
     ],
+    online: { accounts: ["DIGIPLUS.CO.ID", "MAPEMALL"], perUnit: 5_000 },
   },
 };
