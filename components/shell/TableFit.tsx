@@ -7,7 +7,7 @@ import { useEffect } from "react";
  * scrolling:
  * 1. a table that fits is left alone;
  * 2. one that is too wide first tries a compact style (`sd-fit-compact`: smaller text/padding,
- *    wrapping headers);
+ *    wrapping headers), then a tighter one (`sd-fit-tight`);
  * 3. if it still doesn't fit, every row becomes a card (`sd-fit-stack`) where each value is shown
  *    under its column name (`data-label`, taken from the header — multi-row headers are joined,
  *    e.g. "Apple · iPhone").
@@ -55,14 +55,17 @@ function fit(wrap: HTMLElement) {
   wrap.dataset.fitTable = tableId(table);
   delete table.dataset.fitLabels; // rows may have been re-rendered: label new cells
   const y = window.scrollY;
-  wrap.classList.remove("sd-fit-compact", "sd-fit-stack");
+  wrap.classList.remove("sd-fit-compact", "sd-fit-tight", "sd-fit-stack");
   const done = () => {
     if (window.scrollY !== y) window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior });
   };
   if (table.scrollWidth <= wrap.clientWidth + 1) return done();
   wrap.classList.add("sd-fit-compact");
   if (table.scrollWidth <= wrap.clientWidth + 1) return done();
-  wrap.classList.remove("sd-fit-compact");
+  // a few columns of numbers still read best as a table: try a tighter one before turning rows into cards
+  wrap.classList.add("sd-fit-tight");
+  if (table.scrollWidth <= wrap.clientWidth + 1) return done();
+  wrap.classList.remove("sd-fit-compact", "sd-fit-tight");
   label(table);
   wrap.classList.add("sd-fit-stack", "sd-fit-measure");
   wrap.style.setProperty("--fit-col", `${columnWidth(table)}px`);
