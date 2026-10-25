@@ -1,4 +1,5 @@
 import { priceModels } from "./pricelist";
+import type { VariantPromo } from "./samsungPromo";
 import type { PriceKind, PriceList } from "@/types/pricelist";
 import type { SohItem } from "@/types/soh";
 
@@ -9,7 +10,7 @@ export interface SkuModel {
   model: string;
   /** Price List page key (`?t=`). */
   key: string;
-  variants: Array<{ label: string; name: string; normal: number; promo: number; credit?: number; status: string; note?: string }>;
+  variants: Array<{ label: string; name: string; normal: number; promo: number; credit?: number; status: string; note?: string; articles?: string[]; samsung?: VariantPromo }>;
 }
 
 export interface SkuPrices {
@@ -50,6 +51,7 @@ export function skuPrices(list: PriceList | null, soh: SohItem[]): SkuPrices {
                 ...(x.credit != null ? { credit: x.credit } : {}),
                 status: x.status,
                 ...(x.note ? { note: x.note } : {}),
+                ...(x.articles?.length ? { articles: x.articles } : {}),
               })),
             });
           }
