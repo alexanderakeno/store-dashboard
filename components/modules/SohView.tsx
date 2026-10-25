@@ -29,7 +29,7 @@ function SkuPricePopup({ prices, row, onClose, today }: { prices: SkuPrices; row
       id="sku-price"
       popover="auto"
       onToggle={(e) => (e as unknown as { newState: string }).newState === "closed" && onClose()}
-      className="m-auto w-[min(94vw,520px)] rounded-2xl border border-slate-200 bg-white p-4 text-left text-slate-900 shadow-2xl backdrop:bg-slate-900/40 sm:p-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+      className="m-auto max-h-[90dvh] w-[min(94vw,520px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-4 text-left text-slate-900 shadow-2xl backdrop:bg-slate-900/40 sm:p-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
     >
       {row && m && v ? (
         <>
