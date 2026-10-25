@@ -28,7 +28,7 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
   const p = await loadPage(searchParams);
   if (p.state !== "ok") return <PageStatus title="SOH" p={p} />;
   const manage = <Link href="/upload#soh" prefetch={false} className="sd-btn">Kelola SOH</Link>;
-  const intro = "SOH per kategori dari PDF Sales Dashboard V6 · Qty Sold dari Sales Person.";
+  const intro = "SOH per kategori dari PDF Sales Dashboard V6 / Excel Stock Position Report · Qty Sold dari Sales Person.";
 
   let soh: SohSnapshot | null;
   try {
@@ -51,7 +51,7 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
     return (
       <div className="sd-content">
         <PageIntro title="Stock On Hand" desc={intro} actions={manage} />
-        <Panel><EmptyBlock title="Data SOH">Belum ada SOH. Upload PDF Stock On Hand di Data Upload → Import SOH.</EmptyBlock></Panel>
+        <Panel><EmptyBlock title="Data SOH">Belum ada SOH. Upload PDF Stock On Hand atau Excel Stock Position Report di Data Upload → Import SOH.</EmptyBlock></Panel>
       </div>
     );
   }
@@ -69,7 +69,7 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
       <div className="sd-content">
         <PageIntro
           title="Stock On Hand"
-          desc={`Need fulfillment: device yang terjual ${range} tapi kosong di SOH ${soh.date ? dmy(soh.date) : "terakhir"}. Aksesoris tidak termasuk (tidak ada di PDF SOH).`}
+          desc={`Need fulfillment: device yang terjual ${range} tapi kosong di SOH ${soh.date ? dmy(soh.date) : "terakhir"}. Aksesoris tidak termasuk.`}
           actions={manage}
         />
         <Tabs kosong count={kosongCount} />
