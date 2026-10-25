@@ -24,7 +24,7 @@ function grid(grand = 9): unknown[][] {
   ];
 }
 
-test("soh excel: articles summed, zero stock dropped, categories, demo/merchandise skipped, date", () => {
+test("soh excel: every line = 1 unit (Qty 0 included), Qty > 1 kept, categories, demo/merchandise skipped, date", () => {
   const g = grid();
   assert.equal(isSohXlsx(g), true);
   assert.equal(isSohXlsx([["Brand", "SAP Article"]]), false);
@@ -32,16 +32,17 @@ test("soh excel: articles summed, zero stock dropped, categories, demo/merchandi
   assert.equal(r.date, "2026-10-25");
   assert.match(r.title, /Stock Position Report For 25-10-2026 · Digiplus Kota Kasablanka/);
   assert.deepEqual(r.categories, ["iPhone", "MacBook", "Samsung", "Aksesoris", "Elektronik"]);
+  assert.equal(r.items.find((x) => x.article === "APPMFYM4ID/A")!.qty, 2); // 2 lines with Qty 0 = 2 units
   const air = r.items.find((x) => x.article === "APPMG2L4ID/A")!;
   assert.deepEqual(air, { category: "iPhone", article: "APPMG2L4ID/A", description: "IPHONE AIR 256GB SPACE BLACK", qty: 2 });
-  assert.equal(r.items.some((x) => x.article === "APPMFYM4ID/A"), false); // qty 0 on every line
   assert.equal(r.items.some((x) => x.article.endsWith("-D")), false);
   assert.equal(r.items.find((x) => x.article === "AMNAPAADL65EUWH")!.category, "Aksesoris");
-  assert.equal(r.totals.iPhone, 2);
-  assert.equal(r.items.reduce((a, x) => a + x.qty, 0), 7);
+  assert.equal(r.items.find((x) => x.article === "AMNAPAADL65EUWH")!.qty, 2); // Qty 2 on one line
+  assert.equal(r.totals.iPhone, 4);
+  assert.equal(r.items.reduce((a, x) => a + x.qty, 0), 9);
   // grand total matches → only the "skipped" notes
   assert.equal(r.warnings.filter((w) => /Grand Total/.test(w)).length, 0);
-  assert.ok(r.warnings.some((w) => /unit demo tidak diimport \(1 qty\)/.test(w)));
+  assert.ok(r.warnings.some((w) => /unit demo tidak diimport \(1 unit\)/.test(w)));
   // SOH from Excel matches the Android Excel price list by article
   assert.equal(matchArticles("GALAXY WATCH8 40MM", ["SSUSMR930"], r.items)[0].color, "SILVER");
 });
