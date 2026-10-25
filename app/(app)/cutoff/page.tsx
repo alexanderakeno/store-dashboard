@@ -1,5 +1,6 @@
 import { appConfig } from "@/config/app";
 import { PageIntro, Panel } from "@/components/kit";
+import { MobileGrid } from "@/components/kit/MobileGrid";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { dayShort, dmy, num, rpf, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
@@ -43,7 +44,23 @@ export default async function CutoffPage({ searchParams }: { searchParams: Searc
         </Panel>
       </div>
       <Panel title="Kontrol harian MR vs SP">
-        <div className="sd-table-wrap">
+        <MobileGrid
+          className="!text-[12px]"
+          minFirst="2rem"
+          cols={[{ label: "Tgl" }, { label: "Merch. Report", w: "6.3rem" }, { label: "Sales Person", w: "6.3rem" }, { label: "", w: "1.6rem" }]}
+          rows={days.map((d) => {
+            const mr = mrByDay.get(d) ?? 0;
+            const sp = spByDay.get(d) ?? 0;
+            const diff = sp - mr;
+            const off = Math.abs(diff) > 1;
+            return {
+              key: d,
+              cells: [<span key="d" className="leading-tight"><b className="block">{Number(d.slice(8))}</b><span className="text-[10.5px] text-slate-500">{dayShort(d).split(" ")[0]}</span></span>, rpf(mr), rpf(sp), <b key="x" className={off ? "text-rose-600" : "text-emerald-600"}>{off ? "✕" : "✓"}</b>],
+              ...(off ? { sub: <span className="font-semibold text-rose-600">Selisih {rpf(diff)}</span> } : {}),
+            };
+          })}
+        />
+        <div className="sd-table-wrap max-sm:hidden">
           <table className="sd-table">
             <thead><tr><th>Tanggal</th><th className="n">Merchandise Report</th><th className="n">Sales Person</th><th className="n">Selisih</th></tr></thead>
             <tbody>
