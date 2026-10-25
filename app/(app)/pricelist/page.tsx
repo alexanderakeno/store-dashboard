@@ -68,7 +68,7 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
       for (const m of models)
         if (/samsung/i.test(m.brand))
           for (const v of m.variants) {
-            const vp = variantPromo(v.name, promo, today, appConfig().storeCode, excl);
+            const vp = variantPromo(v.name, promo, today, appConfig().storeCode, excl, v.articles ?? []);
             const etp = etpPromos(v.name, promo.programs, today, appConfig().storeCode);
             if (vp || etp.length) promos[v.id] = { ...(vp ?? { items: [], cash: { total: 0, kinds: [] }, pwp: 0, info: [] }), etp };
           }
