@@ -7,6 +7,8 @@ import { StockKosong } from "@/components/modules/StockKosong";
 import { appConfig } from "@/config/app";
 import { monthStart } from "@/lib/domain/period";
 import { sohRows } from "@/lib/domain/soh";
+import { skuPrices } from "@/lib/domain/skuPrice";
+import { getPriceList } from "@/lib/pricelist";
 import { fulfillmentText } from "@/lib/domain/stockKosong";
 import { dmy, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
@@ -79,6 +81,9 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
     );
   }
 
+  // price popup per SKU: optional — a failed price-list read must not hide the stock
+  const prices = skuPrices(await getPriceList().catch(() => null), soh.items);
+
   return (
     <div className="sd-content">
       <PageIntro
@@ -87,7 +92,7 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
         actions={manage}
       />
       <Tabs kosong={false} count={kosongCount} />
-      <SohView categories={soh.categories} rows={sohRows(soh.items, p.snap.lines, p.asOf)} initialCat={p.q.cat ?? ""} initialSearch={(p.q.s ?? "").trim()} />
+      <SohView categories={soh.categories} rows={sohRows(soh.items, p.snap.lines, p.asOf)} prices={prices} initialCat={p.q.cat ?? ""} initialSearch={(p.q.s ?? "").trim()} />
     </div>
   );
 }

@@ -1,11 +1,100 @@
 "use client";
 import { useDeferredValue, useMemo, useState } from "react";
-import { Search, X } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, Search, Tag, X } from "lucide-react";
 import { EmptyBlock, Panel } from "@/components/kit";
 import { LOW_DAYS, SLOW_DAYS, type SohRow } from "@/lib/domain/soh";
+import type { SkuPrices } from "@/lib/domain/skuPrice";
 
 const nf = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 const num = (n: number) => nf.format(n);
+const rp = (n: number) => `Rp ${nf.format(n)}`;
+const isEol = (s: string) => /EOL/i.test(s);
+
+/** Price popup of one SKU: its price-list model with every storage; the SKU's own variant is preselected. */
+function SkuPricePopup({ prices, row, onClose }: { prices: SkuPrices; row: SohRow | null; onClose: () => void }) {
+  const hit = row ? prices.byArticle[row.article.toUpperCase()] : undefined;
+  const m = hit ? prices.models[hit[0]] : undefined;
+  const [pick, setPick] = useState<{ article: string; vi: number } | null>(null);
+  const vi = pick && row && pick.article === row.article ? pick.vi : (hit?.[1] ?? 0);
+  const v = m?.variants[vi];
+  const save = v ? v.normal - v.promo : 0;
+  const base = v ? (v.credit ?? v.promo) : 0;
+  return (
+    <div
+      id="sku-price"
+      popover="auto"
+      onToggle={(e) => (e as unknown as { newState: string }).newState === "closed" && onClose()}
+      className="m-auto w-[min(94vw,520px)] rounded-2xl border border-slate-200 bg-white p-4 text-left text-slate-900 shadow-2xl backdrop:bg-slate-900/40 sm:p-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+    >
+      {row && m && v ? (
+        <>
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-extrabold tracking-wider text-blue-600 uppercase">{m.brand}</p>
+              <p className="text-lg leading-tight font-black">{m.model}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {row.description || row.article} · <span className="font-mono">{row.article}</span> · SOH <b className="text-slate-700 dark:text-slate-200">{num(row.qty)}</b>
+              </p>
+            </div>
+            <button type="button" popoverTarget="sku-price" popoverTargetAction="hide" className="sd-btn shrink-0" aria-label="Tutup">✕</button>
+          </div>
+
+          {m.variants.length > 1 && (
+            <div className="mb-3">
+              <p className="mb-1.5 text-[11px] font-extrabold tracking-wider text-slate-500 uppercase">Semua pilihan</p>
+              <div className="flex flex-wrap gap-1.5">
+                {m.variants.map((x, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setPick({ article: row.article, vi: i })}
+                    className={`rounded-xl border px-2.5 py-1.5 text-left text-xs font-bold ${i === vi ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200"}`}
+                  >
+                    {x.label}
+                    {i === hit![1] && <span className={`ml-1 text-[10px] ${i === vi ? "text-blue-100" : "text-blue-600"}`}>• SKU ini</span>}
+                    <span className={`block text-[11px] font-semibold ${i === vi ? "text-blue-100" : "text-slate-500"}`}>{rp(x.promo)}{isEol(x.status) ? " · EOL" : ""}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+            <p className="text-[11px] font-extrabold tracking-wider text-slate-500 uppercase">{save > 0 ? "Promo price" : "Harga"} · {v.label}</p>
+            <p className="text-2xl font-black text-blue-600">{rp(v.promo)}</p>
+            {save > 0 && (
+              <>
+                <p className="text-sm text-slate-400 line-through">{rp(v.normal)}</p>
+                <p className="text-sm font-bold text-emerald-600">Hemat {rp(save)} · {((save / v.normal) * 100).toLocaleString("id-ID", { maximumFractionDigits: 1 })}%</p>
+              </>
+            )}
+            {v.credit != null && v.credit !== v.promo && <p className="mt-1 text-sm font-bold text-slate-700 dark:text-slate-200">Promo Cicilan {rp(v.credit)}</p>}
+            {isEol(v.status) && <p className="mt-1"><span className="sd-badge amber">EOL</span></p>}
+            {v.note && <p className="mt-2 text-xs text-slate-500">{v.note}</p>}
+            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-dashed border-slate-300 pt-3 dark:border-slate-600">
+              {[12, 24].map((n) => (
+                <div key={n}>
+                  <p className="text-[11px] font-extrabold tracking-wider text-slate-500 uppercase">{n} bulan</p>
+                  <p className="font-black">{rp(Math.round(base / n))} <span className="text-xs font-semibold text-slate-400">/bln</span></p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-slate-400">Estimasi cicilan 0% dari {v.credit != null ? "harga promo cicilan" : "harga aktif"}.</p>
+          </div>
+
+          <Link
+            href={`/pricelist?${new URLSearchParams({ ...(m.kind === "apple" ? { k: "apple" } : {}), b: m.brand, t: m.key, semua: "1" })}`}
+            prefetch={false}
+            className="mt-3 flex items-center justify-center gap-1 text-sm font-semibold text-blue-600 hover:underline"
+          >
+            Buka di Price List <ChevronRight className="size-4" />
+          </Link>
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 const BALANCE: Record<SohRow["balance"], { cls: string; label: (r: SohRow) => string }> = {
   low: { cls: "red", label: (r) => `Stok tipis · ~${Math.max(1, Math.round(r.coverDays!))} hari` },
@@ -25,7 +114,19 @@ function syncUrl(patch: Record<string, string | null>) {
  * SOH table. All categories arrive in one server render; switching category and
  * searching happen here, so they never re-read Google Sheets.
  */
-export function SohView({ categories, rows, initialCat, initialSearch }: { categories: string[]; rows: SohRow[]; initialCat: string; initialSearch: string }) {
+export function SohView({ categories, rows, prices, initialCat, initialSearch }: { categories: string[]; rows: SohRow[]; prices?: SkuPrices; initialCat: string; initialSearch: string }) {
+  const [open, setOpen] = useState<SohRow | null>(null);
+  const priced = (r: SohRow) => !!prices?.byArticle[r.article.toUpperCase()];
+  const priceOf = (r: SohRow) => {
+    const h = prices?.byArticle[r.article.toUpperCase()];
+    return h ? prices!.models[h[0]].variants[h[1]].promo : null;
+  };
+  const show = (r: SohRow) => {
+    if (!priced(r)) return;
+    setOpen(r);
+    // open after the popup has rendered this SKU
+    requestAnimationFrame(() => (document.getElementById("sku-price") as (HTMLElement & { showPopover?: () => void }) | null)?.showPopover?.());
+  };
   const [cat, setCat] = useState(categories.includes(initialCat) ? initialCat : categories[0]);
   const [search, setSearch] = useState(initialSearch);
   const q = useDeferredValue(search);
@@ -80,12 +181,15 @@ export function SohView({ categories, rows, initialCat, initialSearch }: { categ
           {shown.length ? (
             <ul className="divide-y divide-slate-200 dark:divide-slate-700">
               {shown.map((r) => (
-                <li key={`${r.category}|${r.article}`} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                  <span className="min-w-0 text-[13px] leading-snug font-semibold text-slate-800 dark:text-slate-100">
-                    {r.description || r.article}
-                    <span className="mt-0.5 block font-mono text-[11px] font-medium text-slate-400">{r.article}{searching && <> · {r.category}</>}</span>
-                  </span>
-                  <b className={`shrink-0 text-base tabular-nums ${r.balance === "low" ? "text-rose-600" : "text-slate-950 dark:text-white"}`}>{num(r.qty)}</b>
+                <li key={`${r.category}|${r.article}`}>
+                  <button type="button" disabled={!priced(r)} onClick={() => show(r)} className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left ${priced(r) ? "active:bg-blue-50 dark:active:bg-blue-950/30" : "cursor-default"}`}>
+                    <span className="min-w-0 text-[13px] leading-snug font-semibold text-slate-800 dark:text-slate-100">
+                      {r.description || r.article}
+                      <span className="mt-0.5 block font-mono text-[11px] font-medium text-slate-400">{r.article}{searching && <> · {r.category}</>}</span>
+                      {priceOf(r) != null && <span className="mt-0.5 flex items-center gap-1 text-[11px] font-bold text-blue-600"><Tag className="size-3" /> {rp(priceOf(r)!)} ›</span>}
+                    </span>
+                    <b className={`shrink-0 text-base tabular-nums ${r.balance === "low" ? "text-rose-600" : "text-slate-950 dark:text-white"}`}>{num(r.qty)}</b>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -95,22 +199,25 @@ export function SohView({ categories, rows, initialCat, initialSearch }: { categ
           <div className="flex justify-between border-t border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-extrabold dark:border-slate-700 dark:bg-slate-800/60"><span>TOTAL</span><span className="tabular-nums">{num(totSoh)}</span></div>
         </div>
         <div className="sd-table-wrap max-sm:hidden"><table className="sd-table">
-          <thead><tr><th>Article</th><th>Description</th>{searching && <th>Kategori</th>}<th className="n">Qty SOH</th><th className="n">Qty Sold</th><th>Balance View</th></tr></thead>
+          <thead><tr><th>Article</th><th>Description</th>{searching && <th>Kategori</th>}<th className="n">Qty SOH</th><th className="n">Qty Sold</th><th>Balance View</th>{prices && <th className="n">Harga</th>}</tr></thead>
           <tbody>
             {shown.length ? shown.map((r) => (
-              <tr key={`${r.category}|${r.article}`}>
+              <tr key={`${r.category}|${r.article}`} onClick={() => show(r)} className={priced(r) ? "cursor-pointer hover:bg-blue-50/60 dark:hover:bg-blue-950/20" : undefined}>
                 <td className="font-mono text-xs">{r.article}</td>
-                <td>{r.description}</td>
+                <td>{priced(r) ? <span className="font-semibold text-blue-700 dark:text-blue-300">{r.description}</span> : r.description}</td>
                 {searching && <td>{r.category}</td>}
                 <td className="n">{num(r.qty)}</td>
                 <td className="n">{num(r.sold)}</td>
                 <td><span className={`sd-badge ${BALANCE[r.balance].cls}`}>{BALANCE[r.balance].label(r)}</span></td>
+                {prices && <td className="n whitespace-nowrap">{priceOf(r) != null ? <span className="font-semibold text-blue-600">{rp(priceOf(r)!)} ›</span> : <span className="text-slate-400">—</span>}</td>}
               </tr>
-            )) : <tr><td colSpan={searching ? 6 : 5}><EmptyBlock title="Tidak ada artikel" need={false}>{searching ? "Tidak ada Article/Description yang cocok." : "Kategori ini kosong."}</EmptyBlock></td></tr>}
+            )) : <tr><td colSpan={(searching ? 6 : 5) + (prices ? 1 : 0)}><EmptyBlock title="Tidak ada artikel" need={false}>{searching ? "Tidak ada Article/Description yang cocok." : "Kategori ini kosong."}</EmptyBlock></td></tr>}
           </tbody>
-          <tfoot><tr><td>TOTAL</td><td />{searching && <td />}<td className="n">{num(totSoh)}</td><td className="n">{num(totSold)}</td><td /></tr></tfoot>
+          <tfoot><tr><td>TOTAL</td><td />{searching && <td />}<td className="n">{num(totSoh)}</td><td className="n">{num(totSold)}</td><td />{prices && <td />}</tr></tfoot>
         </table></div>
+        {prices && prices.models.length > 0 && <p className="mt-2 text-xs text-slate-500">Ketuk SKU yang ada harganya untuk melihat price list-nya (semua pilihan storage).</p>}
       </Panel>
+      {prices && <SkuPricePopup prices={prices} row={open} onClose={() => setOpen(null)} />}
     </>
   );
 }
