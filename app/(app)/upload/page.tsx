@@ -58,7 +58,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
       name: "SOH / Stock On Hand",
       ok: !!soh,
       detail: soh
-        ? `Import PDF · update ${soh.date ? dmy(soh.date) : "–"} · ${soh.items.length} artikel · qty ${num(soh.items.reduce((a, i) => a + i.qty, 0))} · ${soh.categories.length} kategori`
+        ? `Import ${/stock position/i.test(soh.source ?? "") ? "Excel" : "PDF"} · update ${soh.date ? dmy(soh.date) : "–"} · ${soh.items.length} artikel · qty ${num(soh.items.reduce((a, i) => a + i.qty, 0))} · ${soh.categories.length} kategori`
         : sohError
           ? `Gagal membaca APP_SOH: ${sohError}`
           : "Belum ada — import PDF / Excel SOH di atas",
