@@ -8,7 +8,7 @@ import type { SohItem } from "@/types/soh";
 const MAX_ITEMS = 5_000;
 const str = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 
-/** Admin: replace the stored Stock On Hand with the articles parsed from the SOH PDF. */
+/** Admin: replace the stored Stock On Hand with the articles parsed from the SOH PDF or Stock Position Report Excel. */
 export async function POST(req: Request) {
   return handle(async () => {
     assertSameOrigin(req);

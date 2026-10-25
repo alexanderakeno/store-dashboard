@@ -69,7 +69,7 @@ async function SohCondition({ snap }: { snap: MonthSnapshot }) {
   if (!soh)
     return (
       <Panel title="Kondisi SOH">
-        <EmptyBlock title="Kondisi SOH">{soh === null ? "Belum ada SOH — upload PDF Stock On Hand di Data Upload." : "SOH gagal dibaca saat ini, coba Perbarui."}</EmptyBlock>
+        <EmptyBlock title="Kondisi SOH">{soh === null ? "Belum ada SOH — upload SOH (PDF / Excel) di Data Upload." : "SOH gagal dibaca saat ini, coba Perbarui."}</EmptyBlock>
       </Panel>
     );
   const { groups } = await stockKosong(soh, snap);
