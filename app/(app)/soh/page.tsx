@@ -5,10 +5,12 @@ import { PageStatus } from "@/components/layout/PageStatus";
 import { SohView } from "@/components/modules/SohView";
 import { StockKosong } from "@/components/modules/StockKosong";
 import { appConfig } from "@/config/app";
-import { monthStart } from "@/lib/domain/period";
+import { monthStart, todayIn } from "@/lib/domain/period";
 import { sohRows } from "@/lib/domain/soh";
 import { skuPrices } from "@/lib/domain/skuPrice";
 import { getPriceList } from "@/lib/pricelist";
+import { getSamsungPromo } from "@/lib/samsungPromo";
+import { etpPromos, exclusions, variantPromo } from "@/lib/domain/samsungPromo";
 import { fulfillmentText } from "@/lib/domain/stockKosong";
 import { dmy, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
@@ -83,6 +85,21 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
 
   // price popup per SKU: optional — a failed price-list read must not hide the stock
   const prices = skuPrices(await getPriceList().catch(() => null), soh.items);
+  // Samsung promos (PWP / trade in / EIP / ETP) per variant, same as the Price List page — optional
+  const today = todayIn(appConfig().timeZone);
+  const promo = prices.models.some((m) => m.kind === "android" && /samsung/i.test(m.brand)) ? await getSamsungPromo().catch(() => null) : null;
+  if (promo) {
+    const excl = exclusions(promo.programs);
+    for (const m of prices.models)
+      if (m.kind === "android" && /samsung/i.test(m.brand))
+        for (const v of m.variants) {
+          const vp = variantPromo(v.name, promo, today, appConfig().storeCode, excl, v.articles ?? []);
+          const etp = etpPromos(v.name, promo.programs, today, appConfig().storeCode);
+          if (vp || etp.length) v.samsung = { ...(vp ?? { items: [], cash: { total: 0, kinds: [] }, pwp: 0, info: [] }), etp };
+        }
+  }
+  // the client only needs the prices, not the article lists
+  for (const m of prices.models) for (const v of m.variants) delete v.articles;
 
   return (
     <div className="sd-content">
@@ -92,7 +109,7 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
         actions={manage}
       />
       <Tabs kosong={false} count={kosongCount} />
-      <SohView categories={soh.categories} rows={sohRows(soh.items, p.snap.lines, p.asOf)} prices={prices} initialCat={p.q.cat ?? ""} initialSearch={(p.q.s ?? "").trim()} initialType={p.q.j ?? ""} initialSeries={p.q.sr ?? ""} />
+      <SohView categories={soh.categories} rows={sohRows(soh.items, p.snap.lines, p.asOf)} prices={prices} today={today} initialCat={p.q.cat ?? ""} initialSearch={(p.q.s ?? "").trim()} initialType={p.q.j ?? ""} initialSeries={p.q.sr ?? ""} />
     </div>
   );
 }
