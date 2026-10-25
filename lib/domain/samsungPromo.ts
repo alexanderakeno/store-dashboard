@@ -107,14 +107,26 @@ export function bestCash(items: VariantPromoItem[], excl: Array<[PromoKind, Prom
   return best;
 }
 
+/** What follows the memory / size in an article description: "SAMSUNG Z FOLD 8 12/256GB CREAM" → "CREAM" ("—" when nothing). */
+function tailAfterVariant(desc: string): string {
+  const t = desc.toUpperCase().replace(/\s+/g, " ").trim().split(" ");
+  const k = t.findIndex((w) => /^\d+\/\d+(?:GB?|TB?)?$/.test(w) || /^\d+(?:GB|TB|MM)$/.test(w));
+  return k >= 0 && k < t.length - 1 ? t.slice(k + 1).join(" ") : "—";
+}
+
 /**
  * Samsung promos for one price-list row, matched like SOH stock: promo articles whose description
  * starts with the price-list name ("GALAXY S26 FE 8/256GB" ↔ "GALAXY S26 FE 8/256GB BLUEBERRY").
  * Finished promos and promos of other stores are left out.
  */
-export function variantPromo(name: string, promo: SamsungPromo, today: ISODate, store: string, excl = exclusions(promo.programs)): VariantPromo | null {
+export function variantPromo(name: string, promo: SamsungPromo, today: ISODate, store: string, excl = exclusions(promo.programs), articles: string[] = []): VariantPromo | null {
   const arts = promo.articles.filter((a) => forStore(a, store));
-  const matched = matchStock(name, arts.map((a) => ({ category: "", article: a.article, description: a.description, qty: 0 })));
+  const asStock = arts.map((a) => ({ category: "", article: a.article, description: a.description, qty: 0 }));
+  // Excel price list rows carry their SAP articles: match on the code (names differ — "GALAXY Z FOLD 8" vs SAP
+  // "SAMSUNG Z FOLD 8"); rows without articles (PDF) or without a code match fall back to the name
+  const own = new Set(articles.map((a) => a.toUpperCase()));
+  const byCode = own.size ? asStock.filter((a) => own.has(a.article.toUpperCase())).map((a) => ({ article: a.article, color: tailAfterVariant(a.description), qty: 0 })) : [];
+  const matched = byCode.length ? byCode : matchStock(name, asStock);
   const hit = new Set(matched.map((m) => m.article));
   const suffix = new Map(matched.map((m) => [m.article, m.color === "—" ? "" : m.color]));
   if (!hit.size) return null;
