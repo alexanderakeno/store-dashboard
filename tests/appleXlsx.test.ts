@@ -79,14 +79,30 @@ test("apple excel: price list shows only types in stock, colour from SOH descrip
   assert.equal(priceModels(r.items, "apple", soh).reduce((a, m) => a + m.variants.length, 0), 5);
 });
 
-test("apple pdf rows (no articles) are also hidden when out of stock", () => {
+test("apple pdf rows: model without stock hidden; model with stock shows every storage", () => {
   const pdf = [
     { kind: "apple" as const, brand: "iPhone", series: "iPhone 17 Pro", name: "iPhone 17 Pro 256GB", normal: 2, promo: 1, credit: 2, status: "ACTIVE" },
-    { kind: "apple" as const, brand: "iPhone", series: "iPhone 17 Pro", name: "iPhone 17 Pro 512GB", normal: 2, promo: 1, credit: 2, status: "ACTIVE" },
+    { kind: "apple" as const, brand: "iPhone", series: "iPhone 17 Pro", name: "iPhone 17 Pro 512GB", normal: 3, promo: 2, credit: 3, status: "ACTIVE" },
+    { kind: "apple" as const, brand: "iPhone", series: "iPhone 17 Pro Max", name: "iPhone 17 Pro Max 256GB", normal: 4, promo: 3, credit: 4, status: "ACTIVE" },
   ];
   const soh = [{ category: "iPhone", article: "APPMG8G4ID/A", description: "IPHONE 17 PRO 256GB SILVER", qty: 1 }] as SohItem[];
   const shown = priceModels(pdf, "apple", soh, { inStockOnly: true });
-  assert.deepEqual(shown.flatMap((m) => m.variants.map((v) => v.name)), ["iPhone 17 Pro 256GB"]);
-  assert.equal(shown[0].variants[0].variant, "256GB"); // label from the full group, not "Standar"
-  assert.equal(priceModels(pdf, "apple", soh).flatMap((m) => m.variants).length, 2);
+  assert.deepEqual(shown.map((m) => m.model), ["iPhone 17 Pro"]);
+  assert.deepEqual(shown[0].variants.map((v) => v.variant), ["256GB", "512GB"]);
+  assert.deepEqual(shown[0].variants[1].stock, []); // 512GB listed for its price, no stock
+  assert.equal(priceModels(pdf, "apple", soh).flatMap((m) => m.variants).length, 3);
+});
+
+test("always-shown models stay in the list without stock (iPad Pro M5)", async () => {
+  const { alwaysShown } = await import("@/lib/domain/pricelist");
+  const m5 = { kind: "apple" as const, brand: "iPad", series: "iPad Pro M5- 2026", name: "IPAD PRO 11-INCH M5 WI-FI 512GB", normal: 2, promo: 1, status: "ACTIVE", articles: ["APPX1"] };
+  const m4 = { ...m5, series: "iPad Pro M4 (11\") - 6th Gen", name: "IPAD PRO 11 WIFI 512GB", articles: ["APPX2"] };
+  const air = { ...m5, series: "iPad Air M4 (11\")", name: "IPAD AIR 11 WIFI 256GB M4", articles: ["APPX3"] };
+  const mbp = { ...m5, brand: "Mac", series: "MacBook Pro M5 2026", name: "MBP 14/M5/10C/10C GPU/16GB/512GB", articles: ["APPX4"] };
+  assert.equal(alwaysShown(m5, ["iPad Pro M5"]), true);
+  assert.equal(alwaysShown(m4, ["iPad Pro M5"]), false);
+  assert.equal(alwaysShown(air, ["iPad Pro M5"]), false);
+  assert.equal(alwaysShown(mbp, ["iPad Pro M5"]), false);
+  const shown = priceModels([m5, m4, air, mbp], "apple", [], { inStockOnly: true, alwaysShow: ["iPad Pro M5"] });
+  assert.deepEqual(shown.flatMap((m) => m.variants.map((v) => v.name)), ["IPAD PRO 11-INCH M5 WI-FI 512GB"]);
 });

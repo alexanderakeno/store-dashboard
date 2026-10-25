@@ -44,7 +44,13 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel, 
   const searching = terms.length > 0;
   const shown = searching ? models.filter((m) => terms.every((t) => `${m.brand} ${m.model} ${m.variants.map((v) => v.variant).join(" ")}`.toUpperCase().includes(t))) : models.filter((m) => m.brand === brand);
   const model = shown.find((m) => m.key === modelKey) ?? shown[0];
-  const variant = model?.variants.find((v) => v.id === variantId) ?? model?.variants.find((v) => !isEol(v.status)) ?? model?.variants[0];
+  // default: a variant in stock (models show every storage, also the empty ones), else the first active one
+  const inStock = (v: PriceModel["variants"][number]) => v.stock.some((s) => s.qty > 0);
+  const variant =
+    model?.variants.find((v) => v.id === variantId) ??
+    (hasSoh ? model?.variants.find((v) => inStock(v) && !isEol(v.status)) ?? model?.variants.find(inStock) : undefined) ??
+    model?.variants.find((v) => !isEol(v.status)) ??
+    model?.variants[0];
 
   // types grouped by series, as printed in the PDF
   const bySeries = useMemo(() => {
@@ -157,7 +163,7 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel, 
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500">Tidak ditemukan di data SOH.</p>
+                <p className="text-sm text-slate-500">Stok kosong — tidak ada di data SOH.</p>
               )}
             </div>
           )}

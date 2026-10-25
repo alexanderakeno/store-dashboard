@@ -78,7 +78,8 @@ test("android excel: price list shows only types with stock (by article code)", 
     { category: "Xiaomi", article: "XMI3", description: "REDMI 17 6/128GB BLACK", qty: 0 },
   ] as SohItem[];
   const inStock = priceModels(r.items, "android", soh, { inStockOnly: true });
-  assert.deepEqual(inStock.flatMap((m) => m.variants.map((v) => v.name)), ["REDMI 17 4/128GB"]);
+  // REDMI 17 has stock (4/128GB) → shown with ALL its storages; XIAOMI 15 and GALAXY A07 have none → hidden
+  assert.deepEqual(inStock.flatMap((m) => m.variants.map((v) => v.name)), ["REDMI 17 4/128GB", "REDMI 17 6/128GB"]);
   assert.deepEqual(inStock[0].variants[0].stock, [{ article: "XMI2", color: "BLUE", qty: 3 }]);
   // without the filter every type is listed
   assert.equal(priceModels(r.items, "android", soh).flatMap((m) => m.variants).length, 4);

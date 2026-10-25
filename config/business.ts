@@ -75,3 +75,9 @@ export const DEFAULT_RULES: BusinessRules = {
     online: { accounts: ["DIGIPLUS.CO.ID", "MAPEMALL"], perUnit: 5_000 },
   },
 };
+
+/**
+ * Price List: models always shown, even when the SOH has no stock (the list otherwise shows only what the store has).
+ * Matched on words, case-insensitive: "iPad Pro M5" = every row whose series/name has IPAD + PRO + M5.
+ */
+export const PRICE_LIST_ALWAYS_SHOW: string[] = ["iPad Pro M5"];

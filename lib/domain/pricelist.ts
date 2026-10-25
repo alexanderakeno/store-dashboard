@@ -116,9 +116,19 @@ export function matchAppleArticles(name: string, series: string, articles: strin
 
 /**
  * Apple: one model per Product label (PDF) / series title (Excel); the variant is the part of the name not shared by
- * the whole group. `inStockOnly` hides rows that have no stock.
+ * the whole group. `inStockOnly` hides models with no stock in any variant.
  */
-function appleModels(items: PriceItem[], sohItems: SohItem[], inStockOnly = false): PriceModel[] {
+/** True when every word of one `patterns` entry is in the row's series + name ("iPad Pro M5" ↔ "IPAD PRO 11-INCH M5 WI-FI 512GB"). */
+export function alwaysShown(it: Pick<PriceItem, "series" | "name">, patterns: string[]): boolean {
+  if (!patterns.length) return false;
+  const have = new Set(appleTokens(`${it.series} ${it.name}`).flatMap((t) => [t, ...t.split("-")]));
+  return patterns.some((p) => {
+    const want = appleTokens(p);
+    return want.length > 0 && want.every((t) => have.has(t));
+  });
+}
+
+function appleModels(items: PriceItem[], sohItems: SohItem[], inStockOnly = false, always: string[] = []): PriceModel[] {
   const map = new Map<string, PriceModel>();
   // only Apple articles can match; tokenise them once
   const soh = tokenizeSoh(sohItems.filter((s) => /\b(IPHONE|IPAD|MB[ANP]|MAC|IMAC|APPLE|AIRPODS)\b/i.test(s.description)));
@@ -145,10 +155,9 @@ function appleModels(items: PriceItem[], sohItems: SohItem[], inStockOnly = fals
       if (/^\d{2}$/.test(variant) && brand === "Apple Watch") variant += "mm";
       m.variants.push({ ...it, id: String(i), variant: variant || "Standar", stock });
     });
-    // Apple shows only what the store has: rows without stock are hidden (PDF rows match SOH by tokens, Excel by
-    // article). Labels are worked out on the full group first, so "256GB" stays "256GB" when it is the only one left.
-    if (inStockOnly) m.variants = m.variants.filter((v) => v.stock.some((x) => x.qty > 0));
-    if (!m.variants.length) continue;
+    // Apple shows only models the store has (PDF rows match SOH by tokens, Excel by article). A model with stock in
+    // any variant is shown with ALL its variants, so every storage's price can be quoted.
+    if (inStockOnly && !m.variants.some((v) => v.stock.some((x) => x.qty > 0) || alwaysShown(v, always))) continue;
     // same variant label twice (e.g. two straps of one watch) → tell them apart by the bracket note
     for (const v of m.variants) if (m.variants.filter((x) => x.variant === v.variant).length > 1 && v.note) v.variant = `${v.variant} · ${v.note}`;
     map.set(key, m);
@@ -172,26 +181,28 @@ export function matchArticles(name: string, articles: string[], soh: SohItem[]):
 }
 
 /**
- * `inStockOnly`: rows that list their articles (Android Excel) are shown only when SOH has stock for one of them.
- * Rows without articles (PDF imports) are always shown.
+ * `inStockOnly`: a model is shown only when SOH has stock for one of its variants — then with all its variants (every
+ * storage's price). Android rows without articles (PDF imports) always count as shown; Apple PDF rows match by tokens.
  */
-export function priceModels(stored: PriceItem[], kind: PriceKind, soh: SohItem[], opts: { inStockOnly?: boolean } = {}): PriceModel[] {
+export function priceModels(stored: PriceItem[], kind: PriceKind, soh: SohItem[], opts: { inStockOnly?: boolean; alwaysShow?: string[] } = {}): PriceModel[] {
   // fixes apply to data already in the sheet too: rows printed twice are shown once, "IPHONE 17E" reads "iPhone 17e"
   const items = stored.map((it) => (it.kind === "apple" ? { ...it, name: iphoneName(it.name) } : it));
   dedupeItems(items, []);
-  if (kind === "apple" && items.some((it) => it.kind === "apple" && (it.credit != null || it.articles?.length))) return appleModels(items, soh, opts.inStockOnly);
+  if (kind === "apple" && items.some((it) => it.kind === "apple" && (it.credit != null || it.articles?.length))) return appleModels(items, soh, opts.inStockOnly, opts.alwaysShow);
   const map = new Map<string, PriceModel>();
   items.forEach((it, i) => {
     if (it.kind !== kind) return;
     const stock = it.articles?.length ? matchArticles(it.name, it.articles, soh) : matchStock(it.name, soh);
-    if (opts.inStockOnly && it.articles?.length && !stock.some((x) => x.qty > 0)) return;
     const { model, variant } = modelOf(it.name);
     const key = `${it.brand}|${model}`;
     const m = map.get(key) ?? { key, brand: it.brand, series: it.series, model, variants: [] };
     m.variants.push({ ...it, id: String(i), variant: variant || "Standar", stock });
     map.set(key, m);
   });
-  return [...map.values()];
+  // Excel rows: a model is shown when one of its variants has stock (or is always shown) — then with ALL its variants
+  if (!opts.inStockOnly) return [...map.values()];
+  const keep = (v: PriceVariant) => !v.articles?.length || v.stock.some((x) => x.qty > 0) || alwaysShown(v, opts.alwaysShow ?? []);
+  return [...map.values()].filter((m) => m.variants.some(keep));
 }
 
 /** Qoala tier whose price range contains `price` ("Rp 3.000.001 - Rp 5.000.000"). */

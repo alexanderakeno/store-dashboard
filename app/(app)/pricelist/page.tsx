@@ -9,6 +9,7 @@ import { getPriceHistory, getPriceList } from "@/lib/pricelist";
 import { PriceHistory } from "@/components/modules/PriceHistory";
 import { groupUpdates } from "@/lib/domain/priceHistory";
 import { appConfig } from "@/config/app";
+import { PRICE_LIST_ALWAYS_SHOW } from "@/config/business";
 import { getSoh } from "@/lib/soh";
 import { getSamsungPromo } from "@/lib/samsungPromo";
 import { etpPromos, exclusions, variantPromo, type VariantPromo } from "@/lib/domain/samsungPromo";
@@ -57,7 +58,7 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
   // Apple: always (PDF or Excel import); Android: Excel rows (with articles) — Android PDF rows have no reliable match
   const all = q.semua === "1";
   const byArticle = kind === "apple" ? !!list?.items.some((x) => x.kind === "apple") : !!list?.items.some((x) => x.kind === kind && x.articles?.length);
-  const models = list ? priceModels(list.items, kind, soh?.items ?? [], { inStockOnly: !!soh && byArticle && !all }) : [];
+  const models = list ? priceModels(list.items, kind, soh?.items ?? [], { inStockOnly: !!soh && byArticle && !all, alwaysShow: PRICE_LIST_ALWAYS_SHOW }) : [];
   const hidden = byArticle && soh && !all ? (list ? priceModels(list.items, kind, soh.items).reduce((a, m) => a + m.variants.length, 0) : 0) - models.reduce((a, m) => a + m.variants.length, 0) : 0;
   // Samsung promos (PWP / trade in / EIP) per price-list row — optional, never blocks the prices
   const promos: Record<string, VariantPromo> = {};
