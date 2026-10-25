@@ -78,3 +78,15 @@ test("apple excel: price list shows only types in stock, colour from SOH descrip
   // without the filter every type is listed (Apple path, not the Android one)
   assert.equal(priceModels(r.items, "apple", soh).reduce((a, m) => a + m.variants.length, 0), 5);
 });
+
+test("apple pdf rows (no articles) are also hidden when out of stock", () => {
+  const pdf = [
+    { kind: "apple" as const, brand: "iPhone", series: "iPhone 17 Pro", name: "iPhone 17 Pro 256GB", normal: 2, promo: 1, credit: 2, status: "ACTIVE" },
+    { kind: "apple" as const, brand: "iPhone", series: "iPhone 17 Pro", name: "iPhone 17 Pro 512GB", normal: 2, promo: 1, credit: 2, status: "ACTIVE" },
+  ];
+  const soh = [{ category: "iPhone", article: "APPMG8G4ID/A", description: "IPHONE 17 PRO 256GB SILVER", qty: 1 }] as SohItem[];
+  const shown = priceModels(pdf, "apple", soh, { inStockOnly: true });
+  assert.deepEqual(shown.flatMap((m) => m.variants.map((v) => v.name)), ["iPhone 17 Pro 256GB"]);
+  assert.equal(shown[0].variants[0].variant, "256GB"); // label from the full group, not "Standar"
+  assert.equal(priceModels(pdf, "apple", soh).flatMap((m) => m.variants).length, 2);
+});

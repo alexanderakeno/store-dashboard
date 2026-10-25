@@ -116,7 +116,7 @@ export function matchAppleArticles(name: string, series: string, articles: strin
 
 /**
  * Apple: one model per Product label (PDF) / series title (Excel); the variant is the part of the name not shared by
- * the whole group. `inStockOnly` hides Excel rows (with articles) that have no stock.
+ * the whole group. `inStockOnly` hides rows that have no stock.
  */
 function appleModels(items: PriceItem[], sohItems: SohItem[], inStockOnly = false): PriceModel[] {
   const map = new Map<string, PriceModel>();
@@ -126,7 +126,6 @@ function appleModels(items: PriceItem[], sohItems: SohItem[], inStockOnly = fals
   items.forEach((it, i) => {
     if (it.kind !== "apple") return;
     const stock = it.articles?.length ? matchAppleArticles(it.name, it.series, it.articles, sohItems) : matchAppleStock(it.name, it.series, soh);
-    if (inStockOnly && it.articles?.length && !stock.some((x) => x.qty > 0)) return;
     const key = `${it.brand}|${it.series}`;
     rows.set(key, [...(rows.get(key) ?? []), { it, i, stock }]);
   });
@@ -146,6 +145,10 @@ function appleModels(items: PriceItem[], sohItems: SohItem[], inStockOnly = fals
       if (/^\d{2}$/.test(variant) && brand === "Apple Watch") variant += "mm";
       m.variants.push({ ...it, id: String(i), variant: variant || "Standar", stock });
     });
+    // Apple shows only what the store has: rows without stock are hidden (PDF rows match SOH by tokens, Excel by
+    // article). Labels are worked out on the full group first, so "256GB" stays "256GB" when it is the only one left.
+    if (inStockOnly) m.variants = m.variants.filter((v) => v.stock.some((x) => x.qty > 0));
+    if (!m.variants.length) continue;
     // same variant label twice (e.g. two straps of one watch) → tell them apart by the bracket note
     for (const v of m.variants) if (m.variants.filter((x) => x.variant === v.variant).length > 1 && v.note) v.variant = `${v.variant} · ${v.note}`;
     map.set(key, m);

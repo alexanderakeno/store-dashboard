@@ -53,9 +53,10 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
     soh = await getSoh();
   } catch {}
 
-  // Excel rows (with articles): only types in stock, unless "Tampilkan semua" is on; needs a readable SOH
+  // only types in stock, unless "Tampilkan semua" is on; needs a readable SOH.
+  // Apple: always (PDF or Excel import); Android: Excel rows (with articles) — Android PDF rows have no reliable match
   const all = q.semua === "1";
-  const byArticle = !!list?.items.some((x) => x.kind === kind && x.articles?.length);
+  const byArticle = kind === "apple" ? !!list?.items.some((x) => x.kind === "apple") : !!list?.items.some((x) => x.kind === kind && x.articles?.length);
   const models = list ? priceModels(list.items, kind, soh?.items ?? [], { inStockOnly: !!soh && byArticle && !all }) : [];
   const hidden = byArticle && soh && !all ? (list ? priceModels(list.items, kind, soh.items).reduce((a, m) => a + m.variants.length, 0) : 0) - models.reduce((a, m) => a + m.variants.length, 0) : 0;
   // Samsung promos (PWP / trade in / EIP) per price-list row — optional, never blocks the prices
