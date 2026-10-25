@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Activity, ChevronDown, Gauge, TrendingUp } from "lucide-react";
 import { appConfig } from "@/config/app";
 import { Panel, PageIntro, Progress } from "@/components/kit";
+import { MobileGrid } from "@/components/kit/MobileGrid";
 import { CopyButton, ParamDate, WhatsAppButton } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, linesByStaff, lobQty, vasSplit } from "@/lib/domain/extra";
@@ -10,7 +11,7 @@ import { displayName } from "@/lib/domain/normalize";
 import { daysInMonth, monthEnd, monthStart } from "@/lib/domain/period";
 import { shareText } from "@/lib/domain/share";
 import { dayDetail, homeView } from "@/lib/domain/views";
-import { dateLong, dec, dmy, num, pct, rpf, timeAgo } from "@/lib/format";
+import { dateLong, dec, dmy, num, pct, rpc, rpf, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import type { SalesLine } from "@/types/domain";
 
@@ -159,38 +160,52 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
 
       <Panel title="Share Report" desc="Pilih report yang ingin dibagikan ke WhatsApp." right={<div className="flex flex-wrap gap-2"><CopyButton text={text} label="Salin Teks" /><WhatsAppButton text={text} label="Share WhatsApp ›" /></div>} />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {cards.map((c) => {
           const a = c.target ? (c.actual / c.target) * 100 : null;
           const Icon = c.icon;
           return (
-            <article key={c.label} className="sd-block-card relative p-5" data-tone={c.tone}>
+            <article key={c.label} className="sd-block-card relative p-3.5 sm:p-5" data-tone={c.tone}>
               <CardPeople id={`card-${c.kind}`} title={c.kind === "sales" ? "Achievement" : c.kind} kind={c.kind} people={peopleFor(c.kind)} />
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-bold text-slate-500">{c.label}</p>
-                <span className={`grid size-9 place-items-center rounded-[14px] ${c.ic}`}><Icon className="size-4" /></span>
+                <p className="text-[13px] leading-tight font-bold text-slate-500 sm:text-sm">{c.label}</p>
+                <span className={`grid size-8 shrink-0 place-items-center rounded-[12px] sm:size-9 sm:rounded-[14px] ${c.ic}`}><Icon className="size-4" /></span>
               </div>
-              <p className="mt-4 leading-tight font-black text-slate-950"><span className="block text-xl sm:text-2xl xl:text-xl 2xl:text-2xl">{rpf(c.actual)}</span><span className="block text-sm font-bold text-slate-500">dari target {rpf(c.target)}</span></p>
+              <p className="mt-3 leading-tight font-black text-slate-950 sm:mt-4"><span className="sd-num block sm:text-2xl xl:text-xl 2xl:text-2xl">{rpf(c.actual)}</span><span className="block text-[11px] font-bold text-slate-500 sm:text-sm">dari target {rpf(c.target)}</span></p>
               <p className="mt-3 text-xs font-bold text-slate-500">{pct(a ?? 0, 0)}</p>
               <div className="mt-2"><Progress value={a} color={c.color} label={c.label} /></div>
-              <p className="mt-2 text-xs font-semibold text-blue-600">Rincian per salesperson ›</p>
+              <p className="mt-2 text-[11px] font-semibold text-blue-600 sm:text-xs">Rincian per salesperson ›</p>
             </article>
           );
         })}
-        <article className="sd-block-card relative p-5" data-tone="amber">
+        <article className="sd-block-card relative p-3.5 sm:p-5" data-tone="amber">
           <CardPeople id="card-upt" title="UPT" kind="upt" people={peopleFor("upt")} />
           <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-bold text-slate-500">UPT</p>
-            <span className="grid size-9 place-items-center rounded-[14px] bg-amber-50 text-amber-600"><Gauge className="size-4" /></span>
+            <p className="text-[13px] font-bold text-slate-500 sm:text-sm">UPT</p>
+            <span className="grid size-8 shrink-0 place-items-center rounded-[12px] bg-amber-50 text-amber-600 sm:size-9 sm:rounded-[14px]"><Gauge className="size-4" /></span>
           </div>
-          <p className="mt-4 text-2xl font-black text-slate-950">{dec(t.upt, 1).replace(",", ".")}</p>
-          <p className="mt-3 text-xs font-bold text-slate-500">{num(t.qty)} unit / {num(t.invoices)} transaksi</p>
-          <p className="mt-2 text-xs font-semibold text-blue-600">Rincian per salesperson ›</p>
+          <p className="mt-3 text-xl font-black text-slate-950 sm:mt-4 sm:text-2xl">{dec(t.upt, 1).replace(",", ".")}</p>
+          <p className="mt-2 text-[11px] font-bold text-slate-500 sm:mt-3 sm:text-xs">{num(t.qty)} unit / {num(t.invoices)} transaksi</p>
+          <p className="mt-2 text-[11px] font-semibold text-blue-600 sm:text-xs">Rincian per salesperson ›</p>
         </article>
       </div>
 
       <Panel title="Daily Sales Staff" desc={`Staff dengan target atau transaksi pada ${dateLong(day)}. Target harian = target bulanan staff ÷ ${dim} hari.`}>
-        <div className="sd-table-wrap">
+        <MobileGrid
+          cols={[{ label: "Nama" }, { label: "Achievement", w: "6.4rem" }, { label: "%", w: "2.8rem" }, { label: "UPT", w: "2.2rem" }]}
+          rows={people.map((r) => ({
+            key: r.key,
+            cells: [
+              <span key="n"><b className="block leading-tight text-slate-950 dark:text-white">{displayName(r.name)}</b><span className="text-[11px] text-slate-400">{r.isChannel ? "Online" : r.nik ?? "—"}{r.totals.lines ? "" : " · belum produktif"}</span></span>,
+              <b key="a">{rpf(r.totals.sales)}</b>,
+              <span key="p" className={r.target && r.totals.sales >= r.target ? "font-bold text-emerald-600" : "font-bold"}>{r.target ? pct((r.totals.sales / r.target) * 100, 0) : "—"}</span>,
+              dec(r.totals.upt ?? 0, 1).replace(",", "."),
+            ],
+            sub: <>Target {rpc(r.target)} · ACC {rpc(r.totals.byGroup.ACC)} · VAS {rpc(r.totals.byGroup.VAS)} · ATV {rpc(r.totals.atv ?? 0)}</>,
+          }))}
+          foot={["TOTAL", rpf(sum.sales), pct(sum.target ? (sum.sales / sum.target) * 100 : 0, 0), dec(t.upt ?? 0, 1).replace(",", ".")]}
+        />
+        <div className="sd-table-wrap max-sm:hidden">
           <table className="sd-table">
             <thead><tr><th>Nama</th><th>Status</th><th className="n">Target</th><th className="n">ACC</th><th className="n">VAS</th><th className="n">Achievement</th><th className="n">%</th><th className="n">UPT</th><th className="n">ATV</th></tr></thead>
             <tbody>
@@ -217,7 +232,15 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
       </Panel>
 
       <Panel title="LOB Apple Daily" desc="iPhone, MacBook, iPad, dan Watch = device Apple • AirPods = accessories Apple">
-        <div className="sd-table-wrap">
+        <MobileGrid
+          cols={[{ label: "Nama" }, ...(["iPh", "Mac", "iPad", "AW", "AirP"] as const).map((l) => ({ label: l, w: "2.3rem" }))]}
+          rows={people.map((r) => {
+            const q = lobQty(byKey.get(r.key) ?? []);
+            return { key: r.key, cells: [<b key="n" className="leading-tight">{displayName(r.name)}</b>, ...APPLE_LOBS.map((k) => <span key={k} className={q[k] ? "font-bold" : "text-slate-400"}>{num(q[k])}</span>)] };
+          })}
+          foot={["TOTAL", ...APPLE_LOBS.map((k) => num(lobQty(dayLines)[k]))]}
+        />
+        <div className="sd-table-wrap max-sm:hidden">
           <table className="sd-table">
             <thead><tr><th>Nama</th><th className="n">iPhone (Device)</th><th className="n">MacBook (Device)</th><th className="n">iPad (Device)</th><th className="n">Apple Watch (Device)</th><th className="n">AirPods (Accessories)</th></tr></thead>
             <tbody>
@@ -234,7 +257,23 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
       </Panel>
 
       <Panel title="VAS Daily" desc="Sumber Sales Person (brand Qoala / Telkomsel / XL / Indosat).">
-        <div className="sd-table-wrap">
+        <MobileGrid
+          minFirst="4.4rem"
+          cols={[{ label: "Nama" }, ...VAS_PROVIDERS.map((v) => ({ label: ({ Qoala: "Qoala", Telkomsel: "Tsel", XL: "XL", Indosat: "Isat" } as Record<string, string>)[v] ?? v, w: "2.9rem" }))]}
+          rows={people.map((r) => {
+            const v = vasSplit(byKey.get(r.key) ?? []);
+            return {
+              key: r.key,
+              cells: [
+                <b key="n" className="leading-tight">{displayName(r.name)}</b>,
+                ...VAS_PROVIDERS.map((k) => (v[k].qty || v[k].value ? <span key={k} className="leading-tight"><b className="block">{num(v[k].qty)}</b><span className="text-[10.5px] text-slate-500">{rpc(v[k].value)}</span></span> : <span key={k} className="text-slate-400">0</span>)),
+              ],
+            };
+          })}
+          foot={["TOTAL", ...VAS_PROVIDERS.map((k) => { const v = vasSplit(dayLines)[k]; return <span key={k} className="leading-tight"><span className="block">{num(v.qty)}</span><span className="text-[10.5px]">{rpc(v.value)}</span></span>; })]}
+        />
+        <p className="mt-1.5 text-[11px] text-slate-500 sm:hidden">Angka atas = qty, bawah = value.</p>
+        <div className="sd-table-wrap max-sm:hidden">
           <table className="sd-table">
             <thead><tr><th>Nama</th>{VAS_PROVIDERS.map((v) => <th key={v} className="n">{v} Qty / Value</th>)}</tr></thead>
             <tbody>
