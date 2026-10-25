@@ -61,6 +61,12 @@ export function validateRuleOverrides(input: unknown): Result {
           if (!ok) return { ok: false, error: 'incentive.qoalaTiers: daftar { "min": 1000000, "fee": 40000 }' };
           inc.qoalaTiers = (v.qoalaTiers as Array<{ min: number; fee: number }>).map((x) => ({ min: x.min, fee: x.fee }));
         }
+        if (v.online !== undefined) {
+          const o = v.online;
+          const ok = isObj(o) && (o.accounts === undefined || (Array.isArray(o.accounts) && o.accounts.every((x) => typeof x === "string"))) && (o.perUnit === undefined || (typeof o.perUnit === "number" && o.perUnit >= 0 && o.perUnit <= 10_000_000));
+          if (!ok) return { ok: false, error: 'incentive.online: { "accounts": ["DIGIPLUS.CO.ID", "MAPEMALL"], "perUnit": 5000 }' };
+          inc.online = { ...(o.accounts !== undefined ? { accounts: o.accounts as string[] } : {}), ...(o.perUnit !== undefined ? { perUnit: o.perUnit as number } : {}) } as BusinessRules["incentive"]["online"];
+        }
         out.incentive = inc as BusinessRules["incentive"];
         break;
       }
