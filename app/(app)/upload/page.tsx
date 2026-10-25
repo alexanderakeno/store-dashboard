@@ -143,7 +143,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
         </Panel>
       </div>
       <div id="pricelist-apple" className="scroll-mt-20">
-        <Panel title="Import Price List Apple" desc="Upload 2 PDF price list Apple sekaligus → Dashboard › Price List › Apple." right={priceCount("apple") ? <Link href="/pricelist?k=apple" prefetch={false} className="sd-btn">Lihat Apple</Link> : undefined}>
+        <Panel title="Import Price List Apple" desc="Upload 2 PDF price list Apple sekaligus, atau 1 file Excel price list DIGIMAP → Dashboard › Price List › Apple." right={priceCount("apple") ? <Link href="/pricelist?k=apple" prefetch={false} className="sd-btn">Lihat Apple</Link> : undefined}>
           {isAdmin ? <ApplePriceListImportForm current={price?.dates.apple ?? null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
         </Panel>
       </div>
