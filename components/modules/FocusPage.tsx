@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { appConfig } from "@/config/app";
 import { EmptyBlock, NeedData, PageIntro, Panel, Progress, achColor } from "@/components/kit";
+import { MobileGrid } from "@/components/kit/MobileGrid";
 import { ParamDate, ParamSelect, PrintButton, WhatsAppButton } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { breakdown } from "@/lib/domain/kpi";
@@ -9,7 +10,7 @@ import { VAS_PROVIDERS, clampRange, linesByStaff } from "@/lib/domain/extra";
 import { daysInMonth, eachDay, monthStart, weeksOfMonth } from "@/lib/domain/period";
 import { focusKey } from "@/lib/domain/views";
 import { staffItemTarget } from "@/lib/domain/targets";
-import { dateShort, monthLabel, num, pct, rpf } from "@/lib/format";
+import { dateShort, monthLabel, num, pct, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 import type { Group } from "@/types/domain";
@@ -164,7 +165,15 @@ export async function FocusPage({ searchParams, path, group: baseGroup, title, d
             {group === "Apple" && sel.key === "AirPods" && <p className="mt-3 text-xs text-slate-500">AirPods tampil di LOB Apple, nilainya dihitung di ACC.</p>}
           </Panel>
           <Panel title="Kontribusi Staff" desc={`${sel.key} per staff pada periode ini.`}>
-            <div className="sd-table-wrap">
+            <MobileGrid
+              cols={[{ label: "Staff" }, { label: "Target", w: "4.1rem" }, { label: "Value", w: "4.1rem" }, { label: "Qty", w: "1.6rem" }, { label: "%", w: "2.4rem" }]}
+              rows={perStaff.map((r) => {
+                const t = staffTargetCol(r.name);
+                return { key: r.k, cells: [<b key="n" className="leading-tight">{r.name}</b>, t ? rpc(t) : "—", <b key="v">{rpc(r.value)}</b>, num(r.qty), <b key="p">{t ? pct((r.value / t) * 100, 0) : "—"}</b>] };
+              })}
+              empty="Belum ada penjualan."
+            />
+            <div className="sd-table-wrap max-sm:hidden">
               <table className="sd-table">
                 <thead><tr><th>Staff</th><th className="n">Target</th><th className="n">Value</th><th className="n">Qty</th><th className="n">%</th></tr></thead>
                 <tbody>
@@ -181,7 +190,21 @@ export async function FocusPage({ searchParams, path, group: baseGroup, title, d
       )}
 
       <Panel title={`Semua ${itemLabel}`}>
-        <div className="sd-table-wrap">
+        <MobileGrid
+          cols={[{ label: itemLabel }, { label: "Target", w: "4.1rem" }, { label: "Actual", w: "4.1rem" }, { label: "Qty", w: "1.6rem" }, { label: "Ach", w: "2.4rem" }]}
+          rows={items.map((x) => ({
+            key: x.key,
+            cells: [<b key="n" className="leading-tight">{x.key}</b>, x.target ? rpc(x.target) : "—", <b key="a">{rpc(x.actual)}</b>, num(x.qty), <b key="p">{x.ach == null ? "—" : pct(x.ach, 0)}</b>],
+            sub: (
+              <div className="mt-1 flex items-center gap-2">
+                <div className="flex-1"><Progress value={x.ach} tick={tg} color={achColor(x.ach, tg)} label={x.key} /></div>
+                {x.target ? <span className={x.actual - x.target >= 0 ? "text-emerald-600" : "text-rose-600"}>Gap {rpc(x.actual - x.target)}</span> : null}
+                <span className={`sd-badge ${statusTone[statusOf(x.ach, tg)]} !px-1.5 !py-0 !text-[10px]`}>{statusOf(x.ach, tg)}</span>
+              </div>
+            ),
+          }))}
+        />
+        <div className="sd-table-wrap max-sm:hidden">
           <table className="sd-table">
             <thead><tr><th>{itemLabel}</th><th className="n">Target</th><th className="n">Actual</th><th className="n">Qty</th><th style={{ minWidth: 160 }}>Ach</th><th className="n">Gap</th><th>Status</th></tr></thead>
             <tbody>
