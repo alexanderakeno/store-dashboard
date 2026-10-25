@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { NeedData, Panel, Trend, numClass } from "@/components/kit";
+import { MobileGrid } from "@/components/kit/MobileGrid";
 import { LineChart, ParamDate, ParamSelect } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, clampRange, dayRows, deviceOf, linesIn, lobQty, rangeConversion, typeQty } from "@/lib/domain/extra";
 import { totals } from "@/lib/domain/kpi";
 import { daysInMonth, eachDay, monthStart, prevMonth } from "@/lib/domain/period";
-import { dateShort, dayName, dec, monthLabel, num, pct, rpf } from "@/lib/format";
+import { dateShort, dayName, dec, monthLabel, num, pct, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 import { getMonthSnapshot } from "@/lib/services/dashboard";
@@ -125,7 +126,21 @@ export default async function DailySummaryPage({ searchParams }: { searchParams:
       </Panel>
 
       <Panel title="Daily Performance" desc="Klik tanggal untuk membuka detail breakdown harian.">
-        <div className="sd-table-wrap">
+        <MobileGrid
+          cols={[{ label: "Tanggal" }, { label: "Total Sales", w: "6.4rem" }, { label: "Inv", w: "1.9rem" }, { label: "UPT", w: "2rem" }, { label: "CVR", w: "2.9rem" }]}
+          rows={rows.map((r) => ({
+            key: r.date,
+            cells: [
+              <Link key="d" className="leading-tight text-blue-600" href={withQuery("/sales", { m: p.month }, { d: r.date })}><b className="block">{Number(r.date.slice(8))} {monthLabel(p.month).slice(0, 3)}</b><span className="text-[11px]">{dayName(r.date).slice(0, 3)} ›</span></Link>,
+              <b key="s">{rpf(r.totals.sales)}</b>,
+              num(r.totals.invoices),
+              dec(r.totals.upt, 1).replace(",", "."),
+              r.cvr == null ? "—" : pct(r.cvr),
+            ],
+            sub: <>Device {rpc(r.device)} · ACC {rpc(r.acc)} · VAS {rpc(r.vas)} · Qty {num(r.totals.qty)} · ATV {rpc(r.totals.atv)}</>,
+          }))}
+        />
+        <div className="sd-table-wrap max-sm:hidden">
           <table className="sd-table">
             <thead>
               <tr>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { appConfig } from "@/config/app";
 import { PageIntro, Panel } from "@/components/kit";
+import { MobileGrid } from "@/components/kit/MobileGrid";
 import { ParamDate, ParamSelect, PrintButton } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, androidBrands, clampRange, linesIn, lobQty, lobValue, perfCards, staffStats, timeGonePct, vasSplit } from "@/lib/domain/extra";
@@ -57,7 +58,11 @@ export default async function MadingPage({ searchParams }: { searchParams: Searc
       {range && <p className="-mt-2 text-xs text-slate-500">Kartu di atas = MTD s/d {to}; tabel di bawah mengikuti range tanggal.</p>}
       <div className="grid gap-5 xl:grid-cols-2">
         <Panel title="Pencapaian Staff • Value">
-          <div className="sd-table-wrap"><table className="sd-table">
+          <MobileGrid
+            cols={[{ label: "Staff" }, { label: "Target", w: "6.2rem" }, { label: "Value", w: "6.2rem" }, { label: "%", w: "2.4rem" }]}
+            rows={staff.map((r) => ({ key: r.key, cells: [<b key="n" className="leading-tight">{r.name}</b>, rpf(r.target), <b key="v">{rpf(r.totals.sales)}</b>, <b key="p">{pct(r.achievementPct ?? 0, 0)}</b>] }))}
+          />
+          <div className="sd-table-wrap max-sm:hidden"><table className="sd-table">
             <thead><tr><th>Staff</th><th className="n">Target</th><th className="n">Value</th><th className="n">%</th></tr></thead>
             <tbody>{staff.map((r) => <tr key={r.key}><td className="font-bold">{r.name}</td><td className="n">{rpf(r.target)}</td><td className="n">{rpf(r.totals.sales)}</td><td className="n">{pct(r.achievementPct ?? 0, 0)}</td></tr>)}</tbody>
           </table></div>
