@@ -40,7 +40,7 @@ export function mergeRules(o: Partial<BusinessRules>): BusinessRules {
     ...DEFAULT_RULES,
     ...o,
     pointCaps: { ...DEFAULT_RULES.pointCaps, ...(o.pointCaps ?? {}) },
-    incentive: { perUnit: inc.perUnit ?? DEFAULT_RULES.incentive.perUnit, qoalaTiers: inc.qoalaTiers ?? DEFAULT_RULES.incentive.qoalaTiers },
+    incentive: { perUnit: inc.perUnit ?? DEFAULT_RULES.incentive.perUnit, qoalaTiers: inc.qoalaTiers ?? DEFAULT_RULES.incentive.qoalaTiers, online: { ...DEFAULT_RULES.incentive.online, ...(inc.online ?? {}) } },
   };
 }
 
