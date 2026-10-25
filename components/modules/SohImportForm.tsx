@@ -146,7 +146,7 @@ export function SohImportForm({ current }: { current: string | null }) {
                 {parsed ? ` · ${parsed.items.length} artikel · qty ${num(totalQty)}${parsed.date ? ` · update ${dmy(parsed.date)}` : ""}` : ""}
               </span>
             )}
-            {bad ? <span className="block text-xs font-semibold text-rose-700 dark:text-rose-300">{msg}</span> : <span className="block text-xs text-slate-400">{fmt === "pdf" ? "Kolom per kategori: Article · Description · Qty" : "Brand · Product Group · Category · Article / Description · Qty (qty dijumlah per artikel)"}</span>}
+            {bad ? <span className="block text-xs font-semibold text-rose-700 dark:text-rose-300">{msg}</span> : <span className="block text-xs text-slate-400">{fmt === "pdf" ? "Kolom per kategori: Article · Description · Qty" : "Brand · Product Group · Category · Article / Description · 1 baris = 1 unit (nama berulang = +1; Qty > 1 tetap dipakai)"}</span>}
           </span>
         </label>
         {file && !busy && (
