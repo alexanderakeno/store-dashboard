@@ -12,6 +12,98 @@ import { shareText } from "@/lib/domain/share";
 import { dayDetail, homeView } from "@/lib/domain/views";
 import { dateLong, dec, dmy, num, pct, rpf, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
+import type { SalesLine } from "@/types/domain";
+
+type CardKind = "sales" | "VAS" | "ACC" | "upt";
+interface PersonRow {
+  key: string;
+  name: string;
+  sub: string;
+  target: number;
+  lines: SalesLine[];
+}
+
+/** Items a person sold for one card: grouped per description (qty, value), biggest first. */
+function itemsOf(lines: SalesLine[]): Array<{ description: string; qty: number; amount: number }> {
+  const m = new Map<string, { description: string; qty: number; amount: number }>();
+  for (const l of lines) {
+    const k = l.description || l.article;
+    const x = m.get(k) ?? { description: k, qty: 0, amount: 0 };
+    x.qty += l.qty;
+    x.amount += l.amount;
+    m.set(k, x);
+  }
+  return [...m.values()].sort((a, b) => b.amount - a.amount);
+}
+
+/**
+ * Per-salesperson detail behind one card (popover; opens on a click anywhere on the card).
+ * Sales / VAS / ACC: actual vs daily target per person; UPT: units, transactions and UPT per person.
+ * Each person expands to the items they sold.
+ */
+function CardPeople({ id, title, kind, people }: { id: string; title: string; kind: CardKind; people: PersonRow[] }) {
+  const pick = (ls: SalesLine[]) => (kind === "VAS" || kind === "ACC" ? ls.filter((l) => l.group === kind) : ls);
+  const rows = people
+    .map((r) => {
+      const ls = pick(r.lines);
+      const t = totals(ls);
+      return { ...r, ls, actual: kind === "upt" ? t.qty : t.sales, t };
+    })
+    .filter((r) => r.actual !== 0 || (kind !== "upt" && r.target > 0))
+    .sort((a, b) => b.actual - a.actual || b.target - a.target);
+  const sumA = rows.reduce((a, r) => a + r.actual, 0);
+  const sumT = rows.reduce((a, r) => a + r.target, 0);
+  const inv = rows.reduce((a, r) => a + r.t.invoices, 0);
+  return (
+    <>
+      <button type="button" popoverTarget={id} className="absolute inset-0 z-10 cursor-pointer rounded-[inherit]" aria-label={`Rincian ${title} per salesperson`} />
+      <div id={id} popover="auto" className="m-auto w-[min(94vw,600px)] rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 sm:p-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <p className="text-base font-black">{title} · per Salesperson</p>
+          <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>
+        </div>
+        <p className="mb-3 text-xs text-slate-500">{kind === "upt" ? "Unit terjual ÷ jumlah transaksi per orang." : "Target harian = target bulanan ÷ jumlah hari."} Ketuk nama untuk melihat barang yang terjual.</p>
+        {rows.length ? (
+          <div className="overflow-hidden rounded-2xl border border-slate-200 text-[13px] sm:text-sm dark:border-slate-700">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-2 sm:gap-x-3 bg-slate-50 px-3 py-2 text-[11px] font-black tracking-wide text-slate-500 uppercase dark:bg-slate-800/60">
+              <span>Nama</span>
+              <span className="w-[5.3rem] text-right sm:w-28">{kind === "upt" ? "Unit" : "Actual"}</span>
+              <span className="w-[5.3rem] text-right sm:w-28">{kind === "upt" ? "Transaksi" : "Target"}</span>
+              <span className="w-10 text-right sm:w-12">{kind === "upt" ? "UPT" : "%"}</span>
+            </div>
+            {rows.map((r) => (
+              <details key={r.key} className="group border-t border-slate-200 dark:border-slate-700">
+                <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-2 sm:gap-x-3 px-3 py-2 tabular-nums hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <span className="min-w-0"><b className="block leading-tight break-words">{displayName(r.name)} <span className="text-xs font-normal text-slate-400 group-open:rotate-90">›</span></b><span className="text-[11px] text-slate-400">{r.sub}</span></span>
+                  <span className="w-20 text-right font-bold sm:w-28">{kind === "upt" ? num(r.t.qty) : rpf(r.actual)}</span>
+                  <span className="w-20 text-right text-slate-500 sm:w-28">{kind === "upt" ? num(r.t.invoices) : r.target ? rpf(r.target) : "—"}</span>
+                  <span className="w-10 text-right sm:w-12 font-bold">{kind === "upt" ? dec(r.t.upt ?? 0, 1).replace(",", ".") : r.target ? pct((r.actual / r.target) * 100, 0) : "—"}</span>
+                </summary>
+                <ul className="space-y-1 bg-slate-50/70 px-3 py-2 text-[12px] dark:bg-slate-800/30">
+                  {itemsOf(r.ls).map((it) => (
+                    <li key={it.description} className="flex justify-between gap-3">
+                      <span className="min-w-0">{it.description} <span className="text-slate-400">× {num(it.qty)}</span></span>
+                      <span className="shrink-0 tabular-nums">{rpf(it.amount)}</span>
+                    </li>
+                  ))}
+                  {!r.ls.length && <li className="text-slate-400">Belum ada penjualan.</li>}
+                </ul>
+              </details>
+            ))}
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-2 sm:gap-x-3 border-t border-slate-200 bg-slate-50 px-3 py-2 font-black tabular-nums dark:border-slate-700 dark:bg-slate-800/40">
+              <span>Total</span>
+              <span className="w-[5.3rem] text-right sm:w-28">{kind === "upt" ? num(sumA) : rpf(sumA)}</span>
+              <span className="w-[5.3rem] text-right sm:w-28">{kind === "upt" ? num(inv) : rpf(sumT)}</span>
+              <span className="w-10 text-right sm:w-12">{kind === "upt" ? dec(inv ? sumA / inv : 0, 1).replace(",", ".") : sumT ? pct((sumA / sumT) * 100, 0) : "—"}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-500 dark:bg-slate-800/40">Belum ada penjualan pada tanggal ini.</p>
+        )}
+      </div>
+    </>
+  );
+}
 
 export default async function DailySalesPage({ searchParams }: { searchParams: SearchParams }) {
   const p = await loadPage(searchParams);
@@ -34,10 +126,19 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
   const sum = people.reduce((a, r) => ({ target: a.target + r.target, acc: a.acc + r.totals.byGroup.ACC, vas: a.vas + r.totals.byGroup.VAS, sales: a.sales + r.totals.sales }), { target: 0, acc: 0, vas: 0, sales: 0 });
 
   const cards = [
-    { label: "Target vs Achievement", actual: t.sales, target: dailyTarget, color: "#4a90ff", tone: "blue", icon: TrendingUp, ic: "bg-blue-50 text-blue-600" },
-    { label: "VAS vs Achievement", actual: t.byGroup.VAS, target: dailyVas, color: "#42c77a", tone: "green", icon: Activity, ic: "bg-emerald-50 text-emerald-600" },
-    { label: "ACC vs Achievement", actual: t.byGroup.ACC, target: dailyAcc, color: "#8a6fff", tone: "violet", icon: TrendingUp, ic: "bg-violet-50 text-violet-600" },
+    { label: "Target vs Achievement", kind: "sales", actual: t.sales, target: dailyTarget, color: "#4a90ff", tone: "blue", icon: TrendingUp, ic: "bg-blue-50 text-blue-600" },
+    { label: "VAS vs Achievement", kind: "VAS", actual: t.byGroup.VAS, target: dailyVas, color: "#42c77a", tone: "green", icon: Activity, ic: "bg-emerald-50 text-emerald-600" },
+    { label: "ACC vs Achievement", kind: "ACC", actual: t.byGroup.ACC, target: dailyAcc, color: "#8a6fff", tone: "violet", icon: TrendingUp, ic: "bg-violet-50 text-violet-600" },
   ] as const;
+  // per-salesperson rows behind the cards (target per card = that group's daily target)
+  const peopleFor = (kind: CardKind): PersonRow[] =>
+    people.map((r) => ({
+      key: r.key,
+      name: r.name,
+      sub: r.isChannel ? "Online" : (r.nik ?? "—"),
+      target: kind === "VAS" || kind === "ACC" ? r.targetByGroup[kind] : kind === "sales" ? r.target : 0,
+      lines: byKey.get(r.key) ?? [],
+    }));
 
   return (
     <div className="sd-content">
@@ -63,7 +164,8 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
           const a = c.target ? (c.actual / c.target) * 100 : null;
           const Icon = c.icon;
           return (
-            <article key={c.label} className="sd-block-card p-5" data-tone={c.tone}>
+            <article key={c.label} className="sd-block-card relative p-5" data-tone={c.tone}>
+              <CardPeople id={`card-${c.kind}`} title={c.kind === "sales" ? "Achievement" : c.kind} kind={c.kind} people={peopleFor(c.kind)} />
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm font-bold text-slate-500">{c.label}</p>
                 <span className={`grid size-9 place-items-center rounded-[14px] ${c.ic}`}><Icon className="size-4" /></span>
@@ -71,16 +173,19 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
               <p className="mt-4 leading-tight font-black text-slate-950"><span className="block text-xl sm:text-2xl xl:text-xl 2xl:text-2xl">{rpf(c.actual)}</span><span className="block text-sm font-bold text-slate-500">dari target {rpf(c.target)}</span></p>
               <p className="mt-3 text-xs font-bold text-slate-500">{pct(a ?? 0, 0)}</p>
               <div className="mt-2"><Progress value={a} color={c.color} label={c.label} /></div>
+              <p className="mt-2 text-xs font-semibold text-blue-600">Rincian per salesperson ›</p>
             </article>
           );
         })}
-        <article className="sd-block-card p-5" data-tone="amber">
+        <article className="sd-block-card relative p-5" data-tone="amber">
+          <CardPeople id="card-upt" title="UPT" kind="upt" people={peopleFor("upt")} />
           <div className="flex items-start justify-between gap-2">
             <p className="text-sm font-bold text-slate-500">UPT</p>
             <span className="grid size-9 place-items-center rounded-[14px] bg-amber-50 text-amber-600"><Gauge className="size-4" /></span>
           </div>
           <p className="mt-4 text-2xl font-black text-slate-950">{dec(t.upt, 1).replace(",", ".")}</p>
           <p className="mt-3 text-xs font-bold text-slate-500">{num(t.qty)} unit / {num(t.invoices)} transaksi</p>
+          <p className="mt-2 text-xs font-semibold text-blue-600">Rincian per salesperson ›</p>
         </article>
       </div>
 
