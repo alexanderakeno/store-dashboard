@@ -63,7 +63,7 @@ export const DEFAULT_RULES: BusinessRules = {
   pointCaps: { Apple: 30, Android: 30, ACC: 30, VAS: 10 },
   estimateMinDays: 3,
   incentive: {
-    perUnit: { Mac: 30_000, iPhone: 30_000, iPad: 30_000, "Apple Watch": 30_000 },
+    perUnit: { Mac: 30_000, iPhone: 15_000, iPad: 30_000, "Apple Watch": 30_000 },
     qoalaTiers: [
       { min: 0, fee: 20_000 }, // below 1 jt
       { min: 1_000_000, fee: 40_000 }, // 1 jt – 1,5 jt (e.g. Emerald 1.315.000)
