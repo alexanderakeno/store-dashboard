@@ -75,3 +75,17 @@ test("parseAccFocus reads the Data - Akeno leaderboard by label; ACC fee joins s
   assert.equal(v.rows.length, 2);
   assert.equal(v.total.acc, 877_500);
 });
+
+test("online accounts (Digiplus.co.id, Mapemall): 5rb per Apple device, no Qoala; other channels still ignored", () => {
+  const web = (p: Partial<SalesLine>) => line({ nik: null, staffName: "Digiplus.co.id", ...p });
+  const mall = (p: Partial<SalesLine>) => line({ nik: null, staffName: "MAPEMALL", isChannel: true, ...p });
+  const v = incentiveView(
+    [web({ qty: 3 }), web({ lob: "Mac" }), web({ group: "Android", lob: "Samsung" }), { ...qoala(1_200_000), nik: null, staffName: "Digiplus.co.id" }, mall({ qty: 2 }), mall({ qty: -1, amount: -100 }), line({ nik: null, staffName: "TOKOPEDIA", isChannel: true })],
+    R, null, [],
+  );
+  const d = v.rows.find((r) => r.name === "Digiplus.co.id")!;
+  assert.equal(d.deviceFee, 4 * 5_000); // 3 iPhone + 1 Mac, Android not paid
+  assert.equal(d.qoala.fee, 0);
+  assert.equal(v.rows.find((r) => r.name === "Mapemall")?.deviceFee, (2 - 1) * 5_000); // return subtracts
+  assert.equal(v.rows.some((r) => /TOKOPEDIA/i.test(r.name)), false);
+});
