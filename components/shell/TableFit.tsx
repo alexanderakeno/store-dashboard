@@ -33,10 +33,14 @@ export function TableFit() {
     });
     const main = document.querySelector("main") ?? document.body;
     mo.observe(main, { childList: true, subtree: true });
+    // tables inside a popup are hidden until it opens: fit them when a popover / <details> opens
+    const onToggle = () => run();
+    document.addEventListener("toggle", onToggle, true);
     return () => {
       cancelAnimationFrame(frame);
       ro.disconnect();
       mo.disconnect();
+      document.removeEventListener("toggle", onToggle, true);
     };
   }, [path, query]);
 
