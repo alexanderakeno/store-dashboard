@@ -92,7 +92,7 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
         actions={manage}
       />
       <Tabs kosong={false} count={kosongCount} />
-      <SohView categories={soh.categories} rows={sohRows(soh.items, p.snap.lines, p.asOf)} prices={prices} initialCat={p.q.cat ?? ""} initialSearch={(p.q.s ?? "").trim()} />
+      <SohView categories={soh.categories} rows={sohRows(soh.items, p.snap.lines, p.asOf)} prices={prices} initialCat={p.q.cat ?? ""} initialSearch={(p.q.s ?? "").trim()} initialType={p.q.j ?? ""} initialSeries={p.q.sr ?? ""} />
     </div>
   );
 }
