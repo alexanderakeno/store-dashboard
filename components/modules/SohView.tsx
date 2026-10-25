@@ -5,6 +5,7 @@ import { ChevronRight, Search, Tag, X } from "lucide-react";
 import { EmptyBlock, Panel } from "@/components/kit";
 import { LOW_DAYS, SLOW_DAYS, type SohRow } from "@/lib/domain/soh";
 import type { SkuPrices } from "@/lib/domain/skuPrice";
+import { PromoBox } from "./PriceBoard";
 import { DEVICE_TYPES, SAMSUNG_SERIES, deviceType, isSamsung, samsungSeries, splitsByType, type DeviceType } from "@/lib/domain/sohGroups";
 
 const TYPE_LABEL: Record<DeviceType, string> = { Phone: "Phone", Tablet: "Tablet", Watch: "Watch & Wearable", Lainnya: "Lainnya" };
@@ -15,7 +16,7 @@ const rp = (n: number) => `Rp ${nf.format(n)}`;
 const isEol = (s: string) => /EOL/i.test(s);
 
 /** Price popup of one SKU: its price-list model with every storage; the SKU's own variant is preselected. */
-function SkuPricePopup({ prices, row, onClose }: { prices: SkuPrices; row: SohRow | null; onClose: () => void }) {
+function SkuPricePopup({ prices, row, onClose, today }: { prices: SkuPrices; row: SohRow | null; onClose: () => void; today: string }) {
   const hit = row ? prices.byArticle[row.article.toUpperCase()] : undefined;
   const m = hit ? prices.models[hit[0]] : undefined;
   const [pick, setPick] = useState<{ article: string; vi: number } | null>(null);
@@ -56,7 +57,7 @@ function SkuPricePopup({ prices, row, onClose }: { prices: SkuPrices; row: SohRo
                   >
                     {x.label}
                     {i === hit![1] && <span className={`ml-1 text-[10px] ${i === vi ? "text-blue-100" : "text-blue-600"}`}>• SKU ini</span>}
-                    <span className={`block text-[11px] font-semibold ${i === vi ? "text-blue-100" : "text-slate-500"}`}>{rp(x.promo)}{isEol(x.status) ? " · EOL" : ""}</span>
+                    <span className={`block text-[11px] font-semibold ${i === vi ? "text-blue-100" : "text-slate-500"}`}>{rp(x.promo)}{isEol(x.status) ? " · EOL" : ""}{(x.samsung?.items.some((p) => p.state === "aktif") || x.samsung?.etp.some((p) => p.state === "aktif")) && <span className={`ml-1 rounded px-1 text-[9px] font-extrabold ${i === vi ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"}`}>PROMO</span>}</span>
                   </button>
                 ))}
               </div>
@@ -85,6 +86,7 @@ function SkuPricePopup({ prices, row, onClose }: { prices: SkuPrices; row: SohRo
             </div>
             <p className="mt-2 text-[11px] text-slate-400">Estimasi cicilan 0% dari {v.credit != null ? "harga promo cicilan" : "harga aktif"}.</p>
           </div>
+          {v.samsung && <PromoBox vp={v.samsung} price={v.promo} today={today} model={m.model} />}
 
           <Link
             href={`/pricelist?${new URLSearchParams({ ...(m.kind === "apple" ? { k: "apple" } : {}), b: m.brand, t: m.key, semua: "1" })}`}
@@ -117,7 +119,7 @@ function syncUrl(patch: Record<string, string | null>) {
  * SOH table. All categories arrive in one server render; switching category and
  * searching happen here, so they never re-read Google Sheets.
  */
-export function SohView({ categories, rows, prices, initialCat, initialSearch, initialType = "", initialSeries = "" }: { categories: string[]; rows: SohRow[]; prices?: SkuPrices; initialCat: string; initialSearch: string; initialType?: string; initialSeries?: string }) {
+export function SohView({ categories, rows, prices, today = "", initialCat, initialSearch, initialType = "", initialSeries = "" }: { categories: string[]; rows: SohRow[]; prices?: SkuPrices; today?: string; initialCat: string; initialSearch: string; initialType?: string; initialSeries?: string }) {
   const [open, setOpen] = useState<SohRow | null>(null);
   const priced = (r: SohRow) => !!prices?.byArticle[r.article.toUpperCase()];
   const priceOf = (r: SohRow) => {
@@ -282,7 +284,7 @@ export function SohView({ categories, rows, prices, initialCat, initialSearch, i
         </table></div>
         {prices && prices.models.length > 0 && <p className="mt-2 text-xs text-slate-500">Ketuk SKU yang ada harganya untuk melihat price list-nya (semua pilihan storage).</p>}
       </Panel>
-      {prices && <SkuPricePopup prices={prices} row={open} onClose={() => setOpen(null)} />}
+      {prices && <SkuPricePopup prices={prices} row={open} today={today} onClose={() => setOpen(null)} />}
     </>
   );
 }

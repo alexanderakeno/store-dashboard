@@ -269,7 +269,7 @@ const KIND_LABEL: Record<string, string> = { PWP: "PWP", "TRADE IN": "Trade In",
 const short = (d: string) => `${Number(d.slice(8))}/${Number(d.slice(5, 7))}`;
 
 /** Samsung promos of the selected variant (from the imported promo workbook) and the best nett price. */
-function PromoBox({ vp, price, today, model }: { vp: VariantPromo; price: number; today: string; model: string }) {
+export function PromoBox({ vp, price, today, model }: { vp: VariantPromo; price: number; today: string; model: string }) {
   const kinds = vp.cash.kinds.map((k) => KIND_LABEL[k].replace(" (kartu kredit)", "")).join(" + ");
   return (
     <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
