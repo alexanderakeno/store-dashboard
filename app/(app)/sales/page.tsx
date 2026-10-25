@@ -24,6 +24,9 @@ interface PersonRow {
   lines: SalesLine[];
 }
 
+/** Popup table: name · value (with target / transactions under it) · %. Fits a 360 px phone. */
+const GRID = "grid grid-cols-[minmax(0,1fr)_auto_2.8rem] gap-x-2 px-3 sm:grid-cols-[minmax(0,1fr)_auto_3.2rem] sm:gap-x-3";
+
 /** Items a person sold for one card: grouped per description (qty, value), biggest first. */
 function itemsOf(lines: SalesLine[]): Array<{ description: string; qty: number; amount: number }> {
   const m = new Map<string, { description: string; qty: number; amount: number }>();
@@ -58,7 +61,7 @@ function CardPeople({ id, title, kind, people }: { id: string; title: string; ki
   return (
     <>
       <button type="button" popoverTarget={id} className="absolute inset-0 z-10 cursor-pointer rounded-[inherit]" aria-label={`Rincian ${title} per salesperson`} />
-      <div id={id} popover="auto" className="m-auto w-[min(94vw,600px)] rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 sm:p-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+      <div id={id} popover="auto" className="m-auto max-h-[90dvh] w-[min(94vw,600px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 sm:p-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
         <div className="mb-1 flex items-center justify-between gap-3">
           <p className="text-base font-black">{title} · per Salesperson</p>
           <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>
@@ -66,24 +69,25 @@ function CardPeople({ id, title, kind, people }: { id: string; title: string; ki
         <p className="mb-3 text-xs text-slate-500">{kind === "upt" ? "Unit terjual ÷ jumlah transaksi per orang." : "Target harian = target bulanan ÷ jumlah hari."} Ketuk nama untuk melihat barang yang terjual.</p>
         {rows.length ? (
           <div className="overflow-hidden rounded-2xl border border-slate-200 text-[13px] sm:text-sm dark:border-slate-700">
-            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-2 sm:gap-x-3 bg-slate-50 px-3 py-2 text-[11px] font-black tracking-wide text-slate-500 uppercase dark:bg-slate-800/60">
+            <div className={`${GRID} bg-slate-50 py-2 text-[11px] font-black tracking-wide text-slate-500 uppercase dark:bg-slate-800/60`}>
               <span>Nama</span>
-              <span className="w-[5.3rem] text-right sm:w-28">{kind === "upt" ? "Unit" : "Actual"}</span>
-              <span className="w-[5.3rem] text-right sm:w-28">{kind === "upt" ? "Transaksi" : "Target"}</span>
-              <span className="w-10 text-right sm:w-12">{kind === "upt" ? "UPT" : "%"}</span>
+              <span className="text-right">{kind === "upt" ? "Unit · Transaksi" : "Actual · Target"}</span>
+              <span className="text-right">{kind === "upt" ? "UPT" : "%"}</span>
             </div>
             {rows.map((r) => (
               <details key={r.key} className="group border-t border-slate-200 dark:border-slate-700">
-                <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-2 sm:gap-x-3 px-3 py-2 tabular-nums hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <span className="min-w-0"><b className="block leading-tight break-words">{displayName(r.name)} <span className="text-xs font-normal text-slate-400 group-open:rotate-90">›</span></b><span className="text-[11px] text-slate-400">{r.sub}</span></span>
-                  <span className="w-20 text-right font-bold sm:w-28">{kind === "upt" ? num(r.t.qty) : rpf(r.actual)}</span>
-                  <span className="w-20 text-right text-slate-500 sm:w-28">{kind === "upt" ? num(r.t.invoices) : r.target ? rpf(r.target) : "—"}</span>
-                  <span className="w-10 text-right sm:w-12 font-bold">{kind === "upt" ? dec(r.t.upt ?? 0, 1).replace(",", ".") : r.target ? pct((r.actual / r.target) * 100, 0) : "—"}</span>
+                <summary className={`${GRID} cursor-pointer list-none items-center py-2 tabular-nums hover:bg-slate-50 dark:hover:bg-slate-800/40`}>
+                  <span className="min-w-0"><b className="leading-tight break-words">{displayName(r.name)}</b> <span className="inline-block text-xs text-slate-400 transition group-open:rotate-90">›</span><span className="block text-[11px] text-slate-400">{r.sub}</span></span>
+                  <span className="text-right leading-tight">
+                    <b className="block whitespace-nowrap">{kind === "upt" ? `${num(r.t.qty)} unit` : rpf(r.actual)}</b>
+                    <span className="text-[11px] whitespace-nowrap text-slate-500">{kind === "upt" ? `${num(r.t.invoices)} transaksi` : r.target ? `dari ${rpf(r.target)}` : "tanpa target"}</span>
+                  </span>
+                  <b className="text-right">{kind === "upt" ? dec(r.t.upt ?? 0, 1).replace(",", ".") : r.target ? pct((r.actual / r.target) * 100, 0) : "—"}</b>
                 </summary>
                 <ul className="space-y-1 bg-slate-50/70 px-3 py-2 text-[12px] dark:bg-slate-800/30">
                   {itemsOf(r.ls).map((it) => (
                     <li key={it.description} className="flex justify-between gap-3">
-                      <span className="min-w-0">{it.description} <span className="text-slate-400">× {num(it.qty)}</span></span>
+                      <span className="min-w-0 break-words">{it.description} <span className="text-slate-400">× {num(it.qty)}</span></span>
                       <span className="shrink-0 tabular-nums">{rpf(it.amount)}</span>
                     </li>
                   ))}
@@ -91,11 +95,13 @@ function CardPeople({ id, title, kind, people }: { id: string; title: string; ki
                 </ul>
               </details>
             ))}
-            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-2 sm:gap-x-3 border-t border-slate-200 bg-slate-50 px-3 py-2 font-black tabular-nums dark:border-slate-700 dark:bg-slate-800/40">
+            <div className={`${GRID} items-center border-t border-slate-200 bg-slate-50 py-2 font-black tabular-nums dark:border-slate-700 dark:bg-slate-800/40`}>
               <span>Total</span>
-              <span className="w-[5.3rem] text-right sm:w-28">{kind === "upt" ? num(sumA) : rpf(sumA)}</span>
-              <span className="w-[5.3rem] text-right sm:w-28">{kind === "upt" ? num(inv) : rpf(sumT)}</span>
-              <span className="w-10 text-right sm:w-12">{kind === "upt" ? dec(inv ? sumA / inv : 0, 1).replace(",", ".") : sumT ? pct((sumA / sumT) * 100, 0) : "—"}</span>
+              <span className="text-right leading-tight">
+                <span className="block whitespace-nowrap">{kind === "upt" ? `${num(sumA)} unit` : rpf(sumA)}</span>
+                <span className="text-[11px] font-semibold whitespace-nowrap text-slate-500">{kind === "upt" ? `${num(inv)} transaksi` : `dari ${rpf(sumT)}`}</span>
+              </span>
+              <span className="text-right">{kind === "upt" ? dec(inv ? sumA / inv : 0, 1).replace(",", ".") : sumT ? pct((sumA / sumT) * 100, 0) : "—"}</span>
             </div>
           </div>
         ) : (
