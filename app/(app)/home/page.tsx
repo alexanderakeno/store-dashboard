@@ -334,7 +334,7 @@ function CardDetail({ id, title, detail, total, tg, drillQuery }: { id: string; 
   return (
     <>
       <button type="button" popoverTarget={id} className="absolute inset-0 z-10 cursor-pointer rounded-[inherit]" aria-label={`Rincian ${title}`} />
-      <div id={id} popover="auto" className="m-auto w-[min(94vw,480px)] rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+      <div id={id} popover="auto" className="m-auto max-h-[90dvh] w-[min(94vw,480px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
         <div className="mb-3 flex items-center justify-between gap-3">
           <p className="text-base font-black">Rincian {title}</p>
           <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>
@@ -601,7 +601,7 @@ function MonthDetail({ id, label, year, prevYear, upTo, deviceOnly, cur, prev, p
   return (
     <>
       <button type="button" popoverTarget={id} className="text-left font-bold text-blue-600 underline-offset-2 hover:underline">{label} ›</button>
-      <div id={id} popover="auto" className="m-auto w-[min(94vw,560px)] rounded-2xl border border-slate-200 bg-white p-4 text-left font-normal text-slate-900 shadow-2xl backdrop:bg-slate-900/40 sm:p-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+      <div id={id} popover="auto" className="m-auto max-h-[90dvh] w-[min(94vw,560px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-4 text-left font-normal text-slate-900 shadow-2xl backdrop:bg-slate-900/40 sm:p-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
         <div className="mb-1 flex items-center justify-between gap-3">
           <p className="text-base font-black">{label} {prevYear} vs {year}{deviceOnly ? " · Device" : ""}</p>
           <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>

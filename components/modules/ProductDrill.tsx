@@ -96,7 +96,7 @@ export function ProductDrill({ id, group, label, actual, qty, share, query }: { 
   }, [items, query]);
 
   return (
-    <div ref={ref} id={id} popover="auto" className="m-auto max-h-[88vh] w-[min(94vw,520px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl backdrop:bg-slate-900/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+    <div ref={ref} id={id} popover="auto" className="m-auto max-h-[90dvh] w-[min(94vw,520px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-2xl backdrop:bg-slate-900/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-5 dark:border-slate-700 dark:bg-slate-900">
         <div className="min-w-0">
           <p className="text-[11px] font-black tracking-[.12em] text-blue-600 uppercase">{group}</p>
