@@ -454,6 +454,15 @@ html.dark .sd-log-acct[aria-current="true"] { border-color: #1e3a8a; background:
 .sd-fit-compact .sd-table { font-size: 12px; }
 .sd-fit-compact .sd-table th, .sd-fit-compact .sd-table td, .sd-fit-compact .sd-table tfoot td { padding: 7px 6px; white-space: normal; }
 .sd-fit-compact .sd-table th { font-size: 10px; letter-spacing: 0.03em; }
+.sd-fit-tight .sd-table { font-size: 11px; }
+.sd-fit-tight .sd-table th, .sd-fit-tight .sd-table td, .sd-fit-tight .sd-table tfoot td { padding: 6px 4px; }
+.sd-fit-tight .sd-table th:first-child, .sd-fit-tight .sd-table td:first-child { padding-left: 8px; }
+.sd-fit-tight .sd-table th:last-child, .sd-fit-tight .sd-table td:last-child { padding-right: 8px; }
+.sd-fit-tight .sd-table th { font-size: 9px; letter-spacing: 0.02em; }
+/* phones: card per row reads tighter (label 9px over a 13px value) */
+@media (max-width: 639px) {
+  .sd-fit-stack .sd-table td, .sd-fit-stack .sd-table tfoot td { font-size: 13px; line-height: 1.3; }
+}
 .sd-fit-stack { overflow: visible; border: 0; border-radius: 0; }
 .sd-fit-stack .sd-table, .sd-fit-stack .sd-table tbody, .sd-fit-stack .sd-table tfoot { display: block; width: 100%; }
 .sd-fit-stack .sd-table thead { display: none; }
