@@ -1,10 +1,11 @@
 import { NeedData, PageIntro, Panel, Progress, Trend, achColor } from "@/components/kit";
 import { ParamSelect, PrintButton } from "@/components/kit/controls";
+import { MobileGrid, type MobileRow } from "@/components/kit/MobileGrid";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, deviceOf, typeQty, vasSplit } from "@/lib/domain/extra";
 import { totals } from "@/lib/domain/kpi";
 import { daysInMonth, eachDay, weeksOfMonth } from "@/lib/domain/period";
-import { dateShort, num, pct, rpf } from "@/lib/format";
+import { dateShort, num, pct, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { GROUPS, type SalesLine } from "@/types/domain";
 
@@ -50,6 +51,17 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
       <td className="n">{need ? "—" : <Trend value={g(qa, qb)} digits={0} />}</td><td className="n">{need ? "—" : <Trend value={g(aa, ab)} digits={0} />}</td>
     </tr>
   );
+  // phones: one grid per table — W-prev and W-cur as "qty / value", then the value growth
+  const wcols = [{ label: "" }, { label: `W${prev?.index ?? "-"}`, w: "4.2rem" }, { label: `W${cur.index}`, w: "4.2rem" }, { label: "Δ Value", w: "3.2rem" }];
+  const qv = (q: number, v: number, dim = false) => (
+    <span className="leading-tight"><b className={`block ${dim ? "text-slate-400" : ""}`}>{num(q)}</b><span className="text-[10.5px] text-slate-500">{rpc(v)}</span></span>
+  );
+  const mrow = (key: string, label: React.ReactNode, qa: number, aa: number, qb: number, ab: number, extra: Partial<MobileRow> = {}): MobileRow => ({
+    key,
+    cells: [label, need ? "—" : qv(qa, aa), qv(qb, ab), need ? "—" : <Trend key="t" value={g(aa, ab)} digits={0} />],
+    sub: need ? undefined : <>Qty {g(qa, qb) == null ? "—" : `${(g(qa, qb) ?? 0) >= 0 ? "+" : ""}${Math.round(g(qa, qb) ?? 0)}%`}</>,
+    ...extra,
+  });
   const Head = ({ first, extra }: { first: string; extra?: string }) => (
     <thead><tr><th>{first}</th>{extra && <th>{extra}</th>}<th className="n">W{prev?.index ?? "-"} Qty</th><th className="n">W{prev?.index ?? "-"} Amount</th><th className="n">W{cur.index} Qty</th><th className="n">W{cur.index} Amount</th><th className="n">Qty %</th><th className="n">Amount %</th></tr></thead>
   );
@@ -66,21 +78,45 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
       </section>
 
       <Panel title="Sales Summary — Device / VAS / ACC">
-        <div className="sd-table-wrap"><table className="sd-table"><Head first="Category" />
+        <MobileGrid
+          cols={[{ ...wcols[0], label: "Category" }, ...wcols.slice(1)]}
+          rows={[...cats.map(([k, f]) => mrow(k, <b key="l">{k}</b>, qtyOf(A, f), amtOf(A, f), qtyOf(B, f), amtOf(B, f))), mrow("total", <b key="l">TOTAL</b>, ta.qty, ta.sales, tb.qty, tb.sales, { className: "bg-slate-50 font-black dark:bg-slate-800/50" })]}
+        />
+        <p className="mt-1.5 text-[11px] text-slate-500 sm:hidden">Angka atas = qty, bawah = value.</p>
+        <div className="sd-table-wrap max-sm:hidden"><table className="sd-table"><Head first="Category" />
           <tbody>{cats.map(([k, f]) => <Row key={k} label={k} qa={qtyOf(A, f)} aa={amtOf(A, f)} qb={qtyOf(B, f)} ab={amtOf(B, f)} />)}</tbody>
           <tfoot><Row label="TOTAL" qa={ta.qty} aa={ta.sales} qb={tb.qty} ab={tb.sales} bold /></tfoot>
         </table></div>
       </Panel>
 
       <Panel title="VAS — Qoala / Indosat / Telkomsel / XL">
-        <div className="sd-table-wrap"><table className="sd-table"><Head first="Category" />
+        <MobileGrid
+          cols={[{ ...wcols[0], label: "Provider" }, ...wcols.slice(1)]}
+          rows={[
+            ...VAS_PROVIDERS.map((v) => mrow(v, <b key="l">{v}</b>, va[v].qty, va[v].value, vb[v].qty, vb[v].value)),
+            mrow("total", <b key="l">VAS TOTAL</b>, VAS_PROVIDERS.reduce((a, v) => a + va[v].qty, 0), ta.byGroup.VAS, VAS_PROVIDERS.reduce((a, v) => a + vb[v].qty, 0), tb.byGroup.VAS, { className: "bg-slate-50 font-black dark:bg-slate-800/50" }),
+          ]}
+        />
+        <div className="sd-table-wrap max-sm:hidden"><table className="sd-table"><Head first="Category" />
           <tbody>{VAS_PROVIDERS.map((v) => <Row key={v} label={v} qa={va[v].qty} aa={va[v].value} qb={vb[v].qty} ab={vb[v].value} />)}</tbody>
           <tfoot><Row label="VAS TOTAL" qa={VAS_PROVIDERS.reduce((a, v) => a + va[v].qty, 0)} aa={ta.byGroup.VAS} qb={VAS_PROVIDERS.reduce((a, v) => a + vb[v].qty, 0)} ab={tb.byGroup.VAS} bold /></tfoot>
         </table></div>
       </Panel>
 
       <Panel title="Weekly LOB" desc="Per type: week sebelumnya vs week pembanding.">
-        <div className="sd-table-wrap"><table className="sd-table"><Head first="Product Category" extra="Type" />
+        <MobileGrid
+          cols={[{ ...wcols[0], label: "Type" }, ...wcols.slice(1)]}
+          rows={APPLE_LOBS.flatMap((lob) => {
+            const names = [...new Set([...typesA, ...typesB].filter((x) => x.lob === lob).map((x) => x.type))];
+            const f = (arr: typeof typesA, t: string) => arr.find((x) => x.type === t);
+            const sum = (arr: typeof typesA, k: "qty" | "value") => arr.filter((x) => x.lob === lob).reduce((a, x) => a + x[k], 0);
+            return [
+              ...names.map((t) => mrow(`${lob}|${t}`, <span key="l" className="leading-tight"><span className="block text-[10.5px] text-slate-400">{LOB_LABEL[lob]}</span><b>{t}</b></span>, f(typesA, t)?.qty ?? 0, f(typesA, t)?.value ?? 0, f(typesB, t)?.qty ?? 0, f(typesB, t)?.value ?? 0)),
+              mrow(`${lob}|total`, <b key="l">{LOB_LABEL[lob]} Total</b>, sum(typesA, "qty"), sum(typesA, "value"), sum(typesB, "qty"), sum(typesB, "value"), { className: "bg-blue-50/60 font-black dark:bg-blue-950/20" }),
+            ];
+          })}
+        />
+        <div className="sd-table-wrap max-sm:hidden"><table className="sd-table"><Head first="Product Category" extra="Type" />
           <tbody>
             {APPLE_LOBS.map((lob) => {
               const names = [...new Set([...typesA, ...typesB].filter((x) => x.lob === lob).map((x) => x.type))];
@@ -109,7 +145,26 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
       </Panel>
 
       <Panel title="Target Weekly per Grup" desc={`Pencapaian W${cur.index} dibanding target mingguan (target bulanan ÷ ${dim} × ${curDays} hari). Time gone week ${pct(tgWeek, 0)}.`}>
-        <div className="sd-table-wrap"><table className="sd-table">
+        <MobileGrid
+          cols={[{ label: "Grup" }, { label: "Target", w: "4.6rem" }, { label: "Actual", w: "4.6rem" }, { label: "Ach", w: "2.6rem" }]}
+          rows={[
+            ...GROUPS.map((k) => {
+              const t = ((s.target?.byGroup[k] ?? 0) / dim) * curDays;
+              const a = tb.byGroup[k];
+              const ach = t ? (a / t) * 100 : null;
+              return {
+                key: k,
+                cells: [<b key="k">{k}</b>, rpc(t), <b key="a">{rpc(a)}</b>, <b key="p">{pct(ach, 0)}</b>],
+                sub: <div className="flex items-center gap-2"><div className="flex-1"><Progress value={ach} tick={tgWeek} color={achColor(ach, tgWeek)} label={k} /></div><span className={a - t >= 0 ? "text-emerald-600" : "text-rose-600"}>Gap {rpc(a - t)}</span></div>,
+              };
+            }),
+            (() => {
+              const t = ((s.target?.total ?? 0) / dim) * curDays;
+              return { key: "total", className: "bg-slate-50 font-black dark:bg-slate-800/50", cells: [<b key="k">Total</b>, rpc(t), <b key="a">{rpc(tb.sales)}</b>, <b key="p">{pct(t ? (tb.sales / t) * 100 : null, 0)}</b>], sub: <span className={tb.sales - t >= 0 ? "text-emerald-600" : "text-rose-600"}>Gap {rpc(tb.sales - t)}</span> };
+            })(),
+          ]}
+        />
+        <div className="sd-table-wrap max-sm:hidden"><table className="sd-table">
           <thead><tr><th>Grup</th><th className="n">Target Week</th><th className="n">Actual</th><th style={{ minWidth: 180 }}>Ach</th><th className="n">Gap</th></tr></thead>
           <tbody>
             {GROUPS.map((k) => {
