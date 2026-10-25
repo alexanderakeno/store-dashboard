@@ -8,6 +8,7 @@ import { staffNames } from "@/components/modules/staffList";
 import { clampRange, linesIn } from "@/lib/domain/extra";
 import { DEVICE_LOBS, incentiveView, nameKey, type IncentiveRow } from "@/lib/domain/incentive";
 import { monthStart } from "@/lib/domain/period";
+import { displayName } from "@/lib/domain/normalize";
 import { dmy, num, rp, rpc } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
@@ -181,7 +182,8 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
           <li><b>Device:</b> {DEVICE_LOBS.map((l) => `${LOB_LABEL[l]} ${rp(rules.perUnit[l] ?? 0)}`).join(" · ")} per unit. Retur mengurangi.</li>
           <li><b>Qoala:</b> dihitung per polis, lalu dijumlahkan — {tiers.map((t) => `${tierLabel(t.min)} ${rp(t.fee)}`).join(" · ")}.</li>
           <li><b>Aksesoris:</b> dari {board ? <>&quot;{board.title}&quot;</> : "leaderboard ACC Fokus"} (tab Data - Akeno). Angka ini MTD dari sheet, tidak ikut filter tanggal.</li>
-          <li className="text-xs text-slate-500">Penjualan akun online (Mapemall) tidak dihitung. Skema bisa diubah admin di Settings → Aturan bisnis (kunci <code>incentive</code>).</li>
+          <li><b>Akun online</b> ({(rules.online?.accounts ?? []).map((a) => displayName(a)).join(", ")}): {rp(rules.online?.perUnit ?? 0)} per device (MacBook, iPhone, iPad, Apple Watch); Qoala tidak dihitung.</li>
+          <li className="text-xs text-slate-500">Skema bisa diubah admin di Settings → Aturan bisnis (kunci <code>incentive</code>, mis. <code>{'{"incentive":{"online":{"perUnit":5000}}}'}</code>).</li>
         </ul>
       </Panel>
       )}

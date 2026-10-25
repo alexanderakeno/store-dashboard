@@ -24,14 +24,14 @@ test("qoalaFee tiers: <1jt 20rb, 1–1,5jt 40rb, 1,5–<2jt 60rb, ≥2jt 80rb (r
   assert.equal(qoalaFee(5_065_000, R.qoalaTiers), 80_000);
 });
 
-test("devices: 30rb per unit for Mac/iPhone/iPad/Watch; AirPods and Android not paid; returns subtract", () => {
+test("devices: iPhone 15rb, Mac/iPad/Watch 30rb per unit; AirPods and Android not paid; returns subtract", () => {
   const v = incentiveView(
     [line({ qty: 2 }), line({ lob: "Mac" }), line({ lob: "iPad" }), line({ lob: "Apple Watch" }), line({ lob: "AirPods" }), line({ group: "Android", lob: "Samsung" }), line({ qty: -1, amount: -100 })],
     R, null, ["Chelsy Arrahmat"],
   );
   const r = v.rows[0];
   assert.equal(r.device.iPhone.qty, 1);
-  assert.equal(r.deviceFee, (1 + 1 + 1 + 1) * 30_000);
+  assert.equal(r.deviceFee, 1 * 15_000 + (1 + 1 + 1) * 30_000);
 });
 
 test("qoala: each policy priced on its own, then summed; online channel ignored", () => {
@@ -70,8 +70,22 @@ test("parseAccFocus reads the Data - Akeno leaderboard by label; ACC fee joins s
   const v = incentiveView([line({})], R, b, ["Chelsy Arrahmat", "Elvina Qur'Ani"]);
   const chelsy = v.rows.find((r) => r.name === "Chelsy Arrahmat")!;
   assert.equal(chelsy.acc?.fee, 610_000);
-  assert.equal(chelsy.total, 30_000 + 610_000);
+  assert.equal(chelsy.total, 15_000 + 610_000); // one iPhone
   assert.equal(v.rows.find((r) => r.name === "Elvina Qur'Ani")?.acc?.fee, 267_500); // matched despite case
   assert.equal(v.rows.length, 2);
   assert.equal(v.total.acc, 877_500);
+});
+
+test("online accounts (Digiplus.co.id, Mapemall): 5rb per Apple device, no Qoala; other channels still ignored", () => {
+  const web = (p: Partial<SalesLine>) => line({ nik: null, staffName: "Digiplus.co.id", ...p });
+  const mall = (p: Partial<SalesLine>) => line({ nik: null, staffName: "MAPEMALL", isChannel: true, ...p });
+  const v = incentiveView(
+    [web({ qty: 3 }), web({ lob: "Mac" }), web({ group: "Android", lob: "Samsung" }), { ...qoala(1_200_000), nik: null, staffName: "Digiplus.co.id" }, mall({ qty: 2 }), mall({ qty: -1, amount: -100 }), line({ nik: null, staffName: "TOKOPEDIA", isChannel: true })],
+    R, null, [],
+  );
+  const d = v.rows.find((r) => r.name === "Digiplus.co.id")!;
+  assert.equal(d.deviceFee, 4 * 5_000); // 3 iPhone + 1 Mac, Android not paid
+  assert.equal(d.qoala.fee, 0);
+  assert.equal(v.rows.find((r) => r.name === "Mapemall")?.deviceFee, (2 - 1) * 5_000); // return subtracts
+  assert.equal(v.rows.some((r) => /TOKOPEDIA/i.test(r.name)), false);
 });

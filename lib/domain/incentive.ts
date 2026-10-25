@@ -49,7 +49,8 @@ export function qoalaFee(price: number, tiers: IncentiveRules["qoalaTiers"]): nu
  * - Qoala: every policy is priced on its own (line amount ÷ policies on the line), gets its tier
  *   fee, then the fees are added up.
  * - Accessories: taken as-is from the sheet's "LEADERBOARD ACC FOKUS" (its own date, MTD).
- * `lines` must already be limited to the period; online channel lines are ignored.
+ * - Online accounts (`online.accounts`, e.g. Digiplus.co.id, Mapemall): `online.perUnit` per Apple device only.
+ * `lines` must already be limited to the period; other online channel lines are ignored.
  */
 export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: AccFocusBoard | null, staff: string[]): IncentiveView {
   const tiers = [...rules.qoalaTiers].sort((a, b) => a.min - b.min);
@@ -72,9 +73,15 @@ export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: Ac
   };
   for (const n of staff) row(n);
 
+  // online accounts (Digiplus.co.id, Mapemall): flat rate per Apple device, nothing else
+  const online = new Set((rules.online?.accounts ?? []).map(nameKey));
   for (const l of lines) {
-    if (l.isChannel || !l.staffName) continue;
-    const rate = l.group === "Apple" && l.lob ? rules.perUnit[l.lob] : undefined;
+    if (!l.staffName) continue;
+    const isOnline = online.has(nameKey(l.staffName));
+    if (l.isChannel && !isOnline) continue;
+    const base = l.group === "Apple" && l.lob ? rules.perUnit[l.lob] : undefined;
+    const rate = base !== undefined && isOnline ? (rules.online?.perUnit ?? 0) : base;
+    if (isOnline && (rate === undefined || !l.countsInQty)) continue;
     if (rate !== undefined && l.countsInQty) {
       const r = row(displayName(l.staffName));
       const d = (r.device[l.lob!] ??= { qty: 0, fee: 0 });
