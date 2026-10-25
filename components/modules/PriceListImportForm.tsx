@@ -15,7 +15,7 @@ type Fmt = "pdf" | "xlsx";
 const ACCEPT: Record<Fmt, string> = { pdf: ".pdf,application/pdf", xlsx: ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" };
 
 /** Every sheet of an Excel file as cell grids (browser only). */
-async function readSheets(file: File): Promise<Sheet[]> {
+export async function readSheets(file: File): Promise<Sheet[]> {
   const XLSX = await loadSheetJS();
   try {
     const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
