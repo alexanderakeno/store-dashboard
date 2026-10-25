@@ -146,3 +146,19 @@ test("etpPromos: model + storage named in ETP cashback programs", async () => {
   assert.deepEqual(nos("GALAXY S25 ULTRA 12/256GB"), []); // ended 15 Oct
   assert.deepEqual(nos("GALAXY WATCH 9 44MM"), []); // other stores only
 });
+
+test("variantPromo: Excel rows match promo articles by code (\"GALAXY Z FOLD 8\" row vs SAP \"SAMSUNG Z FOLD 8\")", () => {
+  const art = (article: string, description: string, value: number, code: string) => ({ sheet: "PWP FOLD", kind: "PWP" as const, article, description, value, code, normal: null, ranges: [], stores: [] });
+  const promo = {
+    title: "", programs: [], pairs: [], sheets: [], warnings: [], source: "", updatedAt: "", updatedBy: "",
+    articles: [art("SSUSM-F971BZWDXID", "SAMSUNG Z FOLD 8 12/256GB CREAM", 1699000, "PWPFOLD8"), art("SSUSM-F971BZKDXID", "SAMSUNG Z FOLD 8 12/256GB GRAPHITE", 1699000, "PWPFOLD8"), art("SSUSM-F776BZKAXID", "SAMSUNG Z FLIP 8 12/256GB GRAPHITE", 1099000, "PWPFLIP8")],
+  };
+  // by name alone the row does not match the SAP description…
+  assert.equal(variantPromo("GALAXY Z FOLD 8 12/256GB", promo, "2026-10-25", "QF10"), null);
+  // …with its articles it does
+  const v = variantPromo("GALAXY Z FOLD 8 12/256GB", promo, "2026-10-25", "QF10", undefined, ["SSUSM-F971BZWDXID", "SSUSM-F971BZKDXID"])!;
+  assert.deepEqual(v.items.map((i) => [i.code, i.value, i.label]), [["PWPFOLD8", 1699000, ""]]);
+  assert.equal(v.pwp, 1699000);
+  // articles that are not in any promo → name fallback (PDF-style name still works)
+  assert.equal(variantPromo("SAMSUNG Z FLIP 8 12/256GB", promo, "2026-10-25", "QF10", undefined, ["OTHER"])?.pwp, 1099000);
+});
