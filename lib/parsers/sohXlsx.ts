@@ -40,8 +40,9 @@ function isoOf(s: string): string | null {
  * Brand · Division · Product Group · Category · "ARTICLE / DESCRIPTION" · Barcode · Price · Qty · Value —
  * and a "Grand Total For Stock Quantity & Value" row used to check the qty.
  *
- * - The same article can appear on several lines (per batch/price): qty is summed per article.
- * - Articles whose total qty is 0 are left out (the report also lists empty articles).
+ * - Serial-numbered stock is printed one line per unit and the Qty column is mostly 0 on those lines, so every
+ *   line counts as at least 1 unit: units per line = max(Qty, 1) (a charger line with Qty 5 still counts 5).
+ *   An article repeated on N lines = N units.
  * - DEVICES: Apple per category (iPhone · iPad · MacBook · iMac · Apple Watch), other brands per brand.
  *   ACCESSORIES → "Aksesoris"; motorized / smart home / electronic → "Elektronik".
  * - DEMO units, SUPPORTING and MERCHANDISE (vouchers) are not sellable stock and are skipped.
@@ -77,13 +78,12 @@ export function parseSohXlsx(rows: unknown[][]): SohParse {
     const qty = num(r[7]);
     // the report header row (Store : … Date : … Time : …) is not a stock line
     if (!group || !text || r.some((c) => /STOCK POSITION REPORT|^STORE\s*:/i.test(clean(c)))) continue;
-    if (!Number.isFinite(qty)) {
-      bad++;
-      continue;
-    }
-    counted += qty;
+    if (Number.isFinite(qty)) counted += qty;
+    else bad++;
+    // a listed line is a unit in the store even when Qty says 0
+    const units = Number.isFinite(qty) && qty > 1 ? Math.round(qty) : 1;
     if (SKIP[group]) {
-      skipped.set(group, (skipped.get(group) ?? 0) + qty);
+      skipped.set(group, (skipped.get(group) ?? 0) + units);
       continue;
     }
     const cut = text.indexOf(" / ");
@@ -95,11 +95,11 @@ export function parseSohXlsx(rows: unknown[][]): SohParse {
     const category =
       group === "DEVICES" ? (brand === "APPLE" ? APPLE[cat] ?? "Apple" : brandName(brand)) : group === "ACCESSORIES" ? "Aksesoris" : "Elektronik";
     const it = byArticle.get(article);
-    if (it) it.qty += qty;
-    else byArticle.set(article, { category, article, description, qty });
+    if (it) it.qty += units;
+    else byArticle.set(article, { category, article, description, qty: units });
   }
 
-  const items = [...byArticle.values()].filter((x) => x.qty > 0).map((x) => ({ ...x, qty: Math.round(x.qty) }));
+  const items = [...byArticle.values()];
   const rank = (c: string) => (ORDER.includes(c) ? ORDER.indexOf(c) : LAST.includes(c) ? 100 + LAST.indexOf(c) : 50);
   const categories = [...new Set(items.map((x) => x.category))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
   items.sort((a, b) => rank(a.category) - rank(b.category) || a.category.localeCompare(b.category) || a.description.localeCompare(b.description));
@@ -108,8 +108,9 @@ export function parseSohXlsx(rows: unknown[][]): SohParse {
 
   if (!title) warnings.push('Judul "Stock Position Report" tidak ditemukan — bukan file Stock Position Report?');
   if (!date) warnings.push("Tanggal laporan tidak terbaca.");
-  if (grand != null && Math.round(grand) !== Math.round(counted)) warnings.push(`Total qty terbaca ${counted.toLocaleString("id-ID")} ≠ Grand Total ${grand.toLocaleString("id-ID")} di file.`);
-  if (bad) warnings.push(`${bad} baris tanpa qty dilewati.`);
-  for (const [g, q] of skipped) if (q) warnings.push(`${SKIP[g]} tidak diimport (${q.toLocaleString("id-ID")} qty).`);
+  // the Grand Total sums the Qty column, so it is checked against that column (not against the counted units)
+  if (grand != null && Math.round(grand) !== Math.round(counted)) warnings.push(`Kolom Qty terbaca ${counted.toLocaleString("id-ID")} ≠ Grand Total ${grand.toLocaleString("id-ID")} di file — cek apakah file terpotong.`);
+  if (bad) warnings.push(`${bad} baris tanpa angka qty (dihitung 1 unit).`);
+  for (const [g, q] of skipped) if (q) warnings.push(`${SKIP[g]} tidak diimport (${q.toLocaleString("id-ID")} unit).`);
   return { date, title: [title, store].filter(Boolean).join(" · "), categories, items, totals, warnings };
 }
