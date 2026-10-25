@@ -104,16 +104,31 @@ export function matchAppleStock(name: string, series: string, soh: SohItem[] | S
   return out.sort((a, b) => b.qty - a.qty || a.color.localeCompare(b.color));
 }
 
-/** Apple: one model per Product label of the PDF; the variant is the part of the name not shared by the whole group. */
-function appleModels(items: PriceItem[], sohItems: SohItem[]): PriceModel[] {
+/** Apple Excel rows carry their SAP articles: stock per article, the colour is what the SOH description adds to the name. */
+export function matchAppleArticles(name: string, series: string, articles: string[], soh: SohItem[]): PriceStock[] {
+  const set = new Set(articles.map((a) => a.toUpperCase()));
+  const skip = new Set([...appleTokens(name), ...appleTokens(series)]);
+  return soh
+    .filter((s) => set.has(s.article.toUpperCase()))
+    .map((s) => ({ article: s.article, color: appleTokens(s.description).filter((t) => !skip.has(t) && !isChip(t)).join(" ") || "—", qty: s.qty }))
+    .sort((a, b) => b.qty - a.qty || a.color.localeCompare(b.color));
+}
+
+/**
+ * Apple: one model per Product label (PDF) / series title (Excel); the variant is the part of the name not shared by
+ * the whole group. `inStockOnly` hides Excel rows (with articles) that have no stock.
+ */
+function appleModels(items: PriceItem[], sohItems: SohItem[], inStockOnly = false): PriceModel[] {
   const map = new Map<string, PriceModel>();
   // only Apple articles can match; tokenise them once
   const soh = tokenizeSoh(sohItems.filter((s) => /\b(IPHONE|IPAD|MB[ANP]|MAC|IMAC|APPLE|AIRPODS)\b/i.test(s.description)));
-  const rows = new Map<string, Array<{ it: PriceItem; i: number }>>();
+  const rows = new Map<string, Array<{ it: PriceItem; i: number; stock: PriceStock[] }>>();
   items.forEach((it, i) => {
     if (it.kind !== "apple") return;
+    const stock = it.articles?.length ? matchAppleArticles(it.name, it.series, it.articles, sohItems) : matchAppleStock(it.name, it.series, soh);
+    if (inStockOnly && it.articles?.length && !stock.some((x) => x.qty > 0)) return;
     const key = `${it.brand}|${it.series}`;
-    rows.set(key, [...(rows.get(key) ?? []), { it, i }]);
+    rows.set(key, [...(rows.get(key) ?? []), { it, i, stock }]);
   });
   for (const [key, list] of rows) {
     // shared prefix of all names, cut back to a word or "/" boundary ("MBA 15.3 /M5/10C GPU/" → "16GB/512GB")
@@ -124,12 +139,12 @@ function appleModels(items: PriceItem[], sohItems: SohItem[]): PriceModel[] {
     while (p > 0 && !names.every(edge)) p--;
     const { brand, series } = list[0].it;
     const m: PriceModel = { key, brand, series: brand, model: series, variants: [] };
-    list.forEach(({ it, i }) => {
+    list.forEach(({ it, i, stock }) => {
       let variant = list.length > 1 ? it.name.slice(p).replace(/^[\s/+-]+/, "").trim() : "";
       // identical descriptions (Watch Ultra 3 + Milanese Loop) differ only by the bracket note
       if (!variant && list.length > 1) variant = it.note ?? "";
       if (/^\d{2}$/.test(variant) && brand === "Apple Watch") variant += "mm";
-      m.variants.push({ ...it, id: String(i), variant: variant || "Standar", stock: matchAppleStock(it.name, it.series, soh) });
+      m.variants.push({ ...it, id: String(i), variant: variant || "Standar", stock });
     });
     // same variant label twice (e.g. two straps of one watch) → tell them apart by the bracket note
     for (const v of m.variants) if (m.variants.filter((x) => x.variant === v.variant).length > 1 && v.note) v.variant = `${v.variant} · ${v.note}`;
@@ -161,7 +176,7 @@ export function priceModels(stored: PriceItem[], kind: PriceKind, soh: SohItem[]
   // fixes apply to data already in the sheet too: rows printed twice are shown once, "IPHONE 17E" reads "iPhone 17e"
   const items = stored.map((it) => (it.kind === "apple" ? { ...it, name: iphoneName(it.name) } : it));
   dedupeItems(items, []);
-  if (kind === "apple" && items.some((it) => it.kind === "apple" && it.credit != null)) return appleModels(items, soh);
+  if (kind === "apple" && items.some((it) => it.kind === "apple" && (it.credit != null || it.articles?.length))) return appleModels(items, soh, opts.inStockOnly);
   const map = new Map<string, PriceModel>();
   items.forEach((it, i) => {
     if (it.kind !== kind) return;
