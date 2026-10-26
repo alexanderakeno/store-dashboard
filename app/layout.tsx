@@ -1,9 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+/** Name under the Home Screen icon (iPhone "Add to Home Screen" / Android install). */
+const SHORT_NAME = process.env.APP_SHORT_NAME || "Kokas";
+
+// icons: app/apple-icon.png (iPhone Home Screen, 180 px) + app/icon.svg (browser tab); app/manifest.ts for Android
 export const metadata: Metadata = {
   title: process.env.APP_NAME || "Store Dashboard",
   robots: { index: false, follow: false },
+  appleWebApp: { title: SHORT_NAME },
+  applicationName: SHORT_NAME,
 };
 
 export const viewport: Viewport = {
