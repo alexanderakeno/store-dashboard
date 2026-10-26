@@ -18,5 +18,6 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api/auth/login|_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest).*)"],
+  // icons & manifest stay public: iPhone / Android fetch them without the session cookie
+  matcher: ["/((?!api/auth/login|_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|icon-192.png|icon-512.png|manifest.webmanifest).*)"],
 };
