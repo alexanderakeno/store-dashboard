@@ -1,8 +1,9 @@
 import { EmptyBlock, Panel, SectionHead, Trend, achColor } from "@/components/kit";
 import { ParamSelect } from "@/components/kit/controls";
+import { MobileGrid } from "@/components/kit/MobileGrid";
 import { mtmView, type MtmView } from "@/lib/domain/mtm";
 import { prevMonth } from "@/lib/domain/period";
-import { dateShort, dec, monthLabel, monthShort, num, pct, rpf } from "@/lib/format";
+import { dateShort, dec, monthLabel, monthShort, num, pct, rpc, rpf } from "@/lib/format";
 import { getMonthSnapshot, type MonthSnapshot } from "@/lib/services/dashboard";
 import type { MonthEntry } from "@/lib/repositories";
 
@@ -122,7 +123,16 @@ function Groups({ v }: { v: MtmView }) {
   const b = monthShort(v.compare.month);
   return (
     <Panel title="Per Grup" desc={`Sales tanggal 1–${v.day}; Ach = actual ÷ target prorata ${v.day} hari.`}>
-      <div className="sd-table-wrap">
+      <MobileGrid
+        cols={[{ label: "Grup" }, { label: b, w: "4.5rem" }, { label: a, w: "4.5rem" }, { label: "Growth", w: "3.7rem" }]}
+        rows={v.groups.map((g) => ({
+          key: g.group,
+          cells: [<b key="g">{g.group}</b>, rpc(g.compare), <b key="a">{rpc(g.base)}</b>, <Trend key="t" value={g.growthPct} digits={1} />],
+          sub: <>Selisih <b className={g.diff >= 0 ? "text-emerald-600" : "text-rose-600"}>{rpc(g.diff)}</b> · Ach {b} <b style={{ color: achColor(g.compareAch, 100) }}>{pct(g.compareAch, 0)}</b> · Ach {a} <b style={{ color: achColor(g.baseAch, 100) }}>{pct(g.baseAch, 0)}</b></>,
+        }))}
+        foot={["Total", rpc(v.compare.totals.sales), rpc(v.base.totals.sales), <Trend key="t" value={v.growth.sales} digits={1} />]}
+      />
+      <div className="sd-table-wrap max-sm:hidden">
         <table className="sd-table">
           <thead>
             <tr><th>Grup</th><th className="n">{b}</th><th className="n">{a}</th><th className="n">Selisih</th><th className="n">Growth</th><th className="n">Ach {b}</th><th className="n">Ach {a}</th></tr>
@@ -163,7 +173,15 @@ function Lob({ v }: { v: MtmView }) {
   const max = Math.max(1, ...v.lob.flatMap((r) => [r.baseQty, r.compareQty]));
   return (
     <Panel title="LOB Apple" desc={`Qty dan value tanggal 1–${v.day}. Bar abu-abu = ${b}, biru = ${a}.`}>
-      <div className="sd-table-wrap">
+      <MobileGrid
+        cols={[{ label: "LOB" }, { label: `Qty ${b}`, w: "3.2rem" }, { label: `Qty ${a}`, w: "3.2rem" }, { label: "Growth", w: "3.7rem" }]}
+        rows={v.lob.map((r) => ({
+          key: r.lob,
+          cells: [<b key="l">{LOB_LABEL[r.lob]}</b>, num(r.compareQty), <b key="a">{num(r.baseQty)}</b>, <Trend key="t" value={r.qtyGrowth} digits={1} />],
+          sub: <>Value {rpc(r.compareValue)} → <b>{rpc(r.baseValue)}</b> · <Trend value={r.valueGrowth} digits={1} /></>,
+        }))}
+      />
+      <div className="sd-table-wrap max-sm:hidden">
         <table className="sd-table">
           <thead>
             <tr><th>LOB</th><th style={{ minWidth: 160 }}>Qty</th><th className="n">{b}</th><th className="n">{a}</th><th className="n">Growth Qty</th><th className="n">Value {b}</th><th className="n">Value {a}</th><th className="n">Growth Value</th></tr>
@@ -202,7 +220,16 @@ function Full({ v }: { v: MtmView }) {
       desc={`${b} ${v.compareClosed ? "bulan penuh" : "s/d data terakhir"} vs estimasi closing ${a} (MTD ÷ hari berjalan × hari dalam bulan).`}
       right={!v.compareClosed ? <span className="sd-badge amber">{b} belum tutup bulan</span> : undefined}
     >
-      <div className="sd-table-wrap">
+      <MobileGrid
+        cols={[{ label: "Grup" }, { label: `${b} Act`, w: "4.5rem" }, { label: `${a} Est`, w: "4.5rem" }, { label: "vs", w: "3.7rem" }]}
+        rows={v.full.map((r) => ({
+          key: r.group,
+          className: r.group === "Total" ? "bg-slate-50 font-black dark:bg-slate-800/60" : "",
+          cells: [<b key="g">{r.group}</b>, rpc(r.compareActual), <b key="a">{rpc(r.baseEstimate)}</b>, <Trend key="t" value={r.growthPct} digits={1} />],
+          sub: <>Ach {b} <b style={{ color: achColor(r.compareAch, 100) }}>{pct(r.compareAch, 0)}</b> dari {rpc(r.compareTarget)} · Est. ach {a} <b style={{ color: achColor(r.baseEstAch, 100) }}>{pct(r.baseEstAch, 0)}</b> dari {rpc(r.baseTarget)}</>,
+        }))}
+      />
+      <div className="sd-table-wrap max-sm:hidden">
         <table className="sd-table">
           <thead>
             <tr><th>Grup</th><th className="n">{b} Actual</th><th className="n">{b} Target</th><th className="n">Ach</th><th className="n">{a} Est. Closing</th><th className="n">{a} Target</th><th className="n">Est. Ach</th><th className="n">Est. vs {b}</th></tr>
@@ -246,7 +273,16 @@ function Staff({ v }: { v: MtmView }) {
   const b = monthShort(v.compare.month);
   return (
     <Panel title="Staff" desc={`Sales per staff tanggal 1–${v.day} di kedua bulan.`}>
-      <div className="sd-table-wrap">
+      <MobileGrid
+        cols={[{ label: "Staff" }, { label: b, w: "4.5rem" }, { label: a, w: "4.5rem" }, { label: "Growth", w: "3.7rem" }]}
+        rows={v.staff.map((x) => ({
+          key: x.key,
+          cells: [<b key="n" className="leading-tight">{x.name}{x.isChannel && <span className="ml-1 text-[10px] font-semibold text-slate-400">online</span>}</b>, x.compare ? rpc(x.compare.sales) : muted, <b key="a">{x.base ? rpc(x.base.sales) : muted}</b>, x.base && x.compare ? <Trend key="t" value={x.growthPct} digits={1} /> : <span key="t" className="text-[11px] text-slate-400">{x.base ? "baru" : "–"}</span>],
+          sub: <>Trx {x.compare ? num(x.compare.invoices) : "–"} → {x.base ? num(x.base.invoices) : "–"} · ATV {x.compare ? rpc(x.compare.atv) : "–"} → {x.base ? rpc(x.base.atv) : "–"}</>,
+        }))}
+        empty="Belum ada transaksi."
+      />
+      <div className="sd-table-wrap max-sm:hidden">
         <table className="sd-table">
           <thead>
             <tr><th>Staff</th><th className="n">Sales {b}</th><th className="n">Sales {a}</th><th className="n">Growth</th><th className="n">Trx {b}</th><th className="n">Trx {a}</th><th className="n">ATV {b}</th><th className="n">ATV {a}</th></tr>
