@@ -7,7 +7,7 @@ import { PageStatus } from "@/components/layout/PageStatus";
 import { staffStats, typeQty } from "@/lib/domain/extra";
 import { totals } from "@/lib/domain/kpi";
 import { daysInMonth, eachDay, weeksOfMonth } from "@/lib/domain/period";
-import { dateShort, dmy, num, pct, rpf } from "@/lib/format";
+import { dateShort, dmy, num, pct, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { getSoh, stockKosong } from "@/lib/soh";
 import type { MonthSnapshot } from "@/lib/services/dashboard";
@@ -40,7 +40,20 @@ export default async function WeeklyReasonPage({ searchParams }: { searchParams:
         <div className="self-end text-sm text-slate-500">Sales {rpf(t.sales)} / target {rpf(target)} · <b>{pct(target ? (t.sales / target) * 100 : null, 0)}</b> · time gone week {pct(tg, 0)}</div>
       </section>
       <Panel title="Weekly Sales & Reason Staff" desc="Reason disimpan per staff per week.">
-        <div className="sd-table-wrap"><table className="sd-table">
+        <ul className="divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 sm:hidden dark:divide-slate-700 dark:border-slate-700">
+          {staff.map((r) => (
+            <li key={r.key} className="px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <b className="min-w-0 truncate text-[14px]">{r.name}</b>
+                <span className={`sd-badge shrink-0 ${r.onPace ? "green" : "red"}`}>{pct(r.achievementPct ?? 0, 0)} · {r.onPace ? "On Track" : "Behind"}</span>
+              </div>
+              <p className="mt-0.5 text-[12px] text-slate-500 tabular-nums"><b className="text-slate-800 dark:text-slate-100">{rpf(r.totals.sales)}</b> dari target {rpc(r.target)}</p>
+              <div className="mt-1.5">{isAdmin ? <NoteEditor kind="reason" date={wk.start} keyName={r.name} initial={noteOf(r.name)} others={rows} label="Isi Reason" placeholder="Alasan pencapaian minggu ini…" /> : <span className="text-sm text-slate-600">{noteOf(r.name) || "—"}</span>}</div>
+            </li>
+          ))}
+          {!staff.length && <li className="px-3 py-5 text-center text-slate-500">Belum ada penjualan.</li>}
+        </ul>
+        <div className="sd-table-wrap max-sm:hidden"><table className="sd-table">
           <thead><tr><th>Staff</th><th className="n">Target Week</th><th className="n">Actual</th><th className="n">%</th><th>Status</th><th>Reason</th></tr></thead>
           <tbody>{staff.map((r) => (
             <tr key={r.key}><td className="font-bold">{r.name}</td><td className="n">{rpf(r.target)}</td><td className="n">{rpf(r.totals.sales)}</td><td className="n">{pct(r.achievementPct ?? 0, 0)}</td>
