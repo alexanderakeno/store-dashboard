@@ -7,7 +7,7 @@ import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, androidBrands, clampRange, linesIn, lobQty, lobValue, perfCards, staffStats, timeGonePct, vasSplit } from "@/lib/domain/extra";
 import { monthStart } from "@/lib/domain/period";
 import { homeView } from "@/lib/domain/views";
-import { dec, dmy, monthLabel, num, pct, rpf } from "@/lib/format";
+import { dec, dmy, monthLabel, num, pct, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 
@@ -59,8 +59,8 @@ export default async function MadingPage({ searchParams }: { searchParams: Searc
       <div className="grid gap-5 xl:grid-cols-2">
         <Panel title="Pencapaian Staff • Value">
           <MobileGrid
-            cols={[{ label: "Staff" }, { label: "Target", w: "6.2rem" }, { label: "Value", w: "6.2rem" }, { label: "%", w: "2.4rem" }]}
-            rows={staff.map((r) => ({ key: r.key, cells: [<b key="n" className="leading-tight">{r.name}</b>, rpf(r.target), <b key="v">{rpf(r.totals.sales)}</b>, <b key="p">{pct(r.achievementPct ?? 0, 0)}</b>] }))}
+            cols={[{ label: "Staff" }, { label: "Target", w: "4.6rem" }, { label: "Value", w: "4.8rem" }, { label: "%", w: "2.6rem" }]}
+            rows={staff.map((r) => ({ key: r.key, cells: [<b key="n" className="leading-tight">{r.name}</b>, rpc(r.target), <b key="v">{rpc(r.totals.sales)}</b>, <b key="p">{pct(r.achievementPct ?? 0, 0)}</b>] }))}
           />
           <div className="sd-table-wrap max-sm:hidden"><table className="sd-table">
             <thead><tr><th>Staff</th><th className="n">Target</th><th className="n">Value</th><th className="n">%</th></tr></thead>

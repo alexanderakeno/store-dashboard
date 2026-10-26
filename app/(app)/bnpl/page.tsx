@@ -1,9 +1,10 @@
 import { PageIntro, Panel } from "@/components/kit";
+import { MobileGrid } from "@/components/kit/MobileGrid";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { BnplForm } from "@/components/modules/RecordForms";
 import { monthEnd, monthStart, todayIn } from "@/lib/domain/period";
 import { appConfig } from "@/config/app";
-import { dayName, dmy, monthLabel, num, rpf } from "@/lib/format";
+import { dayName, dmy, monthLabel, num, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { records } from "@/lib/records";
 
@@ -46,7 +47,17 @@ export default async function BnplPage({ searchParams }: { searchParams: SearchP
         </div>
       </Panel>
       <Panel title="Daily Tracking" desc="Qty dan Amount per provider dalam satu baris tanggal.">
-        <div className="sd-table-wrap"><table className="sd-table">
+        <MobileGrid
+          cols={[{ label: "Tanggal" }, { label: "Qty", w: "2.4rem" }, { label: "Amount", w: "6.4rem" }]}
+          rows={days.map((d) => {
+            const t = ALL.reduce((a, x) => ({ qty: a.qty + (byDay[d][x]?.qty ?? 0), amount: a.amount + (byDay[d][x]?.amount ?? 0) }), { qty: 0, amount: 0 });
+            const parts = ALL.filter((x) => byDay[d][x]?.qty || byDay[d][x]?.amount).map((x) => `${x} ${num(byDay[d][x].qty)} · ${rpc(byDay[d][x].amount)}`);
+            return { key: d, cells: [<span key="d" className="font-bold">{dmy(d)} <span className="text-[11px] font-normal text-slate-500">{dayName(d)}</span></span>, num(t.qty), <b key="a">{rpf(t.amount)}</b>], sub: parts.join(" · ") || undefined };
+          })}
+          foot={["TOTAL", num(tb.qty + tt.qty), rpf(tb.amount + tt.amount)]}
+          empty="Belum ada input bulan ini."
+        />
+        <div className="sd-table-wrap max-sm:hidden"><table className="sd-table">
           <thead>
             <tr><th rowSpan={2}>Tanggal</th><th rowSpan={2}>Hari</th>{ALL.map((x) => <th key={x} colSpan={2} className="c">{x}</th>)}</tr>
             <tr>{ALL.map((x) => [<th key={`${x}q`} className="n">Qty</th>, <th key={`${x}a`} className="n">Amount</th>])}</tr>

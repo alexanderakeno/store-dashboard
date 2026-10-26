@@ -7,7 +7,7 @@ import { appConfig } from "@/config/app";
 import { productType, rangeConversion, startedWeeks } from "@/lib/domain/extra";
 import { byStaff, totals } from "@/lib/domain/kpi";
 import { displayName } from "@/lib/domain/normalize";
-import { daysInMonth, eachDay } from "@/lib/domain/period";
+import { addDays, daysInMonth, eachDay } from "@/lib/domain/period";
 import { dayName, dec, monthLabel, num, pct, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
@@ -45,7 +45,7 @@ const DAY_SHORT = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 const MON = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 /** "2026-10-18" → "18 Okt"; a range in one month → "18–24 Okt". */
 const dm = (d: string) => `${Number(d.slice(8))} ${MON[Number(d.slice(5, 7)) - 1]}`;
-const span = (a: string, b: string) => (a.slice(0, 7) === b.slice(0, 7) ? `${Number(a.slice(8))}–${dm(b)}` : `${dm(a)}–${dm(b)}`);
+const span = (a: string, b: string) => (a === b ? dm(a) : a.slice(0, 7) === b.slice(0, 7) ? `${Number(a.slice(8))}–${dm(b)}` : `${dm(a)}–${dm(b)}`);
 
 /**
  * Weekly Performance: one week (Sunday–Saturday, cut at the month's edges like every week in the app) —
@@ -67,8 +67,11 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
 
   const B = linesOf(cur);
   const tb = totals(B);
-  const ta = prev ? totals(linesOf(prev)) : null;
   const days = eachDay(cur.start, cur.end);
+  const running = cur.end > p.asOf;
+  // while the week is running, compare like-for-like: the previous week up to the same weekday (e.g. Sun–Mon vs Sun–Mon)
+  const prevCut = prev && running ? addDays(prev.end, -(6 - new Date(`${p.asOf}T00:00:00Z`).getUTCDay())) : prev?.end;
+  const ta = prev && prevCut && prevCut >= prev.start ? totals(linesOf({ start: prev.start, end: prevCut })) : null;
   const elapsed = eachDay(cur.start, upTo(cur.end)).length;
   const tg = (elapsed / days.length) * 100;
   const target = tgtOf(cur);
@@ -76,7 +79,6 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
   const growth = ta && ta.sales ? ((tb.sales - ta.sales) / ta.sales) * 100 : null;
   const conv = rangeConversion(s, cur.start, upTo(cur.end));
   const dailyTarget = (s.target?.total ?? 0) / dim;
-  const running = cur.end > p.asOf;
 
   // day by day (Sunday → Saturday); days after the data date are "belum"
   const byDay = new Map<string, SalesLine[]>();
@@ -114,7 +116,7 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
     `*${appConfig().storeName || "Store"} — Weekly Performance W${cur.index}*`,
     `${range} ${p.month.slice(0, 4)}${running ? ` (s/d ${dm(p.asOf)})` : ""}`,
     "",
-    `Sales: ${rpf(tb.sales)} / target ${rpf(target)} (${pct(ach)})${growth == null ? "" : ` · vs W${prev!.index} ${growth >= 0 ? "+" : ""}${pct(growth)}`}`,
+    `Sales: ${rpf(tb.sales)} / target ${rpf(target)} (${pct(ach)})${growth == null ? "" : ` · vs W${prev!.index}${running ? " (hari yg sama)" : ""} ${growth >= 0 ? "+" : ""}${pct(growth)}`}`,
     ...GROUPS.map((g) => {
       const t = tgtOf(cur, s.target?.byGroup[g] ?? 0);
       return `${g}: ${rpf(tb.byGroup[g])} (${t ? pct((tb.byGroup[g] / t) * 100) : "–"})`;
@@ -157,10 +159,10 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
           <p className="mt-1 text-[11px] text-slate-500"><b className="text-slate-800 dark:text-slate-100">{pct(ach)}</b> · time gone {pct(tg, 0)}</p>
         </article>
         <article className="sd-block-card p-3.5 sm:p-5" data-tone="violet">
-          <p className="text-[11px] font-extrabold tracking-wide text-slate-500 uppercase">vs W{prev?.index ?? "–"}</p>
+          <p className="text-[11px] font-extrabold tracking-wide text-slate-500 uppercase">vs {prev ? `W${prev.index}` : "week lalu"}</p>
           <p className="mt-2 text-xl font-black">{growth == null ? "—" : <Trend value={growth} digits={1} />}</p>
-          <p className="text-[11px] font-bold text-slate-500 sm:text-xs">{ta ? `${rpf(ta.sales)} week lalu` : "Week pertama bulan ini"}</p>
-          {running && ta && <p className="mt-1 text-[11px] text-slate-400">Week ini masih berjalan ({elapsed}/{days.length} hari).</p>}
+          <p className="text-[11px] font-bold text-slate-500 sm:text-xs">{ta ? `${rpf(ta.sales)} di W${prev!.index}` : prev ? "Tidak ada hari pembanding" : "Week pertama bulan ini"}</p>
+          {running && ta && <p className="mt-1 text-[11px] text-slate-400">Hari yang sama ({span(cur.start, p.asOf)} vs {span(prev!.start, prevCut!)}).</p>}
         </article>
         <article className="sd-block-card p-3.5 sm:p-5" data-tone="green">
           <p className="text-[11px] font-extrabold tracking-wide text-slate-500 uppercase">Transaksi · UPT</p>

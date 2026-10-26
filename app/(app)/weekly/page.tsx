@@ -4,7 +4,7 @@ import { MobileGrid, type MobileRow } from "@/components/kit/MobileGrid";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, deviceOf, typeQty, vasSplit } from "@/lib/domain/extra";
 import { totals } from "@/lib/domain/kpi";
-import { daysInMonth, eachDay, weeksOfMonth } from "@/lib/domain/period";
+import { addDays, daysInMonth, eachDay, weeksOfMonth } from "@/lib/domain/period";
 import { dateShort, num, pct, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { GROUPS, type SalesLine } from "@/types/domain";
@@ -20,7 +20,10 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
   const prevDefault = weeks.find((w) => w.index === cur.index - 1);
   const prev = weeks.find((w) => String(w.index) === p.q.a) ?? prevDefault ?? null;
   const linesOf = (w: { start: string; end: string } | null) => (w ? s.lines.filter((l) => l.date >= w.start && l.date <= w.end && l.date <= p.asOf) : []);
-  const A = linesOf(prev);
+  // while the compared week is still running, the earlier week is cut to the same weekday (like-for-like)
+  const running = cur.end > p.asOf && !!prev && prev.index < cur.index;
+  const aEnd = prev ? (running ? addDays(prev.end, -(6 - new Date(`${p.asOf}T00:00:00Z`).getUTCDay())) : prev.end) : "";
+  const A = prev && aEnd >= prev.start ? linesOf({ start: prev.start, end: aEnd }) : [];
   const B = linesOf(cur);
   const ta = totals(A);
   const tb = totals(B);
@@ -73,7 +76,7 @@ export default async function WeeklyReportPage({ searchParams }: { searchParams:
         <ParamSelect param="a" label="Week Sebelumnya" value={prev ? String(prev.index) : ""} options={[...(prev ? [] : [{ value: "", label: "— (bulan sebelumnya)" }]), ...opts]} />
         <span className="pb-2.5 text-center text-sm font-black text-slate-400">VS</span>
         <ParamSelect param="b" label="Week Pembanding" value={String(cur.index)} options={opts} />
-        <p className="text-xs text-slate-500 sm:col-span-3">Periode Minggu–Sabtu: {prev ? `${dateShort(prev.start)} s.d. ${dateShort(prev.end)}` : "—"} vs {dateShort(cur.start)} s.d. {dateShort(cur.end < p.asOf ? cur.end : p.asOf)} <span className="sd-badge blue ml-1">AUTO</span></p>
+        <p className="text-xs text-slate-500 sm:col-span-3">Periode Minggu–Sabtu: {prev ? `${dateShort(prev.start)} s.d. ${dateShort(aEnd < prev.start ? prev.start : aEnd)}` : "—"} vs {dateShort(cur.start)} s.d. {dateShort(cur.end < p.asOf ? cur.end : p.asOf)} <span className="sd-badge blue ml-1">AUTO</span>{running && <span className="mt-1 block">W{cur.index} masih berjalan — W{prev!.index} dihitung sampai hari yang sama agar perbandingannya adil.</span>}</p>
         {need && <p className="text-xs text-amber-700 sm:col-span-3">Week sebelumnya ada di bulan lalu — pilih week lain atau daftarkan bulan sebelumnya. <NeedData /></p>}
       </section>
 

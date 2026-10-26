@@ -58,7 +58,7 @@ export default async function CxPage({ searchParams }: { searchParams: SearchPar
               const c = cx?.days.find((x) => x.date === d)?.total ?? 0;
               const g = gr?.days.find((x) => x.date === d)?.total ?? 0;
               const inv = invOf(d) ?? 0;
-              return <tr key={d}><td>{dateShort(d)}</td><td>{dayName(d)}</td><td className="n">{num(c)}</td><td className="n">{num(g)}</td><td className="n">{num(inv)}</td><td className="n">{inv ? pct((c / inv) * 100, 0) : "—"}</td><td className="n">{inv ? pct((g / inv) * 100, 0) : "—"}</td></tr>;
+              return <tr key={d}><td className="whitespace-nowrap">{dateShort(d).replace(/ \d{4}$/, "")}</td><td>{dayName(d)}</td><td className="n">{num(c)}</td><td className="n">{num(g)}</td><td className="n">{num(inv)}</td><td className="n">{inv ? pct((c / inv) * 100, 0) : "—"}</td><td className="n">{inv ? pct((g / inv) * 100, 0) : "—"}</td></tr>;
             })}
           </tbody>
         </table></div>
