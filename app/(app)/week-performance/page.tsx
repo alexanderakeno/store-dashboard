@@ -11,30 +11,31 @@ import { addDays, daysInMonth, eachDay } from "@/lib/domain/period";
 import { dayName, dec, monthLabel, num, pct, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
-import { GROUPS, type SalesLine } from "@/types/domain";
+import { GROUPS, type SalesLine, type StoreTarget } from "@/types/domain";
 
 /** Fixed-column grid that fits phones and desktops alike (name column takes the rest). */
-function Grid({ cols, colsM, head, rows, foot }: { cols: string; colsM?: string; head: ReactNode[]; rows: Array<{ key: string; cells: ReactNode[]; sub?: ReactNode }>; foot?: ReactNode[] }) {
+function Grid({ cols, colsM, head, rows, foot, hideM = [] }: { cols: string; colsM?: string; hideM?: number[]; head: ReactNode[]; rows: Array<{ key: string; cells: ReactNode[]; sub?: ReactNode; pop?: string; label?: string }>; foot?: ReactNode[] }) {
   // phones (< 640 px) may use narrower columns (`colsM`)
   const line = "grid items-center gap-x-2 px-3 sm:gap-x-3 grid-cols-[var(--gm)] sm:grid-cols-[var(--gd)]";
   const style = { "--gm": colsM ?? cols, "--gd": cols } as CSSProperties;
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 text-[13px] sm:text-sm dark:border-slate-700">
       <div className={`${line} bg-slate-50 py-2 text-[10.5px] font-extrabold tracking-wide text-slate-500 uppercase dark:bg-slate-800/60`} style={style}>
-        {head.map((h, i) => <span key={i} className={i ? "text-right" : ""}>{h}</span>)}
+        {head.map((h, i) => <span key={i} className={`${i ? "text-right" : ""} ${hideM.includes(i) ? "max-sm:hidden" : ""}`}>{h}</span>)}
       </div>
       {rows.map((r) => (
-        <div key={r.key} className="border-t border-slate-200 py-2 dark:border-slate-700">
+        <div key={r.key} className={`relative border-t border-slate-200 py-2 dark:border-slate-700 ${r.pop ? "hover:bg-slate-50 active:bg-slate-100 dark:hover:bg-slate-800/50" : ""}`}>
+          {r.pop && <button type="button" popoverTarget={r.pop} className="absolute inset-0 z-10 cursor-pointer" aria-label={r.label ?? "Lihat detail"} />}
           <div className={`${line} tabular-nums`} style={style}>
-            {r.cells.map((c, i) => <span key={i} className={i ? "text-right whitespace-nowrap" : "min-w-0 break-words"}>{c}</span>)}
+            {r.cells.map((c, i) => <span key={i} className={`${i ? "text-right whitespace-nowrap" : "min-w-0 break-words"} ${hideM.includes(i) ? "max-sm:hidden" : ""}`}>{c}</span>)}
           </div>
-          {r.sub && <div className="mt-1 px-3 text-[11px] leading-snug text-slate-500">{r.sub}</div>}
+          {r.sub && <div className={`mt-1 px-3 text-[11px] leading-snug text-slate-500 ${hideM.length ? "sm:hidden" : ""}`}>{r.sub}</div>}
         </div>
       ))}
       {!rows.length && <p className="border-t border-slate-200 px-3 py-5 text-center text-slate-500 dark:border-slate-700">Belum ada data.</p>}
       {foot && (
         <div className={`${line} border-t border-slate-200 bg-slate-50 py-2 font-black tabular-nums dark:border-slate-700 dark:bg-slate-800/60`} style={style}>
-          {foot.map((c, i) => <span key={i} className={i ? "text-right whitespace-nowrap" : ""}>{c}</span>)}
+          {foot.map((c, i) => <span key={i} className={`${i ? "text-right whitespace-nowrap" : ""} ${hideM.includes(i) ? "max-sm:hidden" : ""}`}>{c}</span>)}
         </div>
       )}
     </div>
@@ -176,15 +177,16 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
         </article>
       </div>
 
-      <Panel title="Harian Minggu–Sabtu" desc={`Batang = sales per hari · garis = target harian (${rpc(dailyTarget)}). Biru ≥ target, merah muda < target.`}>
+      <Panel title="Harian Minggu–Sabtu" desc={`Batang = sales per hari · garis = target harian (${rpc(dailyTarget)}). Biru ≥ target, merah muda < target. Ketuk hari untuk detail.`}>
         <div className="relative flex h-44 items-end gap-1.5 border-b border-slate-200 px-1 pt-5 sm:gap-3 dark:border-slate-700">
           {dailyTarget > 0 && (
             <div className="pointer-events-none absolute inset-x-0 border-t-2 border-dashed border-amber-500" style={{ bottom: `${(dailyTarget / peak) * 100}%` }}>
-              <span className="absolute -top-4 right-0 bg-white px-1 text-[10px] font-extrabold text-amber-700 dark:bg-slate-900">target/hari</span>
+              <span className="absolute -top-4 right-0 bg-white px-1 text-[10px] font-extrabold text-amber-700 max-sm:hidden dark:bg-slate-900">target/hari</span>
             </div>
           )}
           {dayRows.map((r) => (
-            <div key={r.date} className="flex h-full flex-1 flex-col items-center justify-end">
+            <div key={r.date} className="relative flex h-full flex-1 flex-col items-center justify-end">
+              {!r.future && <button type="button" popoverTarget={`day-${r.date}`} className="absolute inset-0 z-10 cursor-pointer" aria-label={`Detail ${dayName(r.date)} ${dm(r.date)}`} />}
               {!r.future && <span className="mb-0.5 text-[9.5px] font-extrabold whitespace-nowrap sm:text-[11px]">{rpc(r.t.sales).replace("Rp", "")}</span>}
               <div
                 className={`w-full max-w-11 rounded-t-lg ${r.future ? "bg-[repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0_4px,transparent_4px,transparent_8px)]" : r.t.sales >= dailyTarget ? "bg-blue-600" : "bg-rose-300"}`}
@@ -198,22 +200,30 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
           {dayRows.map((r) => <span key={r.date} className="flex-1 text-center text-[11px] font-bold text-slate-500">{DAY_SHORT[new Date(r.date + "T00:00:00Z").getUTCDay()]}</span>)}
         </div>
         <Grid
-          cols="minmax(3rem,1fr) 7.6rem 2.4rem 2.4rem 3.2rem"
+          cols="4.6rem minmax(7.4rem,1.3fr) repeat(4,minmax(4.8rem,1fr)) 2.4rem 2.4rem 3.2rem"
           colsM="minmax(2.4rem,1fr) 4.4rem 1.7rem 1.8rem 2.6rem"
-          head={["Hari", "Sales", "Inv", "UPT", "Ach"]}
+          hideM={[2, 3, 4, 5]}
+          head={["Hari", "Sales", ...GROUPS, "Inv", "UPT", "Ach"]}
           rows={dayRows.map((r) => ({
             key: r.date,
+            pop: r.future ? undefined : `day-${r.date}`,
+            label: `Detail ${dayName(r.date)} ${dm(r.date)}`,
+            sub: r.future ? undefined : GROUPS.map((g) => `${g} ${rpc(r.t.byGroup[g])}`).join(" · "),
             cells: [
-              <Link key="d" href={withQuery("/sales", { m: p.month }, { d: r.date })} prefetch={false} className="leading-tight text-blue-600"><b>{DAY_SHORT[new Date(r.date + "T00:00:00Z").getUTCDay()]}</b> <span className="text-[11px]">{Number(r.date.slice(8))}</span></Link>,
+              <span key="d" className={`leading-tight ${r.future ? "text-slate-400" : "text-blue-600"}`}><b>{DAY_SHORT[new Date(r.date + "T00:00:00Z").getUTCDay()]}</b> <span className="text-[11px]">{Number(r.date.slice(8))}</span>{!r.future && <span className="ml-0.5 text-[11px]">›</span>}</span>,
               r.future ? <span key="s" className="text-slate-400">belum</span> : <b key="s"><span className="sm:hidden">{rpc(r.t.sales)}</span><span className="max-sm:hidden">{rpf(r.t.sales)}</span></b>,
+              ...GROUPS.map((g) => (r.future ? "" : <span key={g} className={r.t.byGroup[g] ? "" : "text-slate-400"}>{rpc(r.t.byGroup[g])}</span>)),
               r.future ? "" : num(r.t.invoices),
               r.future ? "" : dec(r.t.upt, 1).replace(",", "."),
               r.future || !dailyTarget ? "" : <span key="a" className={r.t.sales >= dailyTarget ? "font-bold text-emerald-600" : "font-bold text-rose-600"}>{pct((r.t.sales / dailyTarget) * 100, 0)}</span>,
             ],
           }))}
-          foot={["Total", <span key="s"><span className="sm:hidden">{rpc(tb.sales)}</span><span className="max-sm:hidden">{rpf(tb.sales)}</span></span>, num(tb.invoices), dec(tb.upt, 1).replace(",", "."), pct(ach, 0)]}
+          foot={["Total", <span key="s"><span className="sm:hidden">{rpc(tb.sales)}</span><span className="max-sm:hidden">{rpf(tb.sales)}</span></span>, ...GROUPS.map((g) => rpc(tb.byGroup[g])), num(tb.invoices), dec(tb.upt, 1).replace(",", "."), pct(ach, 0)]}
         />
         {best && best.t.sales > 0 && <p className="mt-2 text-xs text-slate-500">Hari terbaik: <b>{dayName(best.date)} {dm(best.date)} · {rpf(best.t.sales)}</b></p>}
+        {dayRows.filter((r) => !r.future).map((r) => (
+          <DayDetail key={r.date} date={r.date} year={p.month.slice(0, 4)} lines={byDay.get(r.date) ?? []} target={s.target} dim={dim} href={withQuery("/sales", { m: p.month }, { d: r.date })} />
+        ))}
       </Panel>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -283,6 +293,99 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
           <p className="mt-3 text-xs text-slate-500">Week mengikuti kalender Minggu–Sabtu dan dipotong di awal/akhir bulan, jadi W pertama & terakhir bisa kurang dari 7 hari (targetnya ikut menyesuaikan).</p>
         </Panel>
       </div>
+    </div>
+  );
+}
+
+/** Popup with one day of the week: totals vs the daily target, per group, per staff and the items sold. */
+function DayDetail({ date, year, lines, target, dim, href }: { date: string; year: string; lines: SalesLine[]; target: StoreTarget | null; dim: number; href: string }) {
+  const id = `day-${date}`;
+  const t = totals(lines);
+  const tgt = (target?.total ?? 0) / dim;
+  const a = tgt ? (t.sales / tgt) * 100 : null;
+  const { staff, channels } = byStaff(lines, target, 1 / dim);
+  const people = [...staff, ...channels].filter((r) => r.totals.lines).sort((x, y) => y.totals.sales - x.totals.sales);
+  const prod = new Map<string, { type: string; qty: number; value: number }>();
+  for (const l of lines) {
+    if (!l.countsInQty || !(l.group === "Apple" || l.group === "Android" || l.lob === "AirPods")) continue;
+    const k = productType(l);
+    const e = prod.get(k) ?? { type: k, qty: 0, value: 0 };
+    e.qty += l.qty;
+    e.value += l.amount;
+    prod.set(k, e);
+  }
+  const top = [...prod.values()].sort((x, y) => y.qty - x.qty || y.value - x.value).slice(0, 8);
+  const H = ({ children }: { children: ReactNode }) => <p className="mt-4 mb-1.5 text-[11px] font-extrabold tracking-wide text-slate-500 uppercase">{children}</p>;
+  return (
+    <div id={id} popover="auto" className="m-auto max-h-[90dvh] w-[min(94vw,560px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 sm:p-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-base font-black">{dayName(date)}, {dm(date)} {year}</p>
+          <p className="text-xs text-slate-500">Target harian {tgt ? rpf(tgt) : "—"}</p>
+        </div>
+        <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>
+      </div>
+
+      <div className="mt-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800/60">
+        <div className="flex items-end justify-between gap-3">
+          <p className="text-xl font-black tabular-nums">{rpf(t.sales)}</p>
+          {a != null && <p className={`text-lg font-black ${t.sales >= tgt ? "text-emerald-600" : "text-rose-600"}`}>{pct(a, 0)}</p>}
+        </div>
+        <div className="mt-2 grid grid-cols-4 gap-2 text-center tabular-nums">
+          {[["Invoice", num(t.invoices)], ["Qty", num(t.qty)], ["UPT", dec(t.upt, 2).replace(",", ".")], ["ATV", rpc(t.atv)]].map(([k, v]) => (
+            <div key={k}><p className="text-[10.5px] font-bold text-slate-500 uppercase">{k}</p><p className="text-[13px] font-black">{v}</p></div>
+          ))}
+        </div>
+      </div>
+
+      <H>Per Grup</H>
+      <div className="overflow-hidden rounded-xl border border-slate-200 text-[13px] dark:border-slate-700">
+        {GROUPS.map((g) => {
+          const gt = (target?.byGroup[g] ?? 0) / dim;
+          return (
+            <div key={g} className="grid grid-cols-[minmax(0,1fr)_auto_2.8rem] items-center gap-x-2 border-t border-slate-200 px-3 py-1.5 tabular-nums first:border-t-0 dark:border-slate-700">
+              <b>{g}</b>
+              <span className="text-right">{rpc(t.byGroup[g])} <span className="text-[11px] text-slate-400">/ {gt ? rpc(gt) : "–"}</span></span>
+              <b className={`text-right ${gt && t.byGroup[g] >= gt ? "text-emerald-600" : "text-rose-600"}`}>{gt ? pct((t.byGroup[g] / gt) * 100, 0) : "–"}</b>
+            </div>
+          );
+        })}
+      </div>
+
+      <H>Staff</H>
+      {people.length ? (
+        <div className="overflow-hidden rounded-xl border border-slate-200 text-[13px] dark:border-slate-700">
+          {people.map((r) => (
+            <div key={r.key} className="border-t border-slate-200 px-3 py-1.5 first:border-t-0 dark:border-slate-700">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_2.8rem] items-center gap-x-2 tabular-nums">
+                <b className="min-w-0 truncate">{displayName(r.name)}{r.isChannel && <span className="ml-1 text-[10px] font-semibold text-slate-400">online</span>}</b>
+                <span className="text-right font-bold">{rpc(r.totals.sales)}</span>
+                <span className={`text-right text-[12px] font-bold ${r.target ? (r.totals.sales >= r.target ? "text-emerald-600" : "text-rose-600") : "text-slate-400"}`}>{r.target ? pct((r.totals.sales / r.target) * 100, 0) : "–"}</span>
+              </div>
+              <p className="text-[11px] text-slate-500">{num(r.totals.invoices)} trx · {num(r.totals.qty)} unit{r.target ? ` · target ${rpc(r.target)}` : ""}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500">Belum ada penjualan.</p>
+      )}
+
+      {top.length > 0 && (
+        <>
+          <H>Produk terjual</H>
+          <div className="overflow-hidden rounded-xl border border-slate-200 text-[13px] dark:border-slate-700">
+            {top.map((x) => (
+              <div key={x.type} className="grid grid-cols-[minmax(0,1fr)_2rem_4.4rem] items-center gap-x-2 border-t border-slate-200 px-3 py-1.5 tabular-nums first:border-t-0 dark:border-slate-700">
+                <span className="min-w-0 break-words">{x.type}</span>
+                <b className="text-right">{num(x.qty)}</b>
+                <span className="text-right text-slate-500">{rpc(x.value)}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <Link href={href} prefetch={false} className="mt-4 inline-block text-sm font-semibold text-blue-600 hover:underline">Buka di Daily Sales ›</Link>
     </div>
   );
 }
