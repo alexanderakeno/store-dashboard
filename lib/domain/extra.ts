@@ -277,7 +277,7 @@ export interface LobBreakdown {
 
 /**
  * Week-to-week "Weekly Dashboard" split: Apple per LOB (incl. AirPods), Android per brand, ACC (excl. AirPods), VAS.
- * Apple + Android + ACC + VAS = total sales. Device / AirPods qty follow the qty rules; ACC & VAS count every unit.
+ * Apple + Android + ACC + VAS = total sales. Device / AirPods / ACC qty follow the qty rules (qty types); VAS counts every unit.
  */
 export function lobBreakdown(lines: SalesLine[]): LobBreakdown {
   const z = (): QV => ({ qty: 0, value: 0 });
@@ -287,8 +287,10 @@ export function lobBreakdown(lines: SalesLine[]): LobBreakdown {
     let unit = l.countsInQty;
     if (l.lob === "AirPods" || l.group === "Apple") t = out.apple[l.lob || "Apple lainnya"] ??= z();
     else if (l.group === "Android") t = out.android[l.lob || l.brand || "Lainnya"] ??= z();
+    else if (l.group === "ACC") t = out.acc;
     else {
-      t = l.group === "ACC" ? out.acc : out.vas;
+      // VAS lines are not "qty types", but each policy / package counts as one
+      t = out.vas;
       unit = true;
     }
     t.value += l.amount;
