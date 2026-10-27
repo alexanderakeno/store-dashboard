@@ -2,6 +2,7 @@ import { dedupeItems, modelOf } from "@/lib/parsers/pricelist";
 import { iphoneName } from "@/lib/parsers/applePricelist";
 import type { PriceItem, PriceKind, QoalaTier } from "@/types/pricelist";
 import type { SohItem } from "@/types/soh";
+import { airpodsPriceItems } from "./airpods";
 
 /** One SOH article matched to a price-list row: the colour is what follows the price-list name. */
 export interface PriceStock {
@@ -188,6 +189,8 @@ export function priceModels(stored: PriceItem[], kind: PriceKind, soh: SohItem[]
   // fixes apply to data already in the sheet too: rows printed twice are shown once, "IPHONE 17E" reads "iPhone 17e"
   const items = stored.map((it) => (it.kind === "apple" ? { ...it, name: iphoneName(it.name) } : it));
   dedupeItems(items, []);
+  // AirPods are not in the Apple price list: their rows come from the SOH price column
+  if (kind === "apple") items.push(...airpodsPriceItems(soh));
   if (kind === "apple" && items.some((it) => it.kind === "apple" && (it.credit != null || it.articles?.length))) return appleModels(items, soh, opts.inStockOnly, opts.alwaysShow);
   const map = new Map<string, PriceModel>();
   items.forEach((it, i) => {

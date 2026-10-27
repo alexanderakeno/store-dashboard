@@ -32,7 +32,7 @@ export const MASTER_TABS = {
   priceHistory: { name: "APP_PriceHistory", header: ["ts", "kind", "date", "prevDate", "brand", "series", "name", "change", "oldNormal", "newNormal", "oldPromo", "newPromo", "oldCredit", "newCredit", "oldStatus", "newStatus", "by"] },
   access: { name: "APP_Access", header: ["ts", "nik", "name", "role", "event", "path", "ip", "location", "device"] },
   records: { name: "APP_Records", header: ["kind", "date", "key", "data", "updatedAt", "updatedBy"] },
-  soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy"] },
+  soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy", "price"] },
   priceList: { name: "APP_PriceList", header: ["kind", "brand", "series", "name", "normal", "promo", "status", "extra", "date", "source", "updatedAt", "updatedBy"] },
   samsungPromo: { name: "APP_SamsungPromo", header: ["kind", "data", "source", "updatedAt", "updatedBy"] },
 } as const;
@@ -101,10 +101,12 @@ export class SheetsSource implements DataSource {
    * Small tables are rewritten whole: overwrite from row 2, then clear the rows below the new end.
    * Writing first means a failed write leaves the old data in place instead of an empty tab.
    */
-  private async rewrite(tab: TabKey, rows: unknown[][]) {
+  private async rewrite(tab: TabKey, rows: unknown[][], withHeader = false) {
     await this.ensureTabs();
     const t = MASTER_TABS[tab];
     const width = t.header.length;
+    // a column added to the tab later (e.g. APP_SOH "price") needs the header row rewritten too
+    if (withHeader) await writeRange(this.master, t.name, "A1", [[...t.header]]);
     // pad every row to the header width so leftover cells of a longer old row are overwritten too
     const padded = rows.map((r) => [...r, ...Array(Math.max(0, width - r.length)).fill("")]);
     // big tabs (sales history: 10k+ rows) go in blocks so a single request stays small
@@ -247,7 +249,10 @@ export class SheetsSource implements DataSource {
     const rows = (await this.rows("soh")).filter((r) => normalizeText(r.article));
     if (!rows.length) return null;
     const first = rows[0];
-    const items = rows.map((r) => ({ category: normalizeText(r.category), article: normalizeText(r.article), description: normalizeText(r.description), qty: parseNumber(r.qty) }));
+    const items = rows.map((r) => {
+      const price = parseNumber(r.price);
+      return { category: normalizeText(r.category), article: normalizeText(r.article), description: normalizeText(r.description), qty: parseNumber(r.qty), ...(price > 0 ? { price } : {}) };
+    });
     return {
       date: parseDate(first.date),
       categories: [...new Set(items.map((x) => x.category))],
@@ -260,7 +265,7 @@ export class SheetsSource implements DataSource {
 
   async saveSoh(snap: Omit<SohSnapshot, "updatedAt" | "updatedBy">, by: string): Promise<void> {
     const now = new Date().toISOString();
-    await this.rewrite("soh", snap.items.map((x) => [x.category, x.article, x.description, x.qty, snap.date ?? "", snap.source, now, by]));
+    await this.rewrite("soh", snap.items.map((x) => [x.category, x.article, x.description, x.qty, snap.date ?? "", snap.source, now, by, x.price ?? ""]), true);
   }
 
   async getPriceList(): Promise<PriceList | null> {

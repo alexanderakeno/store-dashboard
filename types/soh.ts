@@ -7,6 +7,8 @@ export interface SohItem {
   article: string;
   description: string;
   qty: number;
+  /** Unit price printed in the SOH Excel (used as the AirPods price; the Apple price list has none). */
+  price?: number;
 }
 
 /** Latest imported stock on hand (master sheet `APP_SOH`) — one snapshot, replaced on every import. */

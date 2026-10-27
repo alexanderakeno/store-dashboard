@@ -3,7 +3,7 @@ export type DeviceType = "Phone" | "Tablet" | "Watch" | "Lainnya";
 export const DEVICE_TYPES: DeviceType[] = ["Phone", "Tablet", "Watch", "Lainnya"];
 
 /** SOH categories that are one brand of Android devices (split into Phone / Tablet / Watch). */
-const NOT_SPLIT = new Set(["IPHONE", "IPAD", "MACBOOK", "IMAC", "APPLE WATCH", "APPLE", "AKSESORIS", "ELEKTRONIK", "ACCESSORIES"]);
+const NOT_SPLIT = new Set(["IPHONE", "IPAD", "MACBOOK", "IMAC", "APPLE WATCH", "AIRPODS", "APPLE", "AKSESORIS", "ELEKTRONIK", "ACCESSORIES"]);
 export const splitsByType = (category: string) => !NOT_SPLIT.has(category.trim().toUpperCase());
 
 /**

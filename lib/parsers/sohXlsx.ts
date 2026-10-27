@@ -1,5 +1,6 @@
 import type { SohItem } from "@/types/soh";
 import type { SohParse } from "./soh";
+import { AIRPODS, isAirPods } from "@/lib/domain/airpods";
 
 const clean = (s: unknown) => String(s ?? "").replace(/\s+/g, " ").trim();
 const up = (s: unknown) => clean(s).toUpperCase();
@@ -14,7 +15,7 @@ const brandName = (b: string) => BRANDS[b] ?? (b ? b.charAt(0) + b.slice(1).toLo
 const APPLE: Record<string, string> = { PHONE: "iPhone", TABLETS: "iPad", LAPTOPS: "MacBook", DESKTOP: "iMac", WATCH: "Apple Watch" };
 
 /** Device categories first (same order as the PDF), then the rest. */
-const ORDER = ["iPhone", "iPad", "MacBook", "iMac", "Apple Watch", "Apple", "Samsung", "Oppo", "Xiaomi", "Huawei", "Infinix", "Motorola", "Amazfit"];
+const ORDER = ["iPhone", "iPad", "MacBook", "iMac", "Apple Watch", AIRPODS, "Apple", "Samsung", "Oppo", "Xiaomi", "Huawei", "Infinix", "Motorola", "Amazfit"];
 const LAST = ["Aksesoris", "Elektronik"];
 
 /** Product groups that are not sellable stock: display units, warranty cards / printing, vouchers. */
@@ -44,6 +45,7 @@ function isoOf(s: string): string | null {
  *   line counts as at least 1 unit: units per line = max(Qty, 1) (a charger line with Qty 5 still counts 5).
  *   An article repeated on N lines = N units.
  * - DEVICES: Apple per category (iPhone · iPad · MacBook · iMac · Apple Watch), other brands per brand.
+ *   Apple AirPods / EarPods (ACCESSORIES › EARPHONES) → "AirPods", with the unit price kept as their price.
  *   ACCESSORIES → "Aksesoris"; motorized / smart home / electronic → "Elektronik".
  * - DEMO units, SUPPORTING and MERCHANDISE (vouchers) are not sellable stock and are skipped.
  */
@@ -92,11 +94,16 @@ export function parseSohXlsx(rows: unknown[][]): SohParse {
     if (!article) continue;
     const brand = up(r[0]);
     const cat = up(r[3]);
-    const category =
-      group === "DEVICES" ? (brand === "APPLE" ? APPLE[cat] ?? "Apple" : brandName(brand)) : group === "ACCESSORIES" ? "Aksesoris" : "Elektronik";
+    // Apple's own AirPods / EarPods get their own category (the report files them under ACCESSORIES › EARPHONES)
+    const category = isAirPods(brand, description)
+      ? AIRPODS
+      : group === "DEVICES" ? (brand === "APPLE" ? APPLE[cat] ?? "Apple" : brandName(brand)) : group === "ACCESSORIES" ? "Aksesoris" : "Elektronik";
+    const price = num(r[6]);
     const it = byArticle.get(article);
-    if (it) it.qty += units;
-    else byArticle.set(article, { category, article, description, qty: units });
+    if (it) {
+      it.qty += units;
+      if (Number.isFinite(price) && price > (it.price ?? 0)) it.price = price;
+    } else byArticle.set(article, { category, article, description, qty: units, ...(Number.isFinite(price) && price > 0 ? { price } : {}) });
   }
 
   const items = [...byArticle.values()];
