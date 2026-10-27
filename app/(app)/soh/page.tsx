@@ -73,7 +73,7 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
       <div className="sd-content">
         <PageIntro
           title="Stock On Hand"
-          desc={`Need fulfillment: device yang terjual ${range} tapi kosong di SOH ${soh.date ? dmy(soh.date) : "terakhir"}. Aksesoris tidak termasuk.`}
+          desc={`Need fulfillment: device yang terjual ${range} tapi kosong di SOH ${soh.date ? dmy(soh.date) : "terakhir"}. Aksesoris tidak termasuk (AirPods termasuk).`}
           actions={manage}
         />
         <Tabs kosong count={kosongCount} />
