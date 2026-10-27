@@ -10,7 +10,7 @@ import { VAS_PROVIDERS, clampRange, linesByStaff } from "@/lib/domain/extra";
 import { daysInMonth, eachDay, monthStart, weeksOfMonth } from "@/lib/domain/period";
 import { focusKey } from "@/lib/domain/views";
 import { staffItemTarget } from "@/lib/domain/targets";
-import { dateShort, monthLabel, num, pct, rpc, rpf } from "@/lib/format";
+import { dateShort, monthLabel, num, pct, rp, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 import type { Group } from "@/types/domain";
@@ -86,11 +86,15 @@ export async function FocusPage({ searchParams, path, group: baseGroup, title, d
 
   const periodLabel = per === "week" ? `${wk.label} (${dateShort(wk.start)} – ${dateShort(wk.end)})` : per === "range" ? `${dateShort(from)} – ${dateShort(to)}` : monthLabel(p.month);
   const share = [
-    `*${cfg.storeName || "Store"} — ${title}${tab ? ` ${tab.label}` : ""}*`,
+    `*${cfg.storeName || "Store"}*`,
+    `*${title}${tab ? ` ${tab.label}` : ""}*`,
     `Periode: ${periodLabel}`,
-    `Target ${rpf(totalTarget)} · Ach ${rpf(totalActual)} (${pct(totalAch ?? 0, 1)}) · Gap ${rpf(totalTarget - totalActual)}`,
     "",
-    ...items.map((x) => `${x.key}: ${rpf(x.actual)} / ${rpf(x.target)} (${x.ach == null ? "–" : pct(x.ach, 0)}) · ${num(x.qty)} unit`),
+    `Target: ${rp(totalTarget)}`,
+    `Actual: ${rp(totalActual)} (${pct(totalAch ?? 0, 1)})`,
+    `Gap: ${rp(totalActual - totalTarget)}`,
+    "",
+    ...items.flatMap((x) => [`• *${x.key}*: ${rp(x.actual)} (${x.ach == null ? "–" : pct(x.ach, 0)})`, `   target ${rp(x.target)} · ${num(x.qty)} unit`]),
   ].join("\n");
 
   return (

@@ -8,7 +8,7 @@ import { productType, rangeConversion, startedWeeks } from "@/lib/domain/extra";
 import { byStaff, totals } from "@/lib/domain/kpi";
 import { displayName } from "@/lib/domain/normalize";
 import { addDays, daysInMonth, eachDay } from "@/lib/domain/period";
-import { dayName, dec, monthLabel, num, pct, rpc, rpf } from "@/lib/format";
+import { dayName, dec, monthLabel, num, pct, rp, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 import { GROUPS, type SalesLine, type StoreTarget } from "@/types/domain";
@@ -113,19 +113,30 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
   const trendMax = Math.max(1, ...trend.map((x) => x.sales));
 
   const range = span(cur.start, cur.end);
+  // WhatsApp text: short lines (one figure per line), bold headers, plain "Rp" amounts (no special spaces)
   const share = [
-    `*${appConfig().storeName || "Store"} — Weekly Performance W${cur.index}*`,
-    `${range} ${p.month.slice(0, 4)}${running ? ` (s/d ${dm(p.asOf)})` : ""}`,
+    `*${appConfig().storeName || "Store"}*`,
+    `*Weekly Performance W${cur.index} — ${range} ${p.month.slice(0, 4)}*`,
+    ...(running ? [`_Week berjalan, data s/d ${dayName(p.asOf)} ${dm(p.asOf)}_`] : []),
     "",
-    `Sales: ${rpf(tb.sales)} / target ${rpf(target)} (${pct(ach)})${growth == null ? "" : ` · vs W${prev!.index}${running ? " (hari yg sama)" : ""} ${growth >= 0 ? "+" : ""}${pct(growth)}`}`,
+    "*SALES WEEK*",
+    `Sales: ${rp(tb.sales)}`,
+    `Target: ${rp(target)} (${pct(ach, 0)})`,
+    ...(growth == null ? [] : [`vs W${prev!.index}${running ? " (hari yg sama)" : ""}: ${growth >= 0 ? "+" : ""}${pct(growth)}`]),
+    "",
+    "*PER GRUP*",
     ...GROUPS.map((g) => {
       const t = tgtOf(cur, s.target?.byGroup[g] ?? 0);
-      return `${g}: ${rpf(tb.byGroup[g])} (${t ? pct((tb.byGroup[g] / t) * 100) : "–"})`;
+      return `• *${g}*: ${rp(tb.byGroup[g])} (${t ? pct((tb.byGroup[g] / t) * 100, 0) : "–"})`;
     }),
-    `Invoice ${num(tb.invoices)} · Qty ${num(tb.qty)} · UPT ${dec(tb.upt, 2).replace(",", ".")} · ATV ${rpf(tb.atv)}${conv.cvr == null ? "" : ` · CVR ${pct(conv.cvr)}`}`,
     "",
-    "*Staff*",
-    ...people.filter((r) => !r.isChannel).map((r, i) => `${i + 1}. ${displayName(r.name)} ${rpf(r.totals.sales)}${r.target ? ` (${pct((r.totals.sales / r.target) * 100, 0)})` : ""}`),
+    "*TRANSAKSI*",
+    `Invoice ${num(tb.invoices)} · Qty ${num(tb.qty)}`,
+    `UPT ${dec(tb.upt, 2)} · ATV ${rp(tb.atv)}`,
+    ...(conv.cvr == null ? [] : [`CVR ${pct(conv.cvr)}`]),
+    "",
+    "*STAFF*",
+    ...people.filter((r) => !r.isChannel).map((r, i) => `${i + 1}. ${displayName(r.name)}: ${rp(r.totals.sales)}${r.target ? ` (${pct((r.totals.sales / r.target) * 100, 0)})` : ""}`),
   ].join("\n");
 
   return (
