@@ -1,10 +1,12 @@
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { NeedData, PageIntro, Panel, Progress, Trend, achColor } from "@/components/kit";
 import { PrintButton, WhatsAppButton } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { appConfig } from "@/config/app";
-import { lobBreakdown, productType, rangeConversion, startedWeeks, type QV } from "@/lib/domain/extra";
+import { lobBreakdown, productType, rangeConversion, startedWeeks } from "@/lib/domain/extra";
+import { Grid } from "@/components/kit/FitGrid";
+import { LobCompare } from "@/components/modules/LobCompare";
 import { byStaff, totals } from "@/lib/domain/kpi";
 import { displayName } from "@/lib/domain/normalize";
 import { addDays, daysInMonth, eachDay } from "@/lib/domain/period";
@@ -12,35 +14,6 @@ import { dayName, dec, monthLabel, num, pct, rp, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 import { GROUPS, type SalesLine, type StoreTarget } from "@/types/domain";
-
-/** Fixed-column grid that fits phones and desktops alike (name column takes the rest). */
-function Grid({ cols, colsM, head, rows, foot, hideM = [] }: { cols: string; colsM?: string; hideM?: number[]; head: ReactNode[]; rows: Array<{ key: string; cells: ReactNode[]; sub?: ReactNode; pop?: string; label?: string; className?: string }>; foot?: ReactNode[] }) {
-  // phones (< 640 px) may use narrower columns (`colsM`)
-  const line = "grid items-center gap-x-2 px-3 sm:gap-x-3 grid-cols-[var(--gm)] sm:grid-cols-[var(--gd)]";
-  const style = { "--gm": colsM ?? cols, "--gd": cols } as CSSProperties;
-  return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 text-[13px] sm:text-sm dark:border-slate-700">
-      <div className={`${line} bg-slate-50 py-2 text-[10.5px] font-extrabold tracking-wide text-slate-500 uppercase dark:bg-slate-800/60`} style={style}>
-        {head.map((h, i) => <span key={i} className={`${i ? "text-right" : ""} ${hideM.includes(i) ? "max-sm:hidden" : ""}`}>{h}</span>)}
-      </div>
-      {rows.map((r) => (
-        <div key={r.key} className={`relative border-t border-slate-200 py-2 dark:border-slate-700 ${r.pop ? "hover:bg-slate-50 active:bg-slate-100 dark:hover:bg-slate-800/50" : ""} ${r.className ?? ""}`}>
-          {r.pop && <button type="button" popoverTarget={r.pop} className="absolute inset-0 z-10 cursor-pointer" aria-label={r.label ?? "Lihat detail"} />}
-          <div className={`${line} tabular-nums`} style={style}>
-            {r.cells.map((c, i) => <span key={i} className={`${i ? "text-right whitespace-nowrap" : "min-w-0 break-words"} ${hideM.includes(i) ? "max-sm:hidden" : ""}`}>{c}</span>)}
-          </div>
-          {r.sub && <div className={`mt-1 px-3 text-[11px] leading-snug text-slate-500 ${hideM.length ? "sm:hidden" : ""}`}>{r.sub}</div>}
-        </div>
-      ))}
-      {!rows.length && <p className="border-t border-slate-200 px-3 py-5 text-center text-slate-500 dark:border-slate-700">Belum ada data.</p>}
-      {foot && (
-        <div className={`${line} border-t border-slate-200 bg-slate-50 py-2 font-black tabular-nums dark:border-slate-700 dark:bg-slate-800/60`} style={style}>
-          {foot.map((c, i) => <span key={i} className={`${i ? "text-right whitespace-nowrap" : ""} ${hideM.includes(i) ? "max-sm:hidden" : ""}`}>{c}</span>)}
-        </div>
-      )}
-    </div>
-  );
-}
 
 const DAY_SHORT = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 const MON = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -417,81 +390,5 @@ function DayDetail({ date, year, lines, target, dim, href }: { date: string; yea
 
       <Link href={href} prefetch={false} className="mt-4 inline-block text-sm font-semibold text-blue-600 hover:underline">Buka di Daily Sales ›</Link>
     </div>
-  );
-}
-
-const APPLE_ROWS: Array<[string, string]> = [["iPhone", "iPhone"], ["iPad", "iPad"], ["Mac", "MacBook"], ["Apple Watch", "Apple Watch"], ["AirPods", "AirPods"]];
-const ANDROID_ORDER = ["Samsung", "Oppo", "Xiaomi", "Infinix", "Motorola", "Amazfit", "Huawei", "Vivo", "Realme", "Tecno", "Honor"];
-
-/** "Weekly Dashboard" table: qty and value this week vs last week, difference and % — Apple per LOB, Android per brand, ACC, VAS. */
-function LobCompare({ b, a, wb, wa }: { b: ReturnType<typeof lobBreakdown>; a: ReturnType<typeof lobBreakdown> | null; wb: string; wa: string }) {
-  const z: QV = { qty: 0, value: 0 };
-  const sum = (xs: QV[]): QV => xs.reduce((t, x) => ({ qty: t.qty + x.qty, value: t.value + x.value }), { qty: 0, value: 0 });
-  const appleKeys = [...APPLE_ROWS.map(([k]) => k), ...new Set([...Object.keys(b.apple), ...Object.keys(a?.apple ?? {})].filter((k) => !APPLE_ROWS.some(([x]) => x === k)))];
-  const brands = [...new Set([...Object.keys(b.android), ...Object.keys(a?.android ?? {})])].sort((x, y) => {
-    const ix = ANDROID_ORDER.indexOf(x), iy = ANDROID_ORDER.indexOf(y);
-    return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy) || x.localeCompare(y);
-  });
-  type R = { key: string; label: string; cur: QV; last: QV | null; tone?: "total" | "grand" };
-  const appleCur = appleKeys.map((k) => b.apple[k] ?? z);
-  const appleLast = a ? appleKeys.map((k) => a.apple[k] ?? z) : null;
-  const andCur = brands.map((k) => b.android[k] ?? z);
-  const andLast = a ? brands.map((k) => a.android[k] ?? z) : null;
-  const rows: R[] = [
-    ...appleKeys.map((k, i) => ({ key: `a-${k}`, label: APPLE_ROWS.find(([x]) => x === k)?.[1] ?? k, cur: appleCur[i], last: appleLast?.[i] ?? null })),
-    { key: "ta", label: "Total Apple", cur: sum(appleCur), last: appleLast && sum(appleLast), tone: "total" },
-    ...brands.map((k, i) => ({ key: `b-${k}`, label: k, cur: andCur[i], last: andLast?.[i] ?? null })),
-    { key: "tn", label: "Total Android", cur: sum(andCur), last: andLast && sum(andLast), tone: "total" },
-    { key: "acc", label: "Total ACC", cur: b.acc, last: a?.acc ?? null, tone: "total" },
-    { key: "vas", label: "Total VAS", cur: b.vas, last: a?.vas ?? null, tone: "total" },
-  ];
-  const grand = { cur: sum([sum(appleCur), sum(andCur), b.acc, b.vas]), last: a && andLast && appleLast ? sum([sum(appleLast), sum(andLast), a.acc, a.vas]) : null };
-  rows.push({ key: "g", label: "Grand Total", cur: grand.cur, last: grand.last, tone: "grand" });
-
-  const g = (x: number, y: number | undefined) => (y == null ? null : y ? ((x - y) / y) * 100 : x ? null : 0);
-  const pctCell = (v: number | null) => (v == null ? <span className="text-slate-400">–</span> : <span className={`rounded px-1 font-bold ${v < 0 ? "bg-rose-50 text-rose-600 dark:bg-rose-500/10" : v > 0 ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10" : "text-slate-500"}`}>{v > 0 ? "+" : ""}{pct(v, 0)}</span>);
-  const diff = (v: number | null, isMoney: boolean) => (v == null ? "–" : <span className={v < 0 ? "text-rose-600" : v > 0 ? "text-emerald-600" : "text-slate-400"}>{isMoney ? money(v, true) : `${v > 0 ? "+" : ""}${num(v)}`}</span>);
-  // money: compact on phones / tablets, full rupiah on wide screens (like the sheet)
-  const money = (n: number, sign = false) => <><span className="xl:hidden">{sign && n > 0 ? "+" : ""}{rpc(n)}</span><span className="max-xl:hidden">{sign && n > 0 ? "+" : ""}{rpf(n)}</span></>;
-  const dash = (n: number, isMoney: boolean) => (n ? (isMoney ? money(n) : num(n)) : <span className="text-slate-400">–</span>);
-
-  return (
-    <>
-      <div className="sm:overflow-x-auto"><div className="sm:min-w-[36rem]">
-      <Grid
-        cols="minmax(5.4rem,1.1fr) 2.6rem 2.6rem 2.6rem 3.3rem minmax(4.6rem,1fr) minmax(4.6rem,1fr) minmax(4.6rem,1fr) 3.4rem"
-        colsM="minmax(3.4rem,1fr) 4.3rem 4.3rem 2.9rem"
-        hideM={[1, 2, 3, 4, 7]}
-        head={[
-          "LOB / Brand",
-          `Qty ${wb}`,
-          `Qty ${wa}`,
-          "Δ Qty",
-          "%",
-          <span key="v"><span className="sm:hidden">{wb}</span><span className="max-sm:hidden">Value {wb}</span></span>,
-          <span key="l"><span className="sm:hidden">{wa}</span><span className="max-sm:hidden">Value {wa}</span></span>,
-          "Δ Value",
-          "%",
-        ]}
-        rows={rows.map((r) => ({
-          key: r.key,
-          className: r.tone === "grand" ? "bg-slate-100 font-black dark:bg-slate-800" : r.tone === "total" ? "bg-slate-50 font-bold dark:bg-slate-800/60" : "",
-          cells: [
-            <span key="n" className={r.tone ? "" : "font-semibold"}>{r.label}</span>,
-            dash(r.cur.qty, false),
-            r.last ? dash(r.last.qty, false) : "–",
-            diff(r.last ? r.cur.qty - r.last.qty : null, false),
-            pctCell(g(r.cur.qty, r.last?.qty)),
-            <b key="v">{dash(r.cur.value, true)}</b>,
-            r.last ? dash(r.last.value, true) : "–",
-            diff(r.last ? r.cur.value - r.last.value : null, true),
-            pctCell(g(r.cur.value, r.last?.value)),
-          ],
-          sub: r.last ? <>Qty {num(r.cur.qty)} vs {num(r.last.qty)} ({r.cur.qty - r.last.qty > 0 ? "+" : ""}{num(r.cur.qty - r.last.qty)}) · Δ {r.cur.value - r.last.value > 0 ? "+" : ""}{rpc(r.cur.value - r.last.value)}</> : <>Qty {num(r.cur.qty)}</>,
-        }))}
-      />
-      </div></div>
-      <p className="mt-2 text-xs text-slate-500">Δ dan % = {wb} dibanding {wa}. Grand Total = Apple + Android + ACC + VAS (sama dengan total sales).</p>
-    </>
   );
 }
