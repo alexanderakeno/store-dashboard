@@ -42,7 +42,8 @@ export function emptyStock(items: SohItem[], categories: string[], lines: SalesL
 
   const sold = new Map<string, { article: string; description: string; category: string; sold: number; lastSold: ISODate }>();
   for (const l of lines) {
-    if (l.date < from || l.date > to || !l.article || (l.group !== "Apple" && l.group !== "Android")) continue;
+    // devices + Apple AirPods (sold under ACC, but stocked and tracked like a device)
+    if (l.date < from || l.date > to || !l.article || (l.group !== "Apple" && l.group !== "Android" && l.lob !== "AirPods")) continue;
     const k = key(l.article);
     let s = sold.get(k);
     if (!s) {
