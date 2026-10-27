@@ -259,3 +259,40 @@ export function androidBrands(lines: SalesLine[], extra: string[] = []): Array<{
   for (const b of extra) if (b.trim()) get(b);
   return [...m.values()].sort((a, b) => b.value - a.value || b.qty - a.qty || a.brand.localeCompare(b.brand));
 }
+
+/** Qty + value of one row of the LOB comparison. */
+export interface QV {
+  qty: number;
+  value: number;
+}
+export interface LobBreakdown {
+  /** iPhone · iPad · Mac · Apple Watch · AirPods (AirPods sit under Apple here, not under ACC); other Apple LOBs after. */
+  apple: Record<string, QV>;
+  /** Per brand (Samsung, Oppo, …). */
+  android: Record<string, QV>;
+  /** ACC without AirPods. */
+  acc: QV;
+  vas: QV;
+}
+
+/**
+ * Week-to-week "Weekly Dashboard" split: Apple per LOB (incl. AirPods), Android per brand, ACC (excl. AirPods), VAS.
+ * Apple + Android + ACC + VAS = total sales. Device / AirPods qty follow the qty rules; ACC & VAS count every unit.
+ */
+export function lobBreakdown(lines: SalesLine[]): LobBreakdown {
+  const z = (): QV => ({ qty: 0, value: 0 });
+  const out: LobBreakdown = { apple: { iPhone: z(), iPad: z(), Mac: z(), "Apple Watch": z(), AirPods: z() }, android: {}, acc: z(), vas: z() };
+  for (const l of lines) {
+    let t: QV;
+    let unit = l.countsInQty;
+    if (l.lob === "AirPods" || l.group === "Apple") t = out.apple[l.lob || "Apple lainnya"] ??= z();
+    else if (l.group === "Android") t = out.android[l.lob || l.brand || "Lainnya"] ??= z();
+    else {
+      t = l.group === "ACC" ? out.acc : out.vas;
+      unit = true;
+    }
+    t.value += l.amount;
+    if (unit) t.qty += l.qty;
+  }
+  return out;
+}
