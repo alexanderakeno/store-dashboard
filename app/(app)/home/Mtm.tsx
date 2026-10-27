@@ -1,6 +1,10 @@
 import { EmptyBlock, Panel, SectionHead, Trend, achColor } from "@/components/kit";
 import { ParamSelect } from "@/components/kit/controls";
 import { MobileGrid } from "@/components/kit/MobileGrid";
+import Link from "next/link";
+import { LobCompare } from "@/components/modules/LobCompare";
+import { lobBreakdown } from "@/lib/domain/extra";
+import { withQuery } from "@/lib/qs";
 import { mtmView, type MtmView } from "@/lib/domain/mtm";
 import { prevMonth } from "@/lib/domain/period";
 import { dateShort, dec, monthLabel, monthShort, num, pct, rpc, rpf } from "@/lib/format";
@@ -58,6 +62,7 @@ export async function Mtm({ snap, asOf, months, q }: { snap: MonthSnapshot; asOf
       <Summary v={v} />
       <Kpis v={v} />
       <Groups v={v} />
+      <LobMonthly snap={snap} other={other} asOf={asOf} q={q} />
       <Lob v={v} />
       <Full v={v} />
       <Staff v={v} />
@@ -304,6 +309,35 @@ function Staff({ v }: { v: MtmView }) {
           </tbody>
         </table>
       </div>
+    </Panel>
+  );
+}
+
+/** Month-to-month "Weekly Dashboard" table: Apple per LOB, Android per brand, ACC, VAS — same dates (1–N) or the full other month. */
+function LobMonthly({ snap, other, asOf, q }: { snap: MonthSnapshot; other: MonthSnapshot; asOf: string; q: Record<string, string> }) {
+  const day = Number(asOf.slice(8));
+  const full = q.lm === "full";
+  const lastOther = other.lastDataDate ?? other.lines.reduce((m, l) => (l.date > m ? l.date : m), "");
+  const b = lobBreakdown(snap.lines.filter((l) => l.date <= asOf));
+  const a = lobBreakdown(full ? other.lines : other.lines.filter((l) => Number(l.date.slice(8)) <= day));
+  const nb = monthShort(snap.month).split(" ")[0];
+  const na = monthShort(other.month).split(" ")[0];
+  const sameYear = snap.month.slice(0, 4) === other.month.slice(0, 4);
+  const lb = sameYear ? nb : monthShort(snap.month);
+  const la = sameYear ? na : monthShort(other.month);
+  return (
+    <Panel
+      title={`Comparison per LOB · ${monthLabel(snap.month)} vs ${monthLabel(other.month)}`}
+      desc={`${monthShort(snap.month)} tanggal 1–${day} vs ${monthShort(other.month)} ${full ? `full bulan${lastOther ? ` (data s/d ${dateShort(lastOther)})` : ""}` : `tanggal 1–${day}`}. Apple per LOB (AirPods termasuk Apple), Android per brand, ACC tanpa AirPods.`}
+      right={
+        <div className="flex flex-wrap gap-1.5">
+          {[["", `Tanggal sama (1–${day})`], ["full", "Full bulan pembanding"]].map(([val, label]) => (
+            <Link key={val} href={withQuery("/home", q, { lm: val })} prefetch={false} scroll={false} className={`rounded-full border px-3 py-1 text-xs font-bold ${(val === "full") === full ? "border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900" : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}>{label}</Link>
+          ))}
+        </div>
+      }
+    >
+      <LobCompare b={b} a={a} wb={lb} wa={la} />
     </Panel>
   );
 }
