@@ -20,7 +20,9 @@ export async function POST(req: Request) {
     const items: SohItem[] = b.items.map((r: Record<string, unknown>) => {
       const item = { category: str(r?.category, 60), article: str(r?.article, 60), description: str(r?.description, 200), qty: Number(r?.qty) };
       if (!item.category || !item.article || !Number.isInteger(item.qty)) throw new BadRequest(`Baris SOH tidak valid: ${item.article || "(tanpa artikel)"}`);
-      return item;
+      // unit price from the Excel report (AirPods price); optional
+      const price = Number(r?.price);
+      return Number.isFinite(price) && price > 0 && price < 1e11 ? { ...item, price: Math.round(price) } : item;
     });
     const categories = [...new Set(items.map((x) => x.category))];
     await dataSource().saveSoh({ date, categories, items, source: str(b.source, 200) }, s.nik);
