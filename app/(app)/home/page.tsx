@@ -319,8 +319,8 @@ const cards = [total, grpCard("apple", "Apple", grp.Apple), grpCard("android", "
         </p>
       </Panel>
 
-      <Panel title="Share Daily" desc="Ringkasan harian untuk WhatsApp." right={<div className="flex gap-2"><CopyButton text={shareText(h, cfg.storeName)} label="Salin teks" /><WhatsAppButton text={shareText(h, cfg.storeName)} /></div>}>
-        <pre className="m-0 rounded-2xl bg-slate-50 p-4 font-[inherit] text-sm whitespace-pre-wrap text-slate-700">{shareText(h, cfg.storeName)}</pre>
+      <Panel title="Share Daily" desc="Ringkasan harian untuk WhatsApp." right={<div className="flex gap-2"><CopyButton text={shareText(h, cfg.storeName, p.snap.lines)} label="Salin teks" /><WhatsAppButton text={shareText(h, cfg.storeName, p.snap.lines)} /></div>}>
+        <pre className="m-0 rounded-2xl bg-slate-50 p-4 font-[inherit] text-sm whitespace-pre-wrap text-slate-700">{shareText(h, cfg.storeName, p.snap.lines)}</pre>
       </Panel>
     </>
   );
