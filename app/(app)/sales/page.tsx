@@ -129,7 +129,7 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
   const byKey = linesByStaff(dayLines);
   const detail = dayDetail(s, day);
   const h = homeView(s, day);
-  const text = shareText(h, appConfig().storeName);
+  const text = shareText(h, appConfig().storeName, s.lines);
   const sum = people.reduce((a, r) => ({ target: a.target + r.target, acc: a.acc + r.totals.byGroup.ACC, vas: a.vas + r.totals.byGroup.VAS, sales: a.sales + r.totals.sales }), { target: 0, acc: 0, vas: 0, sales: 0 });
 
   const cards = [
@@ -260,6 +260,55 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
             <tfoot><tr><td>TOTAL</td>{APPLE_LOBS.map((k) => <td key={k} className="n">{num(lobQty(dayLines)[k])}</td>)}</tr></tfoot>
           </table>
         </div>
+      </Panel>
+
+      <Panel title="Android Daily" desc="Qty dan value device Android per brand per salesperson pada tanggal ini.">
+        {(() => {
+          const andOf = (ls: SalesLine[]) => {
+            const m: Record<string, { qty: number; value: number }> = {};
+            for (const l of ls) {
+              if (l.group !== "Android") continue;
+              const k = l.lob || l.brand || "Lainnya";
+              const e = (m[k] ??= { qty: 0, value: 0 });
+              if (l.countsInQty) e.qty += l.qty;
+              e.value += l.amount;
+            }
+            return m;
+          };
+          const all = andOf(dayLines);
+          const brands = Object.keys(all).sort((a, b) => all[b].qty - all[a].qty || all[b].value - all[a].value);
+          if (!brands.length) return <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-500 dark:bg-slate-800/40">Belum ada penjualan Android pada tanggal ini.</p>;
+          const sold = people.filter((r) => Object.keys(andOf(byKey.get(r.key) ?? [])).length);
+          const tot = (m: Record<string, { qty: number; value: number }>) => Object.values(m).reduce((t, x) => ({ qty: t.qty + x.qty, value: t.value + x.value }), { qty: 0, value: 0 });
+          const qv = (x?: { qty: number; value: number }) => (x && (x.qty || x.value) ? <span className="leading-tight"><b className="block">{num(x.qty)}</b><span className="text-[11px] text-slate-500">{rpc(x.value)}</span></span> : <span className="text-slate-400">0</span>);
+          return (
+            <>
+              <MobileGrid
+                cols={[{ label: "Nama" }, { label: "Unit", w: "2.4rem" }, { label: "Value", w: "5rem" }]}
+                rows={sold.map((r) => {
+                  const m = andOf(byKey.get(r.key) ?? []);
+                  const t2 = tot(m);
+                  return { key: r.key, cells: [<b key="n" className="leading-tight">{displayName(r.name)}</b>, <b key="q">{num(t2.qty)}</b>, rpc(t2.value)], sub: brands.filter((b) => m[b]).map((b) => `${b} ${num(m[b].qty)}`).join(" · ") };
+                })}
+                foot={["TOTAL", num(tot(all).qty), rpc(tot(all).value)]}
+              />
+              <p className="mt-2 text-[11px] text-slate-500 sm:hidden">{brands.map((b) => `${b} ${num(all[b].qty)} unit · ${rpc(all[b].value)}`).join(" | ")}</p>
+              <div className="sd-table-wrap max-sm:hidden">
+                <table className="sd-table">
+                  <thead><tr><th>Nama</th>{brands.map((b) => <th key={b} className="n">{b}</th>)}<th className="n">Total</th></tr></thead>
+                  <tbody>
+                    {sold.map((r) => {
+                      const m = andOf(byKey.get(r.key) ?? []);
+                      return <tr key={r.key}><td className="font-bold">{displayName(r.name)}</td>{brands.map((b) => <td key={b} className="n">{qv(m[b])}</td>)}<td className="n">{qv(tot(m))}</td></tr>;
+                    })}
+                  </tbody>
+                  <tfoot><tr><td>TOTAL</td>{brands.map((b) => <td key={b} className="n">{qv(all[b])}</td>)}<td className="n">{qv(tot(all))}</td></tr></tfoot>
+                </table>
+              </div>
+              <p className="mt-2 text-xs text-slate-500 max-sm:hidden">Angka atas = qty, bawah = value.</p>
+            </>
+          );
+        })()}
       </Panel>
 
       <Panel title="VAS Daily" desc="Sumber Sales Person (brand Qoala / Telkomsel / XL / Indosat).">
