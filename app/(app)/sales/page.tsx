@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { Activity, ChevronDown, Gauge, TrendingUp } from "lucide-react";
+import { Activity, ChevronDown, ChevronRight, Gauge, ShoppingBag, TrendingUp } from "lucide-react";
 import { appConfig } from "@/config/app";
 import { Panel, PageIntro, Progress } from "@/components/kit";
 import { MobileGrid } from "@/components/kit/MobileGrid";
 import { CopyButton, ParamDate, WhatsAppButton } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
-import { APPLE_LOBS, VAS_PROVIDERS, linesByStaff, lobQty, vasSplit } from "@/lib/domain/extra";
+import { APPLE_LOBS, VAS_PROVIDERS, linesByStaff, vasSplit } from "@/lib/domain/extra";
+import { CategoryDaily, Stats, Tiles, sumQV, type Split } from "@/components/modules/SalesDaily";
 import { byStaff, totals } from "@/lib/domain/kpi";
 import { displayName } from "@/lib/domain/normalize";
 import { daysInMonth, monthEnd, monthStart } from "@/lib/domain/period";
@@ -40,12 +41,42 @@ function itemsOf(lines: SalesLine[]): Array<{ description: string; qty: number; 
   return [...m.values()].sort((a, b) => b.amount - a.amount);
 }
 
+const LOB_LABEL: Record<string, string> = { iPhone: "iPhone", Mac: "MacBook", iPad: "iPad", "Apple Watch": "Apple Watch", AirPods: "AirPods" };
+const add = (m: Split, k: string, l: SalesLine, unit: boolean) => {
+  const e = (m[k] ??= { qty: 0, value: 0 });
+  if (unit) e.qty += l.qty;
+  e.value += l.amount;
+};
+/** Apple per LOB (device LOBs + AirPods); unit = qty rules. */
+function appleSplit(lines: SalesLine[]): Split {
+  const m: Split = {};
+  for (const l of lines) if (l.lob && (APPLE_LOBS as readonly string[]).includes(l.lob)) add(m, l.lob, l, l.countsInQty);
+  return m;
+}
+/** Android per brand. */
+function androidSplit(lines: SalesLine[]): Split {
+  const m: Split = {};
+  for (const l of lines) if (l.group === "Android") add(m, l.lob || l.brand || "Lainnya", l, l.countsInQty);
+  return m;
+}
+/** VAS per provider (every policy / package = 1). */
+function vasQV(lines: SalesLine[]): Split {
+  const v = vasSplit(lines);
+  return Object.fromEntries(VAS_PROVIDERS.map((k) => [k, v[k]]));
+}
+/** ACC per supplier (AirPods shown as their own key). */
+function accSplit(lines: SalesLine[]): Split {
+  const m: Split = {};
+  for (const l of lines) if (l.group === "ACC") add(m, l.lob === "AirPods" ? "AirPods" : l.supplier || displayName(l.brand || "Lainnya"), l, l.countsInQty);
+  return m;
+}
+
 /**
  * Per-salesperson detail behind one card (popover; opens on a click anywhere on the card).
  * Sales / VAS / ACC: actual vs daily target per person; UPT: units, transactions and UPT per person.
  * Each person expands to the items they sold.
  */
-function CardPeople({ id, title, kind, people }: { id: string; title: string; kind: CardKind; people: PersonRow[] }) {
+function CardPeople({ id, title, kind, people, summary }: { id: string; title: string; kind: CardKind; people: PersonRow[]; summary?: React.ReactNode }) {
   const pick = (ls: SalesLine[]) => (kind === "VAS" || kind === "ACC" ? ls.filter((l) => l.group === kind) : ls);
   const rows = people
     .map((r) => {
@@ -63,9 +94,11 @@ function CardPeople({ id, title, kind, people }: { id: string; title: string; ki
       <button type="button" popoverTarget={id} className="absolute inset-0 z-10 cursor-pointer rounded-[inherit]" aria-label={`Rincian ${title} per salesperson`} />
       <div id={id} popover="auto" className="m-auto max-h-[90dvh] w-[min(94vw,600px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-2xl backdrop:bg-slate-900/40 sm:p-5 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
         <div className="mb-1 flex items-center justify-between gap-3">
-          <p className="text-base font-black">{title} · per Salesperson</p>
+          <p className="text-base font-black">{title}</p>
           <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>
         </div>
+        {summary && <div className="mt-2 mb-4">{summary}</div>}
+        <p className="mb-2 text-[11px] font-extrabold tracking-wide text-slate-500 uppercase">Per salesperson</p>
         <p className="mb-3 text-xs text-slate-500">{kind === "upt" ? "Unit terjual ÷ jumlah transaksi per orang." : "Target harian = target bulanan ÷ jumlah hari."} Ketuk nama untuk melihat barang yang terjual.</p>
         {rows.length ? (
           <div className="overflow-hidden rounded-2xl border border-slate-200 text-[13px] sm:text-sm dark:border-slate-700">
@@ -132,10 +165,34 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
   const text = shareText(h, appConfig().storeName, s.lines);
   const sum = people.reduce((a, r) => ({ target: a.target + r.target, acc: a.acc + r.totals.byGroup.ACC, vas: a.vas + r.totals.byGroup.VAS, sales: a.sales + r.totals.sales }), { target: 0, acc: 0, vas: 0, sales: 0 });
 
+  const dayDate = dateLong(day);
+  const groupTarget = (g: "Apple" | "Android" | "ACC" | "VAS") => tg[g] / dim;
+  const accAll = accSplit(dayLines);
+  const accKeys = Object.keys(accAll).sort((a, b) => accAll[b].value - accAll[a].value);
+  const vasAll = vasQV(dayLines);
+  const appleAll = appleSplit(dayLines);
+  const androidAll = androidSplit(dayLines);
+  const androidKeys = Object.keys(androidAll).sort((a, b) => androidAll[b].qty - androidAll[a].qty || androidAll[b].value - androidAll[a].value);
+  const groupQV = (g: "Apple" | "Android" | "ACC" | "VAS") => ({ qty: g === "VAS" ? sumQV(vasAll).qty : t.qtyByGroup[g], value: t.byGroup[g] });
+
   const cards = [
-    { label: "Target vs Achievement", kind: "sales", actual: t.sales, target: dailyTarget, color: "#4a90ff", tone: "blue", icon: TrendingUp, ic: "bg-blue-50 text-blue-600" },
-    { label: "VAS vs Achievement", kind: "VAS", actual: t.byGroup.VAS, target: dailyVas, color: "#42c77a", tone: "green", icon: Activity, ic: "bg-emerald-50 text-emerald-600" },
-    { label: "ACC vs Achievement", kind: "ACC", actual: t.byGroup.ACC, target: dailyAcc, color: "#8a6fff", tone: "violet", icon: TrendingUp, ic: "bg-violet-50 text-violet-600" },
+    {
+      label: "Target vs Achievement", kind: "sales", title: `Achievement · ${dayDate}`, actual: t.sales, target: dailyTarget, color: "#3b82f6", tone: "blue", icon: TrendingUp, ic: "bg-blue-50 text-blue-600 dark:bg-blue-500/10",
+      summary: (
+        <div className="space-y-3">
+          <Tiles items={(["Apple", "Android", "ACC", "VAS"] as const).map((g) => ({ key: g, label: g, v: groupQV(g), target: groupTarget(g) }))} total={{ label: "Total", v: { qty: t.qty, value: t.sales } }} cols="grid-cols-2 sm:grid-cols-5" />
+          <Tiles items={[...APPLE_LOBS.map((k) => ({ key: k, label: LOB_LABEL[k], v: appleAll[k] ?? { qty: 0, value: 0 } })), ...androidKeys.map((k) => ({ key: k, label: k, v: androidAll[k] }))]} cols="grid-cols-3 sm:grid-cols-4" />
+        </div>
+      ),
+    },
+    {
+      label: "VAS vs Achievement", kind: "VAS", title: `VAS · ${dayDate}`, actual: t.byGroup.VAS, target: dailyVas, color: "#10b981", tone: "green", icon: Activity, ic: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10",
+      summary: <Tiles items={VAS_PROVIDERS.map((k) => ({ key: k, label: k, v: vasAll[k], unit: "polis" }))} total={{ label: "Total VAS", v: sumQV(vasAll), unit: "polis" }} cols="grid-cols-2 sm:grid-cols-5" />,
+    },
+    {
+      label: "ACC vs Achievement", kind: "ACC", title: `ACC · ${dayDate}`, actual: t.byGroup.ACC, target: dailyAcc, color: "#8b5cf6", tone: "violet", icon: ShoppingBag, ic: "bg-violet-50 text-violet-600 dark:bg-violet-500/10",
+      summary: accKeys.length ? <Tiles items={accKeys.map((k) => ({ key: k, label: k, v: accAll[k] }))} total={{ label: "Total ACC", v: sumQV(accAll) }} cols="grid-cols-2 sm:grid-cols-4" /> : undefined,
+    },
   ] as const;
   // per-salesperson rows behind the cards (target per card = that group's daily target)
   const peopleFor = (kind: CardKind): PersonRow[] =>
@@ -146,6 +203,7 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
       target: kind === "VAS" || kind === "ACC" ? r.targetByGroup[kind] : kind === "sales" ? r.target : 0,
       lines: byKey.get(r.key) ?? [],
     }));
+  const tone = (a: number | null) => (a == null ? "bg-slate-100 text-slate-500" : a >= 100 ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10" : a >= 80 ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10" : "bg-rose-50 text-rose-700 dark:bg-rose-500/10");
 
   return (
     <div className="sd-content">
@@ -170,29 +228,41 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
         {cards.map((c) => {
           const a = c.target ? (c.actual / c.target) * 100 : null;
           const Icon = c.icon;
+          const gap = c.actual - c.target;
           return (
-            <article key={c.label} className="sd-block-card relative p-3.5 sm:p-5" data-tone={c.tone}>
-              <CardPeople id={`card-${c.kind}`} title={c.kind === "sales" ? "Achievement" : c.kind} kind={c.kind} people={peopleFor(c.kind)} />
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-[13px] leading-tight font-bold text-slate-500 sm:text-sm">{c.label}</p>
-                <span className={`grid size-8 shrink-0 place-items-center rounded-[12px] sm:size-9 sm:rounded-[14px] ${c.ic}`}><Icon className="size-4" /></span>
+            <article key={c.label} className="sd-block-card group relative flex flex-col p-3.5 sm:p-5" data-tone={c.tone}>
+              <CardPeople id={`card-${c.kind}`} title={c.title} kind={c.kind} people={peopleFor(c.kind)} summary={c.summary} />
+              <div className="flex min-h-9 items-center gap-2">
+                <span className={`grid size-8 shrink-0 place-items-center rounded-xl ${c.ic}`}><Icon className="size-4" /></span>
+                <p className="min-w-0 flex-1 text-[12.5px] leading-tight font-bold text-slate-500 sm:text-sm">{c.label}</p>
               </div>
-              <p className="mt-3 leading-tight font-black text-slate-950 sm:mt-4"><span className="sd-num block sm:text-2xl xl:text-xl 2xl:text-2xl">{rpf(c.actual)}</span><span className="block text-[11px] font-bold text-slate-500 sm:text-sm">dari target {rpf(c.target)}</span></p>
-              <p className="mt-3 text-xs font-bold text-slate-500">{pct(a ?? 0, 0)}</p>
-              <div className="mt-2"><Progress value={a} color={c.color} label={c.label} /></div>
-              <p className="mt-2 text-[11px] font-semibold text-blue-600 sm:text-xs">Rincian per salesperson ›</p>
+              <p className="mt-3 text-[17px] leading-tight font-black tracking-tight text-slate-950 tabular-nums sm:text-2xl xl:text-xl 2xl:text-2xl dark:text-white">{rpf(c.actual)}</p>
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-500 tabular-nums sm:text-xs">Target {rpf(c.target)}</p>
+              <div className="mt-3"><Progress value={a} color={c.color} label={c.label} /></div>
+              <div className="mt-2 mb-3 flex items-center justify-between gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${tone(a)}`}>{pct(a ?? 0, 0)}</span>
+                <span className={`truncate text-[11px] font-bold tabular-nums ${gap >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{gap >= 0 ? "+" : "−"}{rpc(Math.abs(gap))}</span>
+              </div>
+              <span className="mt-auto inline-flex items-center gap-0.5 self-start rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-700 transition group-hover:bg-slate-900 group-hover:text-white dark:bg-slate-800 dark:text-slate-200">Lihat detail <ChevronRight className="size-3.5" /></span>
             </article>
           );
         })}
-        <article className="sd-block-card relative p-3.5 sm:p-5" data-tone="amber">
-          <CardPeople id="card-upt" title="UPT" kind="upt" people={peopleFor("upt")} />
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-[13px] font-bold text-slate-500 sm:text-sm">UPT</p>
-            <span className="grid size-8 shrink-0 place-items-center rounded-[12px] bg-amber-50 text-amber-600 sm:size-9 sm:rounded-[14px]"><Gauge className="size-4" /></span>
+        <article className="sd-block-card group relative flex flex-col p-3.5 sm:p-5" data-tone="amber">
+          <CardPeople
+            id="card-upt"
+            title={`UPT · ${dayDate}`}
+            kind="upt"
+            people={peopleFor("upt")}
+            summary={<Stats items={[{ label: "UPT", value: dec(t.upt, 2).replace(",", "."), note: "unit ÷ transaksi" }, { label: "Unit", value: num(t.qty), note: "device + aksesoris" }, { label: "Transaksi", value: num(t.invoices), note: "invoice" }, { label: "ATV", value: rpc(t.atv ?? 0), note: "sales ÷ transaksi" }]} />}
+          />
+          <div className="flex min-h-9 items-center gap-2">
+            <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/10"><Gauge className="size-4" /></span>
+            <p className="min-w-0 flex-1 text-[12.5px] leading-tight font-bold text-slate-500 sm:text-sm">UPT</p>
           </div>
-          <p className="mt-3 text-xl font-black text-slate-950 sm:mt-4 sm:text-2xl">{dec(t.upt, 1).replace(",", ".")}</p>
-          <p className="mt-2 text-[11px] font-bold text-slate-500 sm:mt-3 sm:text-xs">{num(t.qty)} unit / {num(t.invoices)} transaksi</p>
-          <p className="mt-2 text-[11px] font-semibold text-blue-600 sm:text-xs">Rincian per salesperson ›</p>
+          <p className="mt-3 text-[17px] leading-tight font-black text-slate-950 tabular-nums sm:text-2xl dark:text-white">{dec(t.upt, 2).replace(",", ".")}</p>
+          <p className="mt-0.5 text-[11px] font-semibold text-slate-500 tabular-nums sm:text-xs">{num(t.qty)} unit · {num(t.invoices)} transaksi</p>
+          <p className="mt-3 mb-3 text-[11px] font-semibold text-slate-500 tabular-nums sm:text-xs">ATV <b className="text-slate-800 dark:text-slate-100">{rpf(t.atv ?? 0)}</b></p>
+          <span className="mt-auto inline-flex items-center gap-0.5 self-start rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-700 transition group-hover:bg-slate-900 group-hover:text-white dark:bg-slate-800 dark:text-slate-200">Lihat detail <ChevronRight className="size-3.5" /></span>
         </article>
       </div>
 
@@ -237,109 +307,16 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
         <p className="mt-3 text-xs text-slate-500">Status shift (masuk / libur) belum tersedia — butuh data jadwal staff (<b>Need Data</b>).</p>
       </Panel>
 
-      <Panel title="LOB Apple Daily" desc="iPhone, MacBook, iPad, dan Watch = device Apple • AirPods = accessories Apple">
-        <MobileGrid
-          cols={[{ label: "Nama" }, ...(["iPh", "Mac", "iPad", "AW", "AirP"] as const).map((l) => ({ label: l, w: "2.3rem" }))]}
-          rows={people.map((r) => {
-            const q = lobQty(byKey.get(r.key) ?? []);
-            return { key: r.key, cells: [<b key="n" className="leading-tight">{displayName(r.name)}</b>, ...APPLE_LOBS.map((k) => <span key={k} className={q[k] ? "font-bold" : "text-slate-400"}>{num(q[k])}</span>)] };
-          })}
-          foot={["TOTAL", ...APPLE_LOBS.map((k) => num(lobQty(dayLines)[k]))]}
-        />
-        <div className="sd-table-wrap max-sm:hidden">
-          <table className="sd-table">
-            <thead><tr><th>Nama</th><th className="n">iPhone (Device)</th><th className="n">MacBook (Device)</th><th className="n">iPad (Device)</th><th className="n">Apple Watch (Device)</th><th className="n">AirPods (Accessories)</th></tr></thead>
-            <tbody>
-              {people.map((r) => {
-                const q = lobQty(byKey.get(r.key) ?? []);
-                return (
-                  <tr key={r.key}><td className="font-bold">{displayName(r.name)}</td>{APPLE_LOBS.map((k) => <td key={k} className="n">{num(q[k])}</td>)}</tr>
-                );
-              })}
-            </tbody>
-            <tfoot><tr><td>TOTAL</td>{APPLE_LOBS.map((k) => <td key={k} className="n">{num(lobQty(dayLines)[k])}</td>)}</tr></tfoot>
-          </table>
-        </div>
+      <Panel title="Apple Daily" desc="Per LOB: iPhone, MacBook, iPad, Apple Watch (device) dan AirPods (accessories Apple) — unit dan value.">
+        <CategoryDaily keys={[...APPLE_LOBS]} label={(k) => LOB_LABEL[k] ?? k} split={appleSplit} people={people} byKey={byKey} dayLines={dayLines} empty="Belum ada penjualan Apple pada tanggal ini." />
       </Panel>
 
-      <Panel title="Android Daily" desc="Qty dan value device Android per brand per salesperson pada tanggal ini.">
-        {(() => {
-          const andOf = (ls: SalesLine[]) => {
-            const m: Record<string, { qty: number; value: number }> = {};
-            for (const l of ls) {
-              if (l.group !== "Android") continue;
-              const k = l.lob || l.brand || "Lainnya";
-              const e = (m[k] ??= { qty: 0, value: 0 });
-              if (l.countsInQty) e.qty += l.qty;
-              e.value += l.amount;
-            }
-            return m;
-          };
-          const all = andOf(dayLines);
-          const brands = Object.keys(all).sort((a, b) => all[b].qty - all[a].qty || all[b].value - all[a].value);
-          if (!brands.length) return <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-500 dark:bg-slate-800/40">Belum ada penjualan Android pada tanggal ini.</p>;
-          const sold = people.filter((r) => Object.keys(andOf(byKey.get(r.key) ?? [])).length);
-          const tot = (m: Record<string, { qty: number; value: number }>) => Object.values(m).reduce((t, x) => ({ qty: t.qty + x.qty, value: t.value + x.value }), { qty: 0, value: 0 });
-          const qv = (x?: { qty: number; value: number }) => (x && (x.qty || x.value) ? <span className="leading-tight"><b className="block">{num(x.qty)}</b><span className="text-[11px] text-slate-500">{rpc(x.value)}</span></span> : <span className="text-slate-400">0</span>);
-          return (
-            <>
-              <MobileGrid
-                cols={[{ label: "Nama" }, { label: "Unit", w: "2.4rem" }, { label: "Value", w: "5rem" }]}
-                rows={sold.map((r) => {
-                  const m = andOf(byKey.get(r.key) ?? []);
-                  const t2 = tot(m);
-                  return { key: r.key, cells: [<b key="n" className="leading-tight">{displayName(r.name)}</b>, <b key="q">{num(t2.qty)}</b>, rpc(t2.value)], sub: brands.filter((b) => m[b]).map((b) => `${b} ${num(m[b].qty)}`).join(" · ") };
-                })}
-                foot={["TOTAL", num(tot(all).qty), rpc(tot(all).value)]}
-              />
-              <p className="mt-2 text-[11px] text-slate-500 sm:hidden">{brands.map((b) => `${b} ${num(all[b].qty)} unit · ${rpc(all[b].value)}`).join(" | ")}</p>
-              <div className="sd-table-wrap max-sm:hidden">
-                <table className="sd-table">
-                  <thead><tr><th>Nama</th>{brands.map((b) => <th key={b} className="n">{b}</th>)}<th className="n">Total</th></tr></thead>
-                  <tbody>
-                    {sold.map((r) => {
-                      const m = andOf(byKey.get(r.key) ?? []);
-                      return <tr key={r.key}><td className="font-bold">{displayName(r.name)}</td>{brands.map((b) => <td key={b} className="n">{qv(m[b])}</td>)}<td className="n">{qv(tot(m))}</td></tr>;
-                    })}
-                  </tbody>
-                  <tfoot><tr><td>TOTAL</td>{brands.map((b) => <td key={b} className="n">{qv(all[b])}</td>)}<td className="n">{qv(tot(all))}</td></tr></tfoot>
-                </table>
-              </div>
-              <p className="mt-2 text-xs text-slate-500 max-sm:hidden">Angka atas = qty, bawah = value.</p>
-            </>
-          );
-        })()}
+      <Panel title="Android Daily" desc="Per brand — unit dan value device Android.">
+        <CategoryDaily keys={androidKeys} split={androidSplit} people={people} byKey={byKey} dayLines={dayLines} empty="Belum ada penjualan Android pada tanggal ini." />
       </Panel>
 
-      <Panel title="VAS Daily" desc="Sumber Sales Person (brand Qoala / Telkomsel / XL / Indosat).">
-        <MobileGrid
-          minFirst="4.4rem"
-          cols={[{ label: "Nama" }, ...VAS_PROVIDERS.map((v) => ({ label: ({ Qoala: "Qoala", Telkomsel: "Tsel", XL: "XL", Indosat: "Isat" } as Record<string, string>)[v] ?? v, w: "2.9rem" }))]}
-          rows={people.map((r) => {
-            const v = vasSplit(byKey.get(r.key) ?? []);
-            return {
-              key: r.key,
-              cells: [
-                <b key="n" className="leading-tight">{displayName(r.name)}</b>,
-                ...VAS_PROVIDERS.map((k) => (v[k].qty || v[k].value ? <span key={k} className="leading-tight"><b className="block">{num(v[k].qty)}</b><span className="text-[10.5px] text-slate-500">{rpc(v[k].value)}</span></span> : <span key={k} className="text-slate-400">0</span>)),
-              ],
-            };
-          })}
-          foot={["TOTAL", ...VAS_PROVIDERS.map((k) => { const v = vasSplit(dayLines)[k]; return <span key={k} className="leading-tight"><span className="block">{num(v.qty)}</span><span className="text-[10.5px]">{rpc(v.value)}</span></span>; })]}
-        />
-        <p className="mt-1.5 text-[11px] text-slate-500 sm:hidden">Angka atas = qty, bawah = value.</p>
-        <div className="sd-table-wrap max-sm:hidden">
-          <table className="sd-table">
-            <thead><tr><th>Nama</th>{VAS_PROVIDERS.map((v) => <th key={v} className="n">{v} Qty / Value</th>)}</tr></thead>
-            <tbody>
-              {people.map((r) => {
-                const v = vasSplit(byKey.get(r.key) ?? []);
-                return <tr key={r.key}><td className="font-bold">{displayName(r.name)}</td>{VAS_PROVIDERS.map((k) => <td key={k} className="n">{num(v[k].qty)} / {rpf(v[k].value)}</td>)}</tr>;
-              })}
-            </tbody>
-            <tfoot><tr><td>TOTAL</td>{VAS_PROVIDERS.map((k) => { const v = vasSplit(dayLines)[k]; return <td key={k} className="n">{num(v.qty)} / {rpf(v.value)}</td>; })}</tr></tfoot>
-          </table>
-        </div>
+      <Panel title="VAS Daily" desc="Per provider: Qoala, Telkomsel, XL, Indosat — jumlah polis / paket dan value.">
+        <CategoryDaily keys={[...VAS_PROVIDERS]} split={vasQV} people={people} byKey={byKey} dayLines={dayLines} empty="Belum ada penjualan VAS pada tanggal ini." unit="polis" />
       </Panel>
 
       <Panel title={`Detail Invoice (${detail.invoices.length})`} desc="Klik invoice untuk melihat item.">
