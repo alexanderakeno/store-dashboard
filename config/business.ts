@@ -22,6 +22,8 @@ export interface BusinessRules {
   qtyTypes: string[];
   /** Point caps per group. */
   pointCaps: Record<Group, number>;
+  /** Groups scored per step of achievement: 1 point per full `n` % (VAS: 10 → 10% = 1 pt, max = cap). */
+  pointStepPct?: Partial<Record<Group, number>>;
   /** Days before the closing estimate is considered stable. */
   estimateMinDays: number;
   /** Est. incentive scheme (accessories come from the sheet's ACC Fokus leaderboard). */
@@ -63,6 +65,7 @@ export const DEFAULT_RULES: BusinessRules = {
   channelNames: ["MAPEMALL"],
   qtyTypes: ["DEVICES", "ACCESSORIES"],
   pointCaps: { Apple: 30, Android: 30, ACC: 30, VAS: 10 },
+  pointStepPct: { VAS: 10 },
   estimateMinDays: 3,
   incentive: {
     perUnit: { Mac: 30_000, iPhone: 15_000, iPad: 30_000, "Apple Watch": 30_000 },
