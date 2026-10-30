@@ -34,7 +34,7 @@ test("soh excel: every line = 1 unit (Qty 0 included), Qty > 1 kept, categories,
   assert.deepEqual(r.categories, ["iPhone", "MacBook", "Samsung", "Aksesoris", "Elektronik"]);
   assert.equal(r.items.find((x) => x.article === "APPMFYM4ID/A")!.qty, 2); // 2 lines with Qty 0 = 2 units
   const air = r.items.find((x) => x.article === "APPMG2L4ID/A")!;
-  assert.deepEqual(air, { category: "iPhone", article: "APPMG2L4ID/A", description: "IPHONE AIR 256GB SPACE BLACK", qty: 2 });
+  assert.deepEqual(air, { category: "iPhone", article: "APPMG2L4ID/A", description: "IPHONE AIR 256GB SPACE BLACK", qty: 2, price: 1000 });
   assert.equal(r.items.some((x) => x.article.endsWith("-D")), false);
   assert.equal(r.items.find((x) => x.article === "AMNAPAADL65EUWH")!.category, "Aksesoris");
   assert.equal(r.items.find((x) => x.article === "AMNAPAADL65EUWH")!.qty, 2); // Qty 2 on one line
