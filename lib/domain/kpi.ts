@@ -57,9 +57,14 @@ export function estimateClosing(mtd: number, month: MonthKey, asOf: ISODate, min
   return { value, daysElapsed, stable: daysElapsed >= minDays };
 }
 
-/** Point = MIN(MTD ÷ (Target ÷ daysInMonth), cap) — same as the sheet (Data - Akeno L74:M79). */
-export function point(actual: number, target: number, month: MonthKey, cap: number): number {
+/**
+ * Point = MIN(MTD ÷ (Target ÷ daysInMonth), cap) — same as the sheet (Data - Akeno L74:M79).
+ * Groups with a step (`stepPct`, e.g. VAS: 10) earn 1 point per full `stepPct` % of achievement instead
+ * (VAS: 10% → 1 pt … 100% → 10 pt, max = cap).
+ */
+export function point(actual: number, target: number, month: MonthKey, cap: number, stepPct?: number): number {
   if (!target) return 0;
+  if (stepPct) return Math.min(Math.floor(((actual / target) * 100) / stepPct + 1e-9), cap);
   return Math.min(actual / (target / daysInMonth(month)), cap);
 }
 
@@ -75,8 +80,9 @@ export function points(actual: Record<Group, number>, estimate: Record<Group, nu
   const byGroup = zero();
   const estimateByGroup = zero();
   for (const g of GROUPS) {
-    byGroup[g] = point(actual[g], target[g], month, rules.pointCaps[g]);
-    estimateByGroup[g] = point(estimate[g], target[g], month, rules.pointCaps[g]);
+    const step = rules.pointStepPct?.[g];
+    byGroup[g] = point(actual[g], target[g], month, rules.pointCaps[g], step);
+    estimateByGroup[g] = point(estimate[g], target[g], month, rules.pointCaps[g], step);
   }
   const sum = (r: Record<Group, number>) => GROUPS.reduce((a, g) => a + r[g], 0);
   return { byGroup, total: sum(byGroup), estimateByGroup, estimateTotal: sum(estimateByGroup), max: sum(rules.pointCaps) };

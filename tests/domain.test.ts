@@ -71,6 +71,16 @@ test("point formula matches sheet", () => {
   assert.equal(point(1, 0, m, 30), 0);
 });
 
+test("VAS point: 1 point per full 10% achievement, max 10", () => {
+  const m = "2026-10";
+  assert.equal(point(9, 100, m, 10, 10), 0); // 9%
+  assert.equal(point(10, 100, m, 10, 10), 1); // 10%
+  assert.equal(point(87, 100, m, 10, 10), 8); // 87%
+  assert.equal(point(100, 100, m, 10, 10), 10);
+  assert.equal(point(245, 100, m, 10, 10), 10); // capped
+  assert.equal(point(70067500, 28527015, "2026-09", 10, 10), 10);
+});
+
 test("closing estimate", () => {
   const e = estimateClosing(100, "2026-09", "2026-09-10", 3);
   assert.equal(e.value, 300);
