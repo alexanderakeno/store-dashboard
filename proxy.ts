@@ -18,6 +18,7 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  // icons & manifest stay public: iPhone / Android fetch them without the session cookie
-  matcher: ["/((?!api/auth/login|_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|icon-192.png|icon-512.png|manifest.webmanifest).*)"],
+  // icons & manifest stay public: iPhone / Android fetch them without the session cookie;
+  // /api/warm is the keep-warm ping (returns no data)
+  matcher: ["/((?!api/auth/login|api/warm$|_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|icon-192.png|icon-512.png|manifest.webmanifest).*)"],
 };
