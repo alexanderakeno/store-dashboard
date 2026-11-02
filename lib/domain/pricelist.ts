@@ -185,7 +185,25 @@ export function matchArticles(name: string, articles: string[], soh: SohItem[]):
  * `inStockOnly`: a model is shown only when SOH has stock for one of its variants — then with all its variants (every
  * storage's price). Android rows without articles (PDF imports) always count as shown; Apple PDF rows match by tokens.
  */
+// Price-list rows × SOH matching is the heaviest per-request work (tokenising ~1.000 rows against ~1.200 articles).
+// The inputs come from the in-memory cache (same array objects until it refreshes), so results are memoised per
+// input identity: one computation per data refresh instead of one per page view. Callers treat the result as read-only.
+const modelMemo = new WeakMap<PriceItem[], WeakMap<SohItem[], Map<string, PriceModel[]>>>();
+
 export function priceModels(stored: PriceItem[], kind: PriceKind, soh: SohItem[], opts: { inStockOnly?: boolean; alwaysShow?: string[] } = {}): PriceModel[] {
+  let bySoh = modelMemo.get(stored);
+  if (!bySoh) modelMemo.set(stored, (bySoh = new WeakMap()));
+  let byOpts = bySoh.get(soh);
+  if (!byOpts) bySoh.set(soh, (byOpts = new Map()));
+  const key = `${kind}|${opts.inStockOnly ? 1 : 0}|${(opts.alwaysShow ?? []).join(",")}`;
+  const hit = byOpts.get(key);
+  if (hit) return hit;
+  const out = computePriceModels(stored, kind, soh, opts);
+  byOpts.set(key, out);
+  return out;
+}
+
+function computePriceModels(stored: PriceItem[], kind: PriceKind, soh: SohItem[], opts: { inStockOnly?: boolean; alwaysShow?: string[] } = {}): PriceModel[] {
   // fixes apply to data already in the sheet too: rows printed twice are shown once, "IPHONE 17E" reads "iPhone 17e"
   const items = stored.map((it) => (it.kind === "apple" ? { ...it, name: iphoneName(it.name) } : it));
   dedupeItems(items, []);
