@@ -3,6 +3,7 @@ import { after } from "next/server";
 import type { Session } from "@/lib/auth/token";
 import { deviceFrom } from "@/lib/domain/access";
 import { dataSource } from "@/lib/repositories";
+import { notifyLogin } from "@/lib/notify";
 import type { AccessEntry, AccessEvent } from "@/types/access";
 
 function header(req: Request, name: string): string {
@@ -50,4 +51,6 @@ export function recordAccess(req: Request, event: AccessEvent, who: Pick<Session
     ...clientInfo(req),
   };
   after(() => dataSource().logAccess([entry]).catch((e) => console.error("access log:", e)));
+  // Telegram notification for logins / failed logins (only when configured in Vercel env)
+  if (event === "login" || event === "login_failed") after(() => notifyLogin(entry));
 }

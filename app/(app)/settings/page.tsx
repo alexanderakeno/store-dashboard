@@ -1,6 +1,8 @@
 import { appConfig } from "@/config/app";
 import { EmptyBlock, PageIntro, Panel } from "@/components/kit";
 import { DisplayPrefs } from "@/components/modules/DisplayPrefs";
+import { NotifyTest } from "@/components/modules/NotifyTest";
+import { telegramConfig } from "@/lib/notify";
 import { MonthForm, RulesForm, TrafficForm, UserForm } from "@/components/modules/settings/forms";
 import { eachDay, monthEnd, monthStart, todayIn } from "@/lib/domain/period";
 import { monthLabel } from "@/lib/format";
@@ -78,6 +80,27 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
               </table>
             </div>
             <div className="mt-4"><UserForm /></div>
+          </Panel>
+
+          <Panel title="Notifikasi login (Telegram)" desc="Kirim pesan ke Telegram setiap ada yang login / salah password.">
+            {(() => {
+              const t = telegramConfig();
+              const kinds = [t.kinds.has("login") && "login staff", t.kinds.has("failed") && "login gagal", t.kinds.has("admin") && "login admin"].filter(Boolean).join(" · ");
+              return (
+                <div className="space-y-3 text-sm">
+                  <p>Status: {t.ready ? <span className="sd-badge green">aktif · {t.chats.length} chat</span> : <span className="sd-badge slate">belum diatur</span>} {t.ready && <span className="text-slate-500">· dikirim: {kinds || "tidak ada"}</span>}</p>
+                  {!t.ready && (
+                    <ol className="list-decimal space-y-1 pl-5 text-slate-600 dark:text-slate-300">
+                      <li>Di Telegram buka <b>@BotFather</b> → <code>/newbot</code> → simpan <b>token</b>-nya.</li>
+                      <li>Kirim pesan apa saja ke bot baru itu, lalu buka <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> dan catat angka <b>chat.id</b>.</li>
+                      <li>Di Vercel → Settings → Environment Variables isi <code>TELEGRAM_BOT_TOKEN</code> dan <code>TELEGRAM_CHAT_ID</code>, lalu Redeploy.</li>
+                    </ol>
+                  )}
+                  <p className="text-xs text-slate-500">Opsional <code>TELEGRAM_NOTIFY</code>: <code>login,failed</code> (default), tambah <code>admin</code> untuk login admin juga. Salah password untuk NIK yang sama dikirim maksimal 1× per 10 menit.</p>
+                  <NotifyTest ready={t.ready} />
+                </div>
+              );
+            })()}
           </Panel>
 
           <Panel title="Aturan bisnis" desc="VAS brand, override grup, supplier ACC, channel online, cap point.">
