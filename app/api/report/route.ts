@@ -55,6 +55,7 @@ export async function GET(req: Request) {
       ly: ly?.lines ?? null,
       ytd,
       bnpl: bnpl.map((r) => ({ key: r.key, data: r.data })),
+      channelNames: snap.rules.channelNames,
     });
     let manual: unknown = null;
     const rec = saved.find((r) => r.key === "manual");
