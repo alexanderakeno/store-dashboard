@@ -10,7 +10,7 @@ const numIn = (v: string): number | null => {
   const n = Number(v.replace(/[^\d]/g, ""));
   return v.trim() === "" || !Number.isFinite(n) ? null : n;
 };
-const fmt = (n: number | null | undefined) => (n == null ? "" : String(n));
+const fmt = (n: number | null | undefined) => (n == null ? "" : new Intl.NumberFormat("id-ID").format(n));
 const rp = (n: number) => new Intl.NumberFormat("id-ID").format(Math.round(n));
 
 /** Overview: "Buat PPT" — pop-up for what the dashboard does not know, then downloads the .pptx. */
@@ -132,7 +132,7 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
                       <input type="checkbox" className="size-4 accent-blue-600" checked={isOn(s.id)} onChange={(e) => toggle(s.id, e.target.checked)} />
                       <span className={isOn(s.id) ? "" : "text-slate-400 line-through"}>{s.label}</span>
                       {s.id === "npi" && <Manual />}
-                      {s.id === "bnpl" && !d.bnpl.value && <span className="text-[11px] text-slate-400">(belum ada data BNPL)</span>}
+                      {s.id === "bnpl" && !d.bnpl.value && <span className="text-[11px] text-slate-400">(menu BNPL kosong — bisa diketik)</span>}
                       {s.id === "ytd" && !d.ytd.some((r) => r.prev && r.cur) && <span className="text-[11px] text-slate-400">(data {d.ytdYears[0]} belum ada)</span>}
                     </label>
                   ))}
@@ -207,36 +207,36 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
               )}
 
               {isOn("bnpl") && (
-                <Sec title="Kontribusi BNPL" badge={<><Auto /> <Manual text="+ PER TIPE OPSIONAL" /></>} note="value & kontrak dari menu BNPL">
-                  {d.bnpl.rows.some((r) => r.value || r.qty) ? (
-                    <div className="overflow-x-auto">
-                      <table className="text-[13px]">
-                        <thead>
-                          <tr className="text-left text-slate-500">
-                            <th className="pr-3">BNPL</th>
-                            <th className="pr-3 text-right">Value</th>
-                            <th className="pr-3 text-right">Kontrak</th>
-                            <th className="px-1"><input className="sd-input !py-1" style={{ width: 90 }} value={m.bnpl.colA} onChange={(e) => set((x) => ({ ...x, bnpl: { ...x.bnpl, colA: e.target.value } }))} /></th>
-                            <th className="px-1"><input className="sd-input !py-1" style={{ width: 90 }} value={m.bnpl.colB} onChange={(e) => set((x) => ({ ...x, bnpl: { ...x.bnpl, colB: e.target.value } }))} /></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {d.bnpl.rows.filter((r) => r.value || r.qty).map((r) => (
+                <Sec title="Kontribusi BNPL" badge={d.bnpl.value ? <><Auto /> <Manual text="+ PER TIPE OPSIONAL" /></> : <Manual text="ISI MANUAL" />} note={d.bnpl.value ? "value & kontrak dari menu BNPL (bisa dikoreksi)" : "menu BNPL bulan ini kosong — ketik di sini"}>
+                  <div className="overflow-x-auto">
+                    <table className="text-[13px]">
+                      <thead>
+                        <tr className="text-left text-slate-500">
+                          <th className="pr-3">BNPL</th>
+                          <th className="px-1 text-right">Value (Rp)</th>
+                          <th className="px-1 text-right">Kontrak</th>
+                          <th className="px-1"><input className="sd-input !py-1" style={{ width: 84 }} value={m.bnpl.colA} onChange={(e) => set((x) => ({ ...x, bnpl: { ...x.bnpl, colA: e.target.value } }))} /></th>
+                          <th className="px-1"><input className="sd-input !py-1" style={{ width: 84 }} value={m.bnpl.colB} onChange={(e) => set((x) => ({ ...x, bnpl: { ...x.bnpl, colB: e.target.value } }))} /></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {d.bnpl.rows.map((r) => {
+                          const cur = m.bnpl.per[r.provider] ?? { a: null, b: null };
+                          const put = (patch: Partial<typeof cur>) => set((x) => { x.bnpl.per[r.provider] = { ...(x.bnpl.per[r.provider] ?? { a: null, b: null }), ...patch }; return x; });
+                          return (
                             <tr key={r.provider}>
-                              <td className="pr-3 font-semibold">{r.label}</td>
-                              <td className="pr-3 text-right tabular-nums">{rp(r.value)}</td>
-                              <td className="pr-3 text-right tabular-nums">{r.qty}</td>
-                              <td className="px-1 py-0.5"><NumInput value={m.bnpl.per[r.provider]?.a ?? null} onChange={(v) => set((x) => { x.bnpl.per[r.provider] = { a: v, b: x.bnpl.per[r.provider]?.b ?? null }; return x; })} /></td>
-                              <td className="px-1"><NumInput value={m.bnpl.per[r.provider]?.b ?? null} onChange={(v) => set((x) => { x.bnpl.per[r.provider] = { a: x.bnpl.per[r.provider]?.a ?? null, b: v }; return x; })} /></td>
+                              <td className="pr-3 font-semibold whitespace-nowrap">{r.label}</td>
+                              <td className="px-1 py-0.5"><NumInput width={130} value={cur.value ?? null} placeholder={r.value ? rp(r.value) : "0"} onChange={(v) => put({ value: v })} /></td>
+                              <td className="px-1"><NumInput width={70} value={cur.qty ?? null} placeholder={String(r.qty || 0)} onChange={(v) => put({ qty: v })} /></td>
+                              <td className="px-1"><NumInput value={cur.a} onChange={(v) => put({ a: v })} /></td>
+                              <td className="px-1"><NumInput value={cur.b} onChange={(v) => put({ b: v })} /></td>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <p className="mt-1 text-[11px] text-slate-500">Kolom per tipe boleh dikosongkan — kalau kosong semua, kolomnya tidak ditampilkan.</p>
-                    </div>
-                  ) : (
-                    <p className="text-[13px] text-slate-500">Belum ada data BNPL bulan ini (isi di menu BNPL & Trade-In), atau hapus centang slide ini.</p>
-                  )}
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <p className="mt-1 text-[11px] text-slate-500">Kosong = pakai angka menu BNPL (abu-abu). Kolom per tipe boleh dikosongkan — kalau kosong semua, kolomnya tidak ditampilkan.</p>
+                  </div>
                 </Sec>
               )}
 
@@ -287,8 +287,8 @@ function Sec({ title, badge, note, children }: { title: string; badge?: ReactNod
 const Auto = ({ text = "OTOMATIS" }: { text?: string }) => <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">{text}</span>;
 const Manual = ({ text = "MANUAL" }: { text?: string }) => <span className="rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-extrabold text-orange-700 dark:bg-orange-950/40 dark:text-orange-300">{text}</span>;
 
-function NumInput({ value, onChange, placeholder }: { value: number | null; onChange: (v: number | null) => void; placeholder?: string }) {
-  return <input inputMode="numeric" className="sd-input !py-1 text-right tabular-nums" style={{ width: 84 }} value={fmt(value)} placeholder={placeholder ?? "0"} onChange={(e) => onChange(numIn(e.target.value))} />;
+function NumInput({ value, onChange, placeholder, width = 84 }: { value: number | null; onChange: (v: number | null) => void; placeholder?: string; width?: number }) {
+  return <input inputMode="numeric" className="sd-input !py-1 text-right tabular-nums" style={{ width }} value={fmt(value)} placeholder={placeholder ?? "0"} onChange={(e) => onChange(numIn(e.target.value))} />;
 }
 function NumField({ label, value, onChange, placeholder }: { label: string; value: number | null; onChange: (v: number | null) => void; placeholder?: string }) {
   return (

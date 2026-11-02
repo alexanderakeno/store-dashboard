@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import PptxGenJS from "pptxgenjs";
 import { buildReport, type ReportInput } from "@/lib/domain/report";
-import { buildDeck, defaultManual } from "@/lib/report/pptx";
+import { bnplRows, buildDeck, defaultManual } from "@/lib/report/pptx";
 import type { Group, SalesLine, StoreTarget } from "@/types/domain";
 
 let inv = 0;
@@ -52,6 +52,7 @@ function input(o: Partial<ReportInput> = {}): ReportInput {
     line("2026-10-12", "Adi", "VAS", 40, { vasProvider: "Qoala" }),
     line("2026-10-20", "Mapemall", "Apple", 900, { lob: "iPhone", isChannel: true }),
     line("2026-10-31", "Adi", "Android", 100, { lob: "XIAOMI" }),
+    line("2026-10-31", "Digiplus.co.id", "ACC", 5, { nik: "999", lob: null }),
   ];
   const sep: SalesLine[] = [
     line("2026-09-01", "Adi", "Apple", 500, { lob: "iPhone" }),
@@ -92,10 +93,10 @@ test("closing: whole previous month, group growth, LFL", () => {
   assert.equal(d.prevLabel, "September");
   const a = d.groups[0];
   assert.equal(a.group, "Amount");
-  assert.equal(a.mtd, 2410);
+  assert.equal(a.mtd, 2415);
   assert.equal(a.target, 3100);
   assert.equal(a.mtm, 740);
-  assert.ok(Math.abs(a.mtmGrowth! - (2410 / 740 - 1) * 100) < 1e-9);
+  assert.ok(Math.abs(a.mtmGrowth! - (2415 / 740 - 1) * 100) < 1e-9);
   assert.equal(a.lfl, 1170);
   const apple = d.groups.find((g) => g.group === "Apple")!;
   assert.equal(apple.mtd, 1900);
@@ -125,6 +126,9 @@ test("staff rows: target order, online, var and AirPods split", () => {
   assert.equal(el.airpods, 50);
   assert.equal(el.accEx, 20);
   assert.equal(d.staff[2].kind, "online");
+  // a channel name with a NIK still counts as online, not as a staff row
+  assert.equal(d.staff[2].total, 905);
+  assert.equal(d.staff.length, 3);
   // ACC & VAS: ex-staff of last month goes to "Lainnya"
   const lain = d.accVas.find((r) => r.name === "Lainnya*")!;
   assert.equal(lain.airpodsPrev, 30);
@@ -154,7 +158,7 @@ test("weeks, BNPL, balance, YTD", () => {
   assert.equal(d.bnpl.rows.find((r) => r.provider === "Kredivo")!.qty, 3);
   assert.ok(Math.abs(d.balance.value![0] - (1900 / 2300) * 100) < 1e-9);
   const okt = d.ytd.find((r) => r.label === "Okt")!;
-  assert.equal(okt.cur!.value, 2410);
+  assert.equal(okt.cur!.value, 2415);
   assert.equal(okt.prev!.value, 1170);
   assert.equal(d.ytd.find((r) => r.label === "Sep")!.prev, null);
   assert.equal(d.issues.length, 3);
@@ -179,4 +183,19 @@ test("deck builds every slide", async () => {
   const deck = buildDeck(PptxGenJS as unknown as new () => PptxGenJS, d, m, null);
   const buf = (await deck.write({ outputType: "nodebuffer" })) as Buffer;
   assert.ok(buf.length > 20_000);
+});
+
+test("first names on the slides; BNPL typed in the pop-up", () => {
+  const t = { ...target, staff: [{ ...target.staff[0], name: "Adi Muhamad Rizki" }, { ...target.staff[1], name: "Elvina Qurani" }] };
+  const i = input({ target: t, bnpl: [] });
+  i.lines = i.lines.map((l) => (l.staffName === "ADI" || l.staffName === "Adi" ? { ...l, staffName: "ADI MUHAMAD RIZKI" } : l.staffName === "Elvina" ? { ...l, staffName: "Elvina Qurani" } : l));
+  const d = buildReport(i);
+  assert.deepEqual(d.staff.map((s) => s.name), ["Adi", "Elvina", "Online*"]);
+  assert.equal(d.staff[0].total, 1140);
+  const m = defaultManual(d, "");
+  assert.ok(m.skip.includes("bnpl"));
+  m.bnpl.per.Kredivo = { a: 1, b: 2, value: 473769285, qty: 24 };
+  const b = bnplRows(d, m);
+  assert.equal(b.value, 473769285);
+  assert.equal(b.qty, 24);
 });
