@@ -32,3 +32,11 @@ export function loginMessage(e: AccessEntry, opt: { kinds: Set<string>; store: s
   return null;
 }
 
+
+/** Telegram HTML → WhatsApp text: <b>x</b> → *x*, entities decoded. */
+export function toWhatsApp(html: string): string {
+  return html.replace(/<\/?b>/g, "*").replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+}
+
+/** "0812…" / "+62 812…" → "62812…" (international format without "+"). */
+export const waNumber = (s: string) => s.replace(/\D/g, "").replace(/^0/, "62");
