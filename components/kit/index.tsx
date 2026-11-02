@@ -91,8 +91,11 @@ export function Trend({ value, digits = 0, invert = false, className = "" }: { v
   if (value == null || !Number.isFinite(value)) return <span className={`font-bold text-slate-400 ${className}`}>–</span>;
   const up = value >= 0;
   const good = invert ? !up : up;
-  const s = Math.abs(value).toLocaleString("id-ID", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-  return <span className={`font-bold ${good ? "text-emerald-600" : "text-rose-600"} ${className}`}>{up ? "▲" : "▼"} {s}%</span>;
+  const a = Math.abs(value);
+  // very large changes (e.g. a month with only a few days of data vs a full one) stay short enough for narrow columns
+  const full = a.toLocaleString("id-ID", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const s = a >= 1000 ? ">999" : a >= 100 ? a.toLocaleString("id-ID", { maximumFractionDigits: 0 }) : full;
+  return <span title={`${up ? "+" : "-"}${full}%`} className={`font-bold ${good ? "text-emerald-600" : "text-rose-600"} ${className}`}>{up ? "▲" : "▼"} {s}%</span>;
 }
 
 /** Simple KPI tile (label, value, sub). */
