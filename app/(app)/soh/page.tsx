@@ -7,7 +7,7 @@ import { StockKosong } from "@/components/modules/StockKosong";
 import { appConfig } from "@/config/app";
 import { monthStart, todayIn } from "@/lib/domain/period";
 import { sohRows } from "@/lib/domain/soh";
-import { skuPrices } from "@/lib/domain/skuPrice";
+import { skuPrices, type SkuPrices } from "@/lib/domain/skuPrice";
 import { getPriceList } from "@/lib/pricelist";
 import { getSamsungPromo } from "@/lib/samsungPromo";
 import { etpPromos, exclusions, variantPromo } from "@/lib/domain/samsungPromo";
@@ -16,6 +16,43 @@ import { dmy, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { getSoh, stockKosong } from "@/lib/soh";
 import type { SohSnapshot } from "@/types/soh";
+
+/**
+ * Price list per SOH article (+ Samsung PWP / trade in / EIP / ETP per variant), memoised per
+ * (price list, SOH, promo, day): the inputs are the cached objects, so it is computed once per data
+ * refresh instead of on every view. The result is read-only.
+ */
+const priceMemo = new WeakMap<object, WeakMap<object, Map<string, SkuPrices>>>();
+const NO_PROMO = {};
+async function sohPrices(soh: SohSnapshot, today: string): Promise<SkuPrices> {
+  const list = await getPriceList().catch(() => null);
+  const hasSamsung = !!list?.items.some((x) => x.kind === "android" && /samsung/i.test(x.brand));
+  const promo = hasSamsung ? await getSamsungPromo().catch(() => null) : null;
+  const k1 = list ?? NO_PROMO;
+  let a = priceMemo.get(k1);
+  if (!a) priceMemo.set(k1, (a = new WeakMap()));
+  let b = a.get(soh);
+  if (!b) a.set(soh, (b = new Map()));
+  const k3 = `${today}|${promo ? (promo as { updatedAt?: string }).updatedAt ?? "p" : "-"}`;
+  const hit = b.get(k3);
+  if (hit) return hit;
+  const prices = skuPrices(list, soh.items);
+  if (promo) {
+    const excl = exclusions(promo.programs);
+    for (const m of prices.models)
+      if (m.kind === "android" && /samsung/i.test(m.brand))
+        for (const v of m.variants) {
+          const vp = variantPromo(v.name, promo, today, appConfig().storeCode, excl, v.articles ?? []);
+          const etp = etpPromos(v.name, promo.programs, today, appConfig().storeCode);
+          if (vp || etp.length) v.samsung = { ...(vp ?? { items: [], cash: { total: 0, kinds: [] }, pwp: 0, info: [] }), etp };
+        }
+  }
+  // the client only needs the prices, not the article lists
+  for (const m of prices.models) for (const v of m.variants) delete v.articles;
+  if (b.size > 4) b.clear();
+  b.set(k3, prices);
+  return prices;
+}
 
 function Tabs({ kosong, count }: { kosong: boolean; count?: number }) {
   return (
@@ -83,23 +120,9 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
     );
   }
 
-  // price popup per SKU: optional — a failed price-list read must not hide the stock
-  const prices = skuPrices(await getPriceList().catch(() => null), soh.items);
-  // Samsung promos (PWP / trade in / EIP / ETP) per variant, same as the Price List page — optional
+  // price popup per SKU (with Samsung promos): optional — a failed price-list read must not hide the stock
   const today = todayIn(appConfig().timeZone);
-  const promo = prices.models.some((m) => m.kind === "android" && /samsung/i.test(m.brand)) ? await getSamsungPromo().catch(() => null) : null;
-  if (promo) {
-    const excl = exclusions(promo.programs);
-    for (const m of prices.models)
-      if (m.kind === "android" && /samsung/i.test(m.brand))
-        for (const v of m.variants) {
-          const vp = variantPromo(v.name, promo, today, appConfig().storeCode, excl, v.articles ?? []);
-          const etp = etpPromos(v.name, promo.programs, today, appConfig().storeCode);
-          if (vp || etp.length) v.samsung = { ...(vp ?? { items: [], cash: { total: 0, kinds: [] }, pwp: 0, info: [] }), etp };
-        }
-  }
-  // the client only needs the prices, not the article lists
-  for (const m of prices.models) for (const v of m.variants) delete v.articles;
+  const prices = await sohPrices(soh, today);
 
   return (
     <div className="sd-content">
@@ -109,7 +132,7 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
         actions={manage}
       />
       <Tabs kosong={false} count={kosongCount} />
-      <SohView categories={soh.categories} rows={sohRows(soh.items, p.snap.lines, p.asOf)} prices={prices} today={today} initialCat={p.q.cat ?? ""} initialSearch={(p.q.s ?? "").trim()} initialType={p.q.j ?? ""} initialSeries={p.q.sr ?? ""} />
+      <SohView categories={soh.categories} rows={sohRows(soh.items, p.snap.lines, p.asOf).map(({ price: _p, ...r }) => ({ ...r, coverDays: r.coverDays == null ? null : Math.round(r.coverDays) }))} prices={prices} today={today} initialCat={p.q.cat ?? ""} initialSearch={(p.q.s ?? "").trim()} initialType={p.q.j ?? ""} initialSeries={p.q.sr ?? ""} />
     </div>
   );
 }
