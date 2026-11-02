@@ -4,9 +4,11 @@ import { loginMessage, toWhatsApp, waNumber } from "@/lib/domain/notifyText";
 import type { AccessEntry } from "@/types/access";
 
 /**
- * Login notifications — WhatsApp (CallMeBot) and/or Telegram. Configured only through Vercel env
- * (never in the code: the repository is public):
+ * Login notifications — WhatsApp (Fonnte or CallMeBot) and/or Telegram. Configured only through Vercel
+ * env (never in the code: the repository is public):
  *   WHATSAPP_PHONE       number(s) that receive the message, e.g. 6281234567890 (comma-separated)
+ *   FONNTE_TOKEN         Fonnte device token (fonnte.com → Device → token); sends from the WhatsApp
+ *                        number connected there. Used instead of CallMeBot when set.
  *   WHATSAPP_APIKEY      CallMeBot API key(s), same order as WHATSAPP_PHONE
  *   TELEGRAM_BOT_TOKEN   token from @BotFather
  *   TELEGRAM_CHAT_ID     chat id(s), comma-separated
@@ -22,16 +24,35 @@ export function notifyConfig() {
   const kinds = new Set((env("NOTIFY_LOGINS") || env("TELEGRAM_NOTIFY") || "login,failed").toLowerCase().split(",").map((s) => s.trim()));
   const waPhones = list("WHATSAPP_PHONE").map(waNumber);
   const waKeys = list("WHATSAPP_APIKEY");
+  const fonnte = env("FONNTE_TOKEN");
   const tgToken = env("TELEGRAM_BOT_TOKEN");
   const tgChats = list("TELEGRAM_CHAT_ID");
-  const wa = waPhones.length > 0 && waKeys.length > 0;
+  const waVia: "fonnte" | "callmebot" | null = !waPhones.length ? null : fonnte ? "fonnte" : waKeys.length ? "callmebot" : null;
+  const wa = !!waVia;
   const tg = !!tgToken && tgChats.length > 0;
-  return { kinds, wa, waPhones, waKeys, tg, tgToken, tgChats, ready: wa || tg };
+  return { kinds, wa, waVia, waPhones, waKeys, fonnte, tg, tgToken, tgChats, ready: wa || tg };
 }
 const masked = (p: string) => `${p.slice(0, 4)}••••${p.slice(-3)}`;
 
+/** Fonnte: POST api.fonnte.com/send, raw token in Authorization; answers JSON { status, reason | detail }. */
+async function sendFonnte(text: string): Promise<string[]> {
+  const c = notifyConfig();
+  const res = await fetch("https://api.fonnte.com/send", {
+    method: "POST",
+    headers: { Authorization: c.fonnte },
+    body: new URLSearchParams({ target: c.waPhones.join(","), message: text, countryCode: "62" }),
+    signal: AbortSignal.timeout(12000),
+    cache: "no-store",
+  }).catch((e: Error) => e);
+  if (res instanceof Error) return [`WhatsApp (Fonnte): ${res.message}`];
+  const b = (await res.json().catch(() => null)) as { status?: boolean; Status?: boolean; reason?: string; detail?: string } | null;
+  if (!res.ok || !b || (b.status ?? b.Status) !== true) return [`WhatsApp (Fonnte): ${b?.reason || b?.detail || `HTTP ${res.status}`}`];
+  return [];
+}
+
 async function sendWhatsApp(text: string): Promise<string[]> {
   const c = notifyConfig();
+  if (c.waVia === "fonnte") return sendFonnte(text);
   const errors: string[] = [];
   for (let i = 0; i < c.waPhones.length; i++) {
     const key = c.waKeys[i] ?? c.waKeys[0];
@@ -71,7 +92,7 @@ async function sendTelegram(html: string): Promise<string[]> {
 /** Sends one message (Telegram HTML; converted for WhatsApp) to every configured channel. Throws when all fail. */
 export async function sendNotification(html: string): Promise<{ sent: string[] }> {
   const c = notifyConfig();
-  if (!c.ready) throw new Error("Notifikasi belum diatur: isi WHATSAPP_PHONE + WHATSAPP_APIKEY (atau TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID) di Environment Variables Vercel");
+  if (!c.ready) throw new Error("Notifikasi belum diatur: isi WHATSAPP_PHONE + FONNTE_TOKEN (atau TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID) di Environment Variables Vercel");
   const sent: string[] = [];
   const errors: string[] = [];
   if (c.wa) {
