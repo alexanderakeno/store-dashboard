@@ -1,0 +1,17 @@
+# Keeps the dashboard warm: pings /api/warm every 5 minutes during store hours
+# (08:00–23:59 WIB = 01:00–16:59 UTC) so the first visitor after a quiet period
+# doesn't wait for a cold start, and cached Google Sheets data is refreshed in the background.
+# The endpoint returns no data. GitHub may delay scheduled runs by a few minutes.
+name: keep-warm
+on:
+  schedule:
+    - cron: "*/5 1-16 * * *"
+  workflow_dispatch: {}
+permissions: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping /api/warm
+        run: curl -fsS --max-time 40 --retry 2 --retry-delay 5 https://digipluskokas.vercel.app/api/warm || echo "ping gagal (diabaikan)"
