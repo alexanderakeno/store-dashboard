@@ -89,19 +89,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
               return (
                 <div className="space-y-3 text-sm">
                   <p className="flex flex-wrap items-center gap-2">
-                    WhatsApp {n.wa ? <span className="sd-badge green">aktif · {n.waPhones.length} nomor</span> : <span className="sd-badge slate">belum diatur</span>}
+                    WhatsApp {n.wa ? <span className="sd-badge green">aktif · {n.waVia === "fonnte" ? "Fonnte" : "CallMeBot"} · {n.waPhones.length} nomor</span> : <span className="sd-badge slate">belum diatur</span>}
                     <span className="text-slate-300">|</span>
                     Telegram {n.tg ? <span className="sd-badge green">aktif · {n.tgChats.length} chat</span> : <span className="sd-badge slate">tidak dipakai</span>}
                     {n.ready && <span className="text-slate-500">· dikirim: {kinds || "tidak ada"}</span>}
                   </p>
-                  {!n.wa && (
+                  {n.waVia !== "fonnte" && (
                     <ol className="list-decimal space-y-1 pl-5 text-slate-600 dark:text-slate-300">
-                      <li>Simpan nomor <b>+34 644 51 95 23</b> (CallMeBot) di kontak HP.</li>
-                      <li>Dari WhatsApp nomor Anda, kirim pesan <code>I allow callmebot to send me messages</code> ke nomor itu. Balasannya berisi <b>apikey</b>.</li>
-                      <li>Di Vercel → Settings → Environment Variables isi <code>WHATSAPP_PHONE</code> (mis. 62812xxxxxxx) dan <code>WHATSAPP_APIKEY</code>, lalu Redeploy.</li>
+                      <li>Daftar di <b>fonnte.com</b> (paket Free: 1.000 pesan/bulan).</li>
+                      <li>Menu <b>Device</b> → tambah device dengan nomor WhatsApp <b>pengirim</b> (disarankan nomor kedua), lalu <b>Connect</b> dan scan QR dari WhatsApp HP itu (Perangkat tertaut).</li>
+                      <li>Salin <b>token</b> device tersebut.</li>
+                      <li>Di Vercel → Settings → Environment Variables isi <code>FONNTE_TOKEN</code> (token tadi) dan <code>WHATSAPP_PHONE</code> (nomor penerima, mis. 62812xxxxxxx), lalu Redeploy.</li>
                     </ol>
                   )}
-                  <p className="text-xs text-slate-500">Opsional <code>NOTIFY_LOGINS</code>: <code>login,failed</code> (default), tambah <code>admin</code> untuk login admin juga. Salah password untuk NIK yang sama dikirim maksimal 1× per 10 menit. Nomor &amp; apikey hanya disimpan di Vercel, tidak di kode.</p>
+                  <p className="text-xs text-slate-500">Opsional <code>NOTIFY_LOGINS</code>: <code>login,failed</code> (default), tambah <code>admin</code> untuk login admin juga. Salah password untuk NIK yang sama dikirim maksimal 1× per 10 menit. Nomor &amp; token hanya disimpan di Vercel, tidak di kode. HP pengirim harus tetap online (WhatsApp tertaut).</p>
                   <NotifyTest ready={n.ready} />
                 </div>
               );
