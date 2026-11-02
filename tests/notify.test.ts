@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loginMessage } from "../lib/domain/notifyText";
+import { loginMessage, toWhatsApp, waNumber } from "../lib/domain/notifyText";
 
 test("login notification text and filters", () => {
   const opt = { kinds: new Set(["login", "failed"]), store: "QF10", timeZone: "Asia/Jakarta" };
@@ -16,4 +16,10 @@ test("login notification text and filters", () => {
   assert.equal(loginMessage(f, opt, 1_000_000 + 60_000), null); // quiet 10 min per NIK
   assert.ok(loginMessage(f, opt, 1_000_000 + 11 * 60_000));
   assert.equal(loginMessage({ ...base, name: "<b>x</b>" }, opt)!.includes("&lt;b&gt;x"), true); // escaped
+});
+
+test("whatsapp formatting", () => {
+  assert.equal(waNumber("0812-3456 7890"), "6281234567890");
+  assert.equal(waNumber("+62 812 3456 7890"), "6281234567890");
+  assert.equal(toWhatsApp("🔐 <b>Login dashboard QF10</b>\nNama: <b>A &amp; B</b>"), "🔐 *Login dashboard QF10*\nNama: *A & B*");
 });
