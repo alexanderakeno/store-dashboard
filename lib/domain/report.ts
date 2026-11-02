@@ -191,6 +191,16 @@ export interface ReportInput {
   /** YTD: lines per month of both years (`YYYY-MM` → lines). */
   ytd: Map<MonthKey, SalesLine[]>;
   bnpl: Array<{ key: string; data: Record<string, unknown> }>;
+  /** Rules → channel names (Mapemall, …); Digiplus.co.id / Mapemall names count as online too. */
+  channelNames?: string[];
+}
+
+/** Online channel sales names (they can carry a NIK, so `isChannel` alone misses them). */
+export function isOnlineName(name: string, extra: string[] = []): boolean {
+  const k = nameKey(name);
+  if (!k) return false;
+  if (extra.some((x) => nameKey(x) === k)) return true;
+  return /digiplus ?co ?id|digiplus\.co\.id|mapemall|\bonline\b|tokopedia|shopee|blibli|lazada|tiktok/.test(k) || /\.co\.id/i.test(name);
 }
 
 /* ---------------- helpers ---------------- */
@@ -274,8 +284,9 @@ export function buildReport(i: ReportInput): ReportData {
     staffList.push({ key: k, name: s.name.trim(), kind: "staff" });
   }
   const extra = new Map<string, { name: string; sales: number }>();
+  const online = (l: SalesLine) => l.isChannel || isOnlineName(l.staffName, i.channelNames);
   for (const l of cur) {
-    if (l.isChannel) continue;
+    if (online(l)) continue;
     const k = nameKey(l.staffName);
     if (!k || seen.has(k)) continue;
     const e = extra.get(k) ?? { name: displayName(l.staffName), sales: 0 };
@@ -283,8 +294,13 @@ export function buildReport(i: ReportInput): ReportData {
     extra.set(k, e);
   }
   for (const [k, e] of [...extra.entries()].sort((a, b) => b[1].sales - a[1].sales)) staffList.push({ key: k, name: e.name, kind: "staff" });
+  // first names, like the store's deck ("Adi Muhamad Rizki" → "Adi"), unless two staff share one
+  const first = (n: string) => displayName(n).split(/\s+/)[0] || n;
+  const counts = new Map<string, number>();
+  for (const s of staffList) counts.set(first(s.name), (counts.get(first(s.name)) ?? 0) + 1);
+  for (const s of staffList) s.name = counts.get(first(s.name)) === 1 ? first(s.name) : displayName(s.name);
   const ONLINE: StaffLine = { key: "__online", name: "Online*", kind: "online" };
-  const keyOf = (l: SalesLine, known: Set<string>) => (l.isChannel ? "__online" : known.has(nameKey(l.staffName)) ? nameKey(l.staffName) : "__other");
+  const keyOf = (l: SalesLine, known: Set<string>) => (online(l) ? "__online" : known.has(nameKey(l.staffName)) ? nameKey(l.staffName) : "__other");
   const known = new Set(staffList.map((s) => s.key));
   const byRow = (ls: SalesLine[]) => {
     const m = new Map<string, SalesLine[]>();
