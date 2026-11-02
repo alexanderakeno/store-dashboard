@@ -46,8 +46,8 @@ export interface MonthRaw {
 }
 
 /** App inputs (BNPL, feedback, weekly reason, checklist…) stored in master sheet `APP_Records`. */
-export type RecordKind = "bnpl" | "feedback" | "reason" | "checklist-spv" | "checklist-staff";
-export const RECORD_KINDS: readonly RecordKind[] = ["bnpl", "feedback", "reason", "checklist-spv", "checklist-staff"];
+export type RecordKind = "bnpl" | "feedback" | "reason" | "checklist-spv" | "checklist-staff" | "report";
+export const RECORD_KINDS: readonly RecordKind[] = ["bnpl", "feedback", "reason", "checklist-spv", "checklist-staff", "report"];
 
 export interface AppRecord {
   kind: RecordKind;

@@ -6,6 +6,7 @@ import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, linesIn, lobQty, lobValue, perfCards, staffStats, timeGonePct, vasSplit } from "@/lib/domain/extra";
 import { totals } from "@/lib/domain/kpi";
 import { sameRange } from "@/lib/domain/history";
+import { ReportBuilder } from "@/components/modules/ReportBuilder";
 import { sameMonthLastYear } from "@/lib/domain/period";
 import { shareText } from "@/lib/domain/share";
 import { homeView } from "@/lib/domain/views";
@@ -61,6 +62,12 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
   ];
   return (
     <div className="sd-content">
+      {p.session.role === "admin" && (
+        <div className="-mb-2 flex items-center justify-end gap-2">
+          <span className="text-[12px] text-slate-500 max-sm:hidden">Laporan PPT weekly / closing bulan ini</span>
+          <ReportBuilder month={p.month} />
+        </div>
+      )}
       <nav className="sd-tabs grid-cols-2 sm:grid-cols-4" aria-label="Tampilan overview">
         {tabs.map((t) => (
           <Link key={t.key} href={withQuery("/home", p.q, { tab: t.key === "monthly" ? null : t.key, vs: null })} className="sd-tab" aria-current={tab === t.key ? "page" : undefined}>
