@@ -4,7 +4,7 @@
  * table headers, green / red cells for up / down. Runs in the browser (and in Node for the audit).
  */
 import type PptxGenJS from "pptxgenjs";
-import type { AccVasRow, ReportData, SlideId, StaffRowData } from "@/lib/domain/report";
+import { rpShort, type AccVasRow, type ReportData, type SlideId, type StaffRowData } from "@/lib/domain/report";
 
 type Pptx = PptxGenJS;
 type Slide = PptxGenJS.Slide;
@@ -28,7 +28,8 @@ export interface ReportManual {
     unboxingLabel: string;
     unboxing: number | null;
   };
-  bnpl: { colA: string; colB: string; per: Record<string, { a: number | null; b: number | null }> };
+  /** Per provider: units per type (a / b) and, when the BNPL menu has nothing, value + contracts typed here. */
+  bnpl: { colA: string; colB: string; per: Record<string, { a: number | null; b: number | null; value?: number | null; qty?: number | null }> };
   /** Typed replacements for the auto "Issue" cells ('' = keep the automatic text). */
   issues: string[];
   feedback: string[];
@@ -211,8 +212,8 @@ function slideStaff(s: Slide, d: ReportData, note: (s: Slide, t: string, y?: num
   const extra = d.staff.filter((r) => r.kind !== "staff");
   const tRows = st.length + 3;
   const aRows = st.length + extra.length + 3;
-  const rowH = fit(tRows + aRows, 4.75, 0.38, 0.2);
-  const fs = fontFor(rowH, 12);
+  const rowH = fit(tRows + aRows, 4.95, 0.38, 0.2);
+  const fs = fontFor(rowH, 11);
   const sum = (k: "Apple" | "Android" | "ACC" | "VAS") => st.reduce((a, r) => a + r.target[k], 0);
   const tTot = st.reduce((a, r) => a + r.targetTotal, 0);
   table(
@@ -238,7 +239,7 @@ function slideStaff(s: Slide, d: ReportData, note: (s: Slide, t: string, y?: num
     ],
     { x: 0.35, y: yA, w: 12.65, rowH, fontSize: fs, colW: [1.1, 1.38, 1.3, 1.12, 1.15, 1.1, 1.12, 1.05, 1.15, 1.43, 0.75] },
   );
-  if (extra.length) note(s, "*Online = Digiplus.co.id + Mapemall + Mapemallonline. Var = actual − target bulan penuh.", Math.min(7.12, yA + rowH * aRows + 0.05));
+  if (extra.length) note(s, "*Online = Digiplus.co.id + Mapemall + Mapemallonline. Var = actual − target bulan penuh.", 7.17);
 }
 
 function slideBalance(s: Slide, d: ReportData, note: (s: Slide, t: string, y?: number) => void) {
@@ -250,7 +251,7 @@ function slideBalance(s: Slide, d: ReportData, note: (s: Slide, t: string, y?: n
       [H("Apple", { bold: false }), H("Android", { bold: false }), H("Apple", { bold: false }), H("Android", { bold: false })],
       [N(pc(b.value?.[0]), { align: "center" }), N(pc(b.value?.[1]), { align: "center" }), N(pc(b.qty?.[0]), { align: "center" }), N(pc(b.qty?.[1]), { align: "center" })],
     ],
-    { x: 3.4, y: 2.0, w: 5.2, rowH: 0.4, fontSize: 12 },
+    { x: 2.9, y: 1.95, w: 6.6, rowH: 0.42, fontSize: 14 },
   );
   const rows = d.staff;
   const rowH = fit(rows.length + 3, 3.5, 0.32, 0.22);
@@ -423,8 +424,17 @@ function slideNpi(s: Slide, m: ReportManual) {
   }
 }
 
+/** BNPL rows: the BNPL menu, or what was typed in the pop-up when a provider has no data there. */
+export function bnplRows(d: ReportData, m: ReportManual) {
+  const rows = d.bnpl.rows.map((r) => {
+    const x = m.bnpl.per[r.provider];
+    return { ...r, value: x?.value ?? r.value, qty: x?.qty ?? r.qty };
+  });
+  return { rows, value: rows.reduce((a, r) => a + r.value, 0), qty: rows.reduce((a, r) => a + r.qty, 0) };
+}
+
 function slideBnpl(s: Slide, d: ReportData, m: ReportManual) {
-  const b = d.bnpl;
+  const b = bnplRows(d, m);
   const per = (p: string) => m.bnpl.per[p] ?? { a: null, b: null };
   const withModels = b.rows.some((r) => per(r.provider).a || per(r.provider).b);
   const rows = b.rows.filter((r) => r.value || r.qty);
@@ -438,14 +448,14 @@ function slideBnpl(s: Slide, d: ReportData, m: ReportManual) {
       ...rows.map((r) => [L(r.label), N(nz(r.value)), N(pc1(share(r.value, b.value))), N(nz(r.qty)), N(r.qty ? nz(r.value / r.qty) : "-"), ...(withModels ? [mc(per(r.provider).a), mc(per(r.provider).b), mc((per(r.provider).a ?? 0) + (per(r.provider).b ?? 0))] : [])]),
       [H("TOTAL"), H(nz(b.value)), H("100%"), H(nz(b.qty)), H(b.qty ? nz(b.value / b.qty) : "-"), ...(withModels ? [H(nz(ta)), H(nz(tb)), H(nz(ta + tb))] : [])],
     ],
-    { x: 0.75, y: 2.45, w: withModels ? 11.85 : 8.2, rowH: 0.55, fontSize: 15 },
+    { x: 0.75, y: 2.2, w: withModels ? 11.85 : 8.2, rowH: 0.5, fontSize: 15, colW: withModels ? [2.05, 1.75, 1.35, 1.1, 1.6, 1.3, 1.4, 1.3] : [2.05, 1.75, 1.35, 1.1, 1.95] },
   );
   const sorted = [...rows].sort((x, y) => y.value - x.value);
   const sales = d.storeTotals.total;
-  const parts = [`BNPL ${d.mode === "closing" ? d.monthName : d.curLabel} Rp${(b.value / 1e9).toFixed(2).replace(".", ",")} M dari ${b.qty} kontrak = ${pc1(share(b.value, sales))} dari total sales (Rp${(sales / 1e9).toFixed(2).replace(".", ",")} M), avg Rp${((b.qty ? b.value / b.qty : 0) / 1e6).toFixed(1).replace(".", ",")} jt/kontrak.`];
+  const parts = [`BNPL ${d.mode === "closing" ? d.monthName : d.curLabel} ${rpShort(b.value)} dari ${b.qty} kontrak = ${pc1(share(b.value, sales))} dari total sales (${rpShort(sales)}), avg ${rpShort(b.qty ? b.value / b.qty : 0)}/kontrak.`];
   if (sorted.length >= 2) parts.push(`${sorted[0].label} (${pc1(share(sorted[0].value, b.value))}) & ${sorted[1].label} (${pc1(share(sorted[1].value, b.value))}) menyumbang ${pc1(share(sorted[0].value + sorted[1].value, b.value))} value BNPL.`);
   if (withModels) parts.push(`Total ${ta + tb} unit ${[m.bnpl.colA, m.bnpl.colB].filter(Boolean).join(" & ")} via BNPL.`);
-  if (b.value) s.addText(parts.join(" "), { x: 0.75, y: 6.25, w: 11.85, h: 0.95, fontSize: 15, bold: true, color: C.navy, fontFace: BODY_FONT, margin: 0, valign: "top", fit: "shrink" });
+  if (b.value) s.addText(parts.join(" "), { x: 0.75, y: 6.45, w: 11.85, h: 0.9, fontSize: 15, bold: true, color: C.navy, fontFace: BODY_FONT, margin: 0, valign: "top", fit: "shrink" });
 }
 
 function slideYtd(s: Slide, d: ReportData, note: (s: Slide, t: string, y?: number) => void) {
