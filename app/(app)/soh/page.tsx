@@ -6,7 +6,7 @@ import { SohView } from "@/components/modules/SohView";
 import { StockKosong } from "@/components/modules/StockKosong";
 import { appConfig } from "@/config/app";
 import { monthStart, todayIn } from "@/lib/domain/period";
-import { sohRows } from "@/lib/domain/soh";
+import { packSohRows, sohRows } from "@/lib/domain/soh";
 import { skuPrices, type SkuPrices } from "@/lib/domain/skuPrice";
 import { getPriceList } from "@/lib/pricelist";
 import { getSamsungPromo } from "@/lib/samsungPromo";
@@ -132,7 +132,7 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
         actions={manage}
       />
       <Tabs kosong={false} count={kosongCount} />
-      <SohView categories={soh.categories} rows={sohRows(soh.items, p.snap.lines, p.asOf).map(({ price: _p, ...r }) => ({ ...r, coverDays: r.coverDays == null ? null : Math.round(r.coverDays) }))} prices={prices} today={today} initialCat={p.q.cat ?? ""} initialSearch={(p.q.s ?? "").trim()} initialType={p.q.j ?? ""} initialSeries={p.q.sr ?? ""} />
+      <SohView categories={soh.categories} packed={packSohRows(sohRows(soh.items, p.snap.lines, p.asOf), soh.categories)} prices={prices} today={today} initialCat={p.q.cat ?? ""} initialSearch={(p.q.s ?? "").trim()} initialType={p.q.j ?? ""} initialSeries={p.q.sr ?? ""} />
     </div>
   );
 }
