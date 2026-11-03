@@ -489,3 +489,31 @@ html.dark .sd-log-acct[aria-current="true"] { border-color: #1e3a8a; background:
 
 /* big amounts in narrow tiles: shrink with the screen instead of breaking "Rp" from the number */
 .sd-num { font-size: clamp(13.5px, 3.9vw, 18px); line-height: 1.25; font-variant-numeric: tabular-nums; }
+
+/* login: spinner, shake on error, greeting while the dashboard loads */
+.login-spin { width: 16px; height: 16px; border: 2.5px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; display: inline-block; margin-right: 8px; animation: login-spin .7s linear infinite; }
+@keyframes login-spin { to { transform: rotate(360deg); } }
+.login-shake { animation: login-shake .45s; }
+@keyframes login-shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+.login-box { position: relative; }
+.login-form { transition: opacity .35s, transform .35s; }
+.login-form.is-hidden { opacity: 0; transform: translateY(-10px); pointer-events: none; }
+.login .card > :not(.login-box) { transition: opacity .35s; }
+.login-welcome .card > :not(.login-box) { opacity: 0; }
+.login-greet { position: absolute; inset: -40px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; animation: login-in .45s ease both; }
+@keyframes login-in { from { opacity: 0; transform: translateY(12px); } }
+.login-ring { width: 72px; height: 72px; }
+.login-ring circle { fill: none; stroke-width: 6; }
+.login-ring .t { stroke: var(--block-border, #e2e8f0); }
+.login-ring .p { stroke: #2563eb; stroke-linecap: round; stroke-dasharray: 189; stroke-dashoffset: 189; transform: rotate(-90deg); transform-origin: 50% 50%; animation: login-ring 2.4s cubic-bezier(.2,.7,.2,1) forwards, login-turn 1.6s linear 2.4s infinite; }
+@keyframes login-ring { to { stroke-dashoffset: 28; } }
+@keyframes login-turn { to { transform: rotate(270deg); } }
+.login-greet-title { margin: 14px 0 2px; font-size: 22px; font-weight: 800; color: var(--block-text, #0f172a); }
+.login-greet-sub { margin: 0; font-size: 14px; color: var(--block-text-muted, #64748b); }
+.login-photo-main { transition: transform 2.5s ease; }
+.login-welcome .login-photo-main { transform: scale(1.06); }
+@media (prefers-reduced-motion: reduce) {
+  .login-spin, .login-shake, .login-greet, .login-ring .p { animation: none; }
+  .login-ring .p { stroke-dashoffset: 28; }
+  .login-photo-main, .login-welcome .login-photo-main { transition: none; transform: none; }
+}

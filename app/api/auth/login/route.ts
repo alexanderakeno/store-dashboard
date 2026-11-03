@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     }
     clearFailures(ip, nik);
     recordAccess(req, "login", session);
-    const res = NextResponse.json({ ok: true, role: session.role });
+    const res = NextResponse.json({ ok: true, role: session.role, name: session.name });
     res.cookies.set(SESSION_COOKIE, await signSession(session), cookieOptions);
     return res;
   });
