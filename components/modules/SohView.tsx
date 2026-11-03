@@ -3,7 +3,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Search, Tag, X } from "lucide-react";
 import { EmptyBlock, Panel } from "@/components/kit";
-import { LOW_DAYS, SLOW_DAYS, type SohRow } from "@/lib/domain/soh";
+import { LOW_DAYS, SLOW_DAYS, unpackSohRows, type PackedSohRow, type SohRow } from "@/lib/domain/soh";
 import type { SkuPrices } from "@/lib/domain/skuPrice";
 import { PromoBox } from "./PriceBoard";
 import { DEVICE_TYPES, SAMSUNG_SERIES, deviceType, isSamsung, samsungSeries, splitsByType, type DeviceType } from "@/lib/domain/sohGroups";
@@ -119,7 +119,12 @@ function syncUrl(patch: Record<string, string | null>) {
  * SOH table. All categories arrive in one server render; switching category and
  * searching happen here, so they never re-read Google Sheets.
  */
-export function SohView({ categories, rows, prices, today = "", initialCat, initialSearch, initialType = "", initialSeries = "" }: { categories: string[]; rows: SohRow[]; prices?: SkuPrices; today?: string; initialCat: string; initialSearch: string; initialType?: string; initialSeries?: string }) {
+/** Rows rendered before "Tampilkan semua". */
+const ROW_LIMIT = 150;
+
+export function SohView({ categories, packed, prices, today = "", initialCat, initialSearch, initialType = "", initialSeries = "" }: { categories: string[]; packed: PackedSohRow[]; prices?: SkuPrices; today?: string; initialCat: string; initialSearch: string; initialType?: string; initialSeries?: string }) {
+  // rows arrive as compact tuples (≈ half the page payload of objects)
+  const rows = useMemo(() => unpackSohRows(packed, categories), [packed, categories]);
   const [open, setOpen] = useState<SohRow | null>(null);
   const priced = (r: SohRow) => !!prices?.byArticle[r.article.toUpperCase()];
   const priceOf = (r: SohRow) => {
@@ -163,6 +168,16 @@ export function SohView({ categories, rows, prices, today = "", initialCat, init
       ? seriesList.map((x) => ({ label: x as string, rows: shown.filter((r) => samsungSeries(r.description) === x) }))
       : [{ label: null, rows: shown }];
   const sumQty = (l: SohRow[]) => l.reduce((a, r) => a + r.qty, 0);
+  // long lists: render the first rows only (lighter page on phones); totals still count everything
+  const viewKey = `${cat}|${q}|${type}|${series}`;
+  const [more, setMore] = useState<string | null>(null);
+  const capped = more !== viewKey && shown.length > ROW_LIMIT;
+  let left = capped ? ROW_LIMIT : Infinity;
+  const visible = groups.map((g) => {
+    const take = g.rows.slice(0, Math.max(0, left));
+    left -= take.length;
+    return { ...g, rows: take, all: g.rows };
+  }).filter((g) => g.rows.length);
   const totSoh = shown.reduce((a, r) => a + r.qty, 0);
   const totSold = shown.reduce((a, r) => a + r.sold, 0);
   const searching = terms.length > 0;
@@ -241,8 +256,8 @@ export function SohView({ categories, rows, prices, today = "", initialCat, init
           <div className="flex justify-between bg-slate-50 px-3 py-2 text-[11px] font-extrabold tracking-wider text-slate-500 uppercase dark:bg-slate-800/60"><span>Tipe</span><span>Stok</span></div>
           {shown.length ? (
             <ul className="divide-y divide-slate-200 dark:divide-slate-700">
-              {groups.flatMap((g) => [
-                ...(g.label ? [<li key={`g|${g.label}`} className="flex justify-between bg-slate-50 px-3 py-1.5 text-[11px] font-extrabold tracking-wider text-slate-600 uppercase dark:bg-slate-800/60 dark:text-slate-300"><span>{g.label}</span><span className="tabular-nums">{num(sumQty(g.rows))}</span></li>] : []),
+              {visible.flatMap((g) => [
+                ...(g.label ? [<li key={`g|${g.label}`} className="flex justify-between bg-slate-50 px-3 py-1.5 text-[11px] font-extrabold tracking-wider text-slate-600 uppercase dark:bg-slate-800/60 dark:text-slate-300"><span>{g.label}</span><span className="tabular-nums">{num(sumQty(g.all))}</span></li>] : []),
                 ...g.rows.map((r) => (
                 <li key={`${r.category}|${r.article}`}>
                   <button type="button" disabled={!priced(r)} onClick={() => show(r)} className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left ${priced(r) ? "active:bg-blue-50 dark:active:bg-blue-950/30" : "cursor-default"}`}>
@@ -265,8 +280,8 @@ export function SohView({ categories, rows, prices, today = "", initialCat, init
         <div className="sd-table-wrap max-sm:hidden"><table className="sd-table">
           <thead><tr><th>Article</th><th>Description</th>{searching && <th>Kategori</th>}<th className="n">Qty SOH</th><th className="n">Qty Sold</th><th>Balance View</th>{prices && <th className="n">Harga</th>}</tr></thead>
           <tbody>
-            {shown.length ? groups.flatMap((g) => [
-              ...(g.label ? [<tr key={`g|${g.label}`} className="bg-slate-50 dark:bg-slate-800/60"><td colSpan={2} className="text-xs font-extrabold tracking-wider text-slate-600 uppercase dark:text-slate-300">{g.label}</td><td className="n font-extrabold">{num(sumQty(g.rows))}</td><td className="n font-extrabold">{num(g.rows.reduce((a, r) => a + r.sold, 0))}</td><td />{prices && <td />}</tr>] : []),
+            {shown.length ? visible.flatMap((g) => [
+              ...(g.label ? [<tr key={`g|${g.label}`} className="bg-slate-50 dark:bg-slate-800/60"><td colSpan={2} className="text-xs font-extrabold tracking-wider text-slate-600 uppercase dark:text-slate-300">{g.label}</td><td className="n font-extrabold">{num(sumQty(g.all))}</td><td className="n font-extrabold">{num(g.all.reduce((a, r) => a + r.sold, 0))}</td><td />{prices && <td />}</tr>] : []),
               ...g.rows.map((r) => (
               <tr key={`${r.category}|${r.article}`} onClick={() => show(r)} className={priced(r) ? "cursor-pointer hover:bg-blue-50/60 dark:hover:bg-blue-950/20" : undefined}>
                 <td className="font-mono text-xs">{r.article}</td>
@@ -282,6 +297,11 @@ export function SohView({ categories, rows, prices, today = "", initialCat, init
           </tbody>
           <tfoot><tr><td>TOTAL</td><td />{searching && <td />}<td className="n">{num(totSoh)}</td><td className="n">{num(totSold)}</td><td />{prices && <td />}</tr></tfoot>
         </table></div>
+        {capped && (
+          <button type="button" className="sd-btn mt-3 w-full justify-center" onClick={() => setMore(viewKey)}>
+            Tampilkan semua ({num(shown.length)} artikel)
+          </button>
+        )}
         {prices && prices.models.length > 0 && <p className="mt-2 text-xs text-slate-500">Ketuk SKU yang ada harganya untuk melihat price list-nya (semua pilihan storage).</p>}
       </Panel>
       {prices && <SkuPricePopup prices={prices} row={open} today={today} onClose={() => setOpen(null)} />}
