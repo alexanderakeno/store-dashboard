@@ -46,6 +46,8 @@ export function parseControlSheet(grid: Grid, month: MonthKey): ControlSheetData
 
   for (let r = start; r < grid.length; r++) {
     const row = grid[r] ?? [];
+    // a broken formula in the sheet (#REF!, #N/A, …) shows up as a fake staff / product: leave such rows out
+    const broken = (cells: unknown[]) => cells.find((c) => isSheetError(c));
 
     // Daily control block
     if (dailyCol >= 0) {
@@ -57,7 +59,9 @@ export function parseControlSheet(grid: Grid, month: MonthKey): ControlSheetData
 
     // Merchandise Report block
     const mrProduct = cellText(row[M + 5]);
-    if (cellText(row[M]) && mrProduct) {
+    const mrBad = broken([row[M], row[M + 5]]);
+    if (mrBad && parseNumber(row[M + 8]) === 0) warnings.push(`MR baris ${r + 1}: sel error di sheet (${String(mrBad).split(/\s/)[0]}), baris dilewati`);
+    else if (cellText(row[M]) && mrProduct) {
       const date = parseDate(row[M + 4]);
       if (!date) warnings.push(`MR baris ${r + 1}: tanggal tidak valid "${cellText(row[M + 4])}"`);
       else if (!date.startsWith(month)) skippedOtherMonth++;
@@ -80,7 +84,9 @@ export function parseControlSheet(grid: Grid, month: MonthKey): ControlSheetData
 
     // Sales Person block
     const spProduct = cellText(row[S + 1]);
-    if (spProduct && (cellText(row[S]) || cellText(row[S + 2]))) {
+    const spBad = broken([row[S], row[S + 1], row[S + 2]]);
+    if (spBad && parseNumber(row[S + 3]) === 0) warnings.push(`SP baris ${r + 1}: sel error di sheet (${String(spBad).split(/\s/)[0]}), baris dilewati`);
+    else if (spProduct && (cellText(row[S]) || cellText(row[S + 2]))) {
       const date = parseDate(row[S - 2]);
       if (!date) warnings.push(`SP baris ${r + 1}: tanggal tidak valid "${cellText(row[S - 2])}"`);
       else if (!date.startsWith(month)) skippedOtherMonth++;
@@ -89,7 +95,8 @@ export function parseControlSheet(grid: Grid, month: MonthKey): ControlSheetData
         sales.push({
           date,
           nik: normalizeNik(row[S - 1]),
-          staffName: cellText(row[S]),
+          // an error cell with a real amount keeps the sale (it still counts) without a fake staff name
+          staffName: isSheetError(row[S]) ? "" : cellText(row[S]),
           article,
           description,
           invoice: normalizeInvoice(row[S + 2]),
@@ -102,4 +109,9 @@ export function parseControlSheet(grid: Grid, month: MonthKey): ControlSheetData
     }
   }
   return { merch, sales, daily, skippedOtherMonth, warnings };
+}
+
+/** Google Sheets error values: "#REF!", "#N/A", "#VALUE!", "#DIV/0!", "#NAME?", "#NUM!", "#NULL!", "#ERROR!", "#SPILL!" (with or without a message). */
+export function isSheetError(v: unknown): boolean {
+  return /^\s*#(REF!|N\/A|VALUE!|DIV\/0!|NAME\?|NUM!|NULL!|ERROR!|SPILL!)/i.test(String(v ?? ""));
 }
