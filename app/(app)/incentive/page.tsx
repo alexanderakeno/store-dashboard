@@ -13,7 +13,7 @@ import { dmy, num, rp, rpc } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 
-const LOB_LABEL: Record<string, string> = { Mac: "MacBook", iPhone: "iPhone", iPad: "iPad", "Apple Watch": "Apple Watch" };
+const LOB_LABEL: Record<string, string> = { Mac: "MacBook", iPhone: "iPhone", iPad: "iPad", "Apple Watch": "Apple Watch", Android: "Android" };
 
 /** "Rp60.000" over "2 unit"; a dash when nothing was sold. */
 function Cell({ fee, sub }: { fee: number; sub: string | null }) {
@@ -179,7 +179,8 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
       {admin && (
       <Panel title="Skema" desc="Hanya terlihat oleh admin." className="!p-4 sm:!p-6">
         <ul className="space-y-1.5 text-sm text-slate-600">
-          <li><b>Device:</b> {DEVICE_LOBS.map((l) => `${LOB_LABEL[l]} ${rp(rules.perUnit[l] ?? 0)}`).join(" · ")} per unit. Retur mengurangi.</li>
+          <li><b>Device:</b> {DEVICE_LOBS.filter((l) => l !== "Android").map((l) => `${LOB_LABEL[l]} ${rp(rules.perUnit[l] ?? 0)}`).join(" · ")} per unit. Retur mengurangi.</li>
+          {rules.android && <li><b>Android:</b> {rp(rules.android.perUnit)} per device (semua brand), kecuali {rules.android.exclude.map((x) => `${x.brand} ${x.match.split("|")[0].replace(" ?", " ").toLowerCase()}`).join(", ")}.</li>}
           <li><b>Qoala:</b> dihitung per polis, lalu dijumlahkan — {tiers.map((t) => `${tierLabel(t.min)} ${rp(t.fee)}`).join(" · ")}.</li>
           <li><b>Aksesoris:</b> dari {board ? <>&quot;{board.title}&quot;</> : "leaderboard ACC Fokus"} (tab Data - Akeno). Angka ini MTD dari sheet, tidak ikut filter tanggal.</li>
           <li><b>Akun online</b> ({(rules.online?.accounts ?? []).map((a) => displayName(a)).join(", ")}): {rp(rules.online?.perUnit ?? 0)} per device (MacBook, iPhone, iPad, Apple Watch); Qoala tidak dihitung.</li>

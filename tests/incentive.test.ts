@@ -24,14 +24,41 @@ test("qoalaFee tiers: <1jt 20rb, 1–1,5jt 40rb, 1,5–<2jt 60rb, ≥2jt 80rb (r
   assert.equal(qoalaFee(5_065_000, R.qoalaTiers), 80_000);
 });
 
-test("devices: iPhone 15rb, Mac/iPad/Watch 30rb per unit; AirPods and Android not paid; returns subtract", () => {
+test("devices: iPhone 15rb, Mac/iPad/Watch 30rb, Android 15rb per unit; AirPods not paid; returns subtract", () => {
   const v = incentiveView(
-    [line({ qty: 2 }), line({ lob: "Mac" }), line({ lob: "iPad" }), line({ lob: "Apple Watch" }), line({ lob: "AirPods" }), line({ group: "Android", lob: "Samsung" }), line({ qty: -1, amount: -100 })],
+    [line({ qty: 2 }), line({ lob: "Mac" }), line({ lob: "iPad" }), line({ lob: "Apple Watch" }), line({ lob: "AirPods" }), line({ group: "Android", lob: "Samsung", brand: "SAMSUNG", description: "GALAXY A07 4/64GB" }), line({ qty: -1, amount: -100 })],
     R, null, ["Chelsy Arrahmat"],
   );
   const r = v.rows[0];
   assert.equal(r.device.iPhone.qty, 1);
-  assert.equal(r.deviceFee, 1 * 15_000 + (1 + 1 + 1) * 30_000);
+  assert.equal(r.device.Android.qty, 1);
+  assert.equal(r.deviceFee, 1 * 15_000 + (1 + 1 + 1) * 30_000 + 15_000);
+});
+
+test("Android 15rb except Xiaomi / Motorola watches and Galaxy Fit 3; online accounts get no Android fee", () => {
+  const a = (lob: string, description: string, p: Partial<SalesLine> = {}) => line({ group: "Android", lob, brand: lob.toUpperCase(), description, ...p });
+  const v = incentiveView(
+    [
+      a("Samsung", "GALAXY S26 ULTRA 512GB"),
+      a("Samsung", "GALAXY FIT3 GRAY"),
+      a("Samsung", "GALAXY FIT 3 PINK"),
+      a("Samsung", "GALAXY WATCH 8 44MM"),
+      a("Xiaomi", "REDMI WATCH 5 ACTIVE"),
+      a("Xiaomi", "XIAOMI SMART BAND 9"),
+      a("Xiaomi", "XIAOMI 17T 12/512GB"),
+      a("Motorola", "MOTO WATCH FIT"),
+      a("Motorola", "MOTOROLA G86 POWER 5G"),
+      a("Huawei", "HUAWEI WATCH FIT 5 PRO"),
+      a("Samsung", "GALAXY A17", { qty: -1, amount: -1 }),
+      a("Samsung", "GALAXY A17", { staffName: "DIGIPLUS.CO.ID" }),
+    ],
+    R, null, ["Chelsy Arrahmat"],
+  );
+  const r = v.rows.find((x) => x.name === "Chelsy Arrahmat")!;
+  // paid: S26, Galaxy Watch 8, Xiaomi 17T, Moto G86, Huawei Watch Fit, minus 1 return
+  assert.equal(r.device.Android.qty, 4);
+  assert.equal(r.device.Android.fee, 60_000);
+  assert.equal(v.rows.find((x) => x.name === "Digiplus.co.id")?.device.Android?.qty ?? 0, 0);
 });
 
 test("qoala: each policy priced on its own, then summed; online channel ignored", () => {

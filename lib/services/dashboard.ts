@@ -41,7 +41,12 @@ export function mergeRules(o: Partial<BusinessRules>): BusinessRules {
     ...o,
     pointCaps: { ...DEFAULT_RULES.pointCaps, ...(o.pointCaps ?? {}) },
     pointStepPct: { ...DEFAULT_RULES.pointStepPct, ...(o.pointStepPct ?? {}) },
-    incentive: { perUnit: inc.perUnit ?? DEFAULT_RULES.incentive.perUnit, qoalaTiers: inc.qoalaTiers ?? DEFAULT_RULES.incentive.qoalaTiers, online: { ...DEFAULT_RULES.incentive.online, ...(inc.online ?? {}) } },
+    incentive: {
+      perUnit: inc.perUnit ?? DEFAULT_RULES.incentive.perUnit,
+      qoalaTiers: inc.qoalaTiers ?? DEFAULT_RULES.incentive.qoalaTiers,
+      online: { ...DEFAULT_RULES.incentive.online, ...(inc.online ?? {}) },
+      android: { ...DEFAULT_RULES.incentive.android!, ...(inc.android ?? {}) },
+    },
   };
 }
 

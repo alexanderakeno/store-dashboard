@@ -37,6 +37,8 @@ export interface IncentiveRules {
   qoalaTiers: Array<{ min: number; fee: number }>;
   /** Online sales accounts (Digiplus.co.id, Mapemall): a flat rupiah per Apple device, no Qoala. */
   online: { accounts: string[]; perUnit: number };
+  /** Android devices: flat rupiah per unit, except the listed products (brand + description pattern, case-insensitive). */
+  android?: { perUnit: number; exclude: Array<{ brand: string; match: string }> };
 }
 
 export const DEFAULT_RULES: BusinessRules = {
@@ -76,6 +78,14 @@ export const DEFAULT_RULES: BusinessRules = {
       { min: 2_000_000, fee: 80_000 }, // 2 jt and up
     ],
     online: { accounts: ["DIGIPLUS.CO.ID", "MAPEMALL"], perUnit: 5_000 },
+    android: {
+      perUnit: 15_000,
+      exclude: [
+        { brand: "Xiaomi", match: "WATCH|BAND" },
+        { brand: "Motorola", match: "WATCH" },
+        { brand: "Samsung", match: "FIT ?3" },
+      ],
+    },
   },
 };
 
