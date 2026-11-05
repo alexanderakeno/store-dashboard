@@ -1,4 +1,5 @@
 import type { MonthKey, TrafficEntry } from "@/types/domain";
+import { isSheetError } from "./controlSheet";
 import type { AccFocusBoard, AccFocusCell, PromoBrand, Tracker, TrackerDay } from "@/types/extras";
 import { normalizeText, parseDate, parseNumber } from "@/lib/domain/normalize";
 import type { Grid } from "./controlSheet";
@@ -155,6 +156,7 @@ export function parseAccFocus(grid: Grid): AccFocusBoard | null {
     const rank = t(row[nameCol - 1]);
     const name = t(row[nameCol]);
     if (/^total/i.test(rank) || /^total/i.test(name)) break;
+    if (isSheetError(name)) continue; // broken formula (#REF!, …) — not a staff
     if (!name) {
       if (!rank) break; // blank row = end of block
       continue; // numbered but empty slot
