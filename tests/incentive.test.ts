@@ -57,6 +57,7 @@ test("parseAccFocus reads the Data - Akeno leaderboard by label; ACC fee joins s
     ["", 1, "Chelsy Arrahmat", 5, 2395000, 32500, 3, 2697000, 150000, 65, 41652200, 610000],
     ["", 2, "Elvina Qur'ani", "-", "-", "-", "-", "-", "-", 35, 19193900, 267500],
     ["", 7, ""],
+    ["", 8, "#REF! (Array result was not expanded because it would overwrite data in Q82.)"],
     ["", "TOTAL", "", 18, 11079000, 127500],
   ];
   const b = parseAccFocus(grid)!;
