@@ -36,18 +36,27 @@ type Detail = { itemLabel: string; rows: DetailRow[]; footnote?: string };
 
 const APPLE_LABELS: Record<(typeof APPLE_LOBS)[number], string> = { iPhone: "iPhone", Mac: "MacBook", iPad: "iPad", "Apple Watch": "Apple Watch", AirPods: "AirPods" };
 
-/** Android devices per brand (lob = brand), largest value first. */
-function androidBrands(lines: SalesLine[]): DetailRow[] {
+/**
+ * Android devices per brand (lob = brand), largest value first, with the brand target from the
+ * Target Store "Total Target" block (Samsung · Xiaomi · …); brands with a target but no sales yet show too.
+ */
+function androidBrands(lines: SalesLine[], brandTargets: Record<string, number> = {}): DetailRow[] {
   const map = new Map<string, DetailRow>();
+  const targetOf = (label: string) => {
+    const k = Object.keys(brandTargets).find((b) => b.trim().toUpperCase() === label.trim().toUpperCase());
+    return k ? brandTargets[k] : null;
+  };
   for (const l of lines) {
     if (l.group !== "Android") continue;
     const label = l.lob ?? "Lainnya";
-    const r = map.get(label) ?? { label, actual: 0, target: null, qty: 0, drill: label };
+    const key = label.toUpperCase();
+    const r = map.get(key) ?? { label, actual: 0, target: targetOf(label), qty: 0, drill: label };
     r.actual += l.amount;
     if (l.countsInQty) r.qty += l.qty;
-    map.set(label, r);
+    map.set(key, r);
   }
-  return [...map.values()].filter((r) => r.actual !== 0 || r.qty !== 0).sort((a, b) => b.actual - a.actual);
+  for (const [b, t] of Object.entries(brandTargets)) if (!map.has(b.trim().toUpperCase()) && t > 0) map.set(b.trim().toUpperCase(), { label: b.trim(), actual: 0, target: t, qty: 0 });
+  return [...map.values()].filter((r) => r.actual !== 0 || r.qty !== 0 || r.target).sort((a, b) => b.actual - a.actual || (b.target ?? 0) - (a.target ?? 0));
 }
 
 export default async function OverviewPage({ searchParams }: { searchParams: SearchParams }) {
@@ -100,7 +109,7 @@ const details: Partial<Record<string, Detail>> = {
     rows: APPLE_LOBS.map((k) => ({ label: APPLE_LABELS[k], actual: av[k], target: null, qty: aq[k], drill: k, ...(k === "AirPods" ? { excluded: true, note: "ACC" } : {}) })),
     footnote: "AirPods ditampilkan untuk info saja — value-nya dihitung di ACC, bukan achievement Apple device.",
   },
-  android: { itemLabel: "Brand", rows: androidBrands(mtd), footnote: "Device only, per brand." },
+  android: { itemLabel: "Brand", rows: androidBrands(mtd, p.snap.target?.brands), footnote: p.snap.target?.brands ? "Device only, per brand. Target per brand dari Target Store (Total Target)." : "Device only, per brand." },
   vas: { itemLabel: "Provider", rows: VAS_PROVIDERS.map((k) => ({ label: k, actual: vs[k].value, target: null, qty: vs[k].qty, drill: k })) },
 };
 const grpCard = (key: string, label: string, x: (typeof h.groups)[number]) => ({ key, label, actual: x.actual, target: x.target, achievementPct: x.target ? (x.actual * 100) / x.target : null, estimate: x.estimate, points: x.point, pointsMax: x.pointCap, variance: x.actual - x.target });
@@ -337,6 +346,7 @@ function CardDetail({ id, title, detail, total, tg, drillQuery }: { id: string; 
   const { rows, itemLabel, footnote } = detail;
   const counted = rows.filter((r) => !r.excluded);
   const hasTarget = rows.some((r) => r.target != null);
+  const sumTarget = rows.reduce((a, r) => a + (r.target ?? 0), 0);
   const other = total - counted.reduce((a, r) => a + r.actual, 0);
   return (
     <>
@@ -367,16 +377,16 @@ function CardDetail({ id, title, detail, total, tg, drillQuery }: { id: string; 
                       {r.note && <span className="ml-1.5 text-[11px] font-semibold text-slate-400">({r.note})</span>}
                       {!hasTarget && <span className="block text-[11px] font-semibold text-slate-400 sm:hidden">{share === "—" ? "tidak dihitung" : `share ${share}`}</span>}
                     </td>
-                    <td className="n">{rpf(r.actual)}</td>
-                    {hasTarget ? <><td className="n">{rpf(r.target ?? 0)}</td><td className={`n font-semibold ${ach != null && ach >= tg ? "text-emerald-600" : "text-rose-600"}`}>{ach == null ? "—" : pct(ach, 0)}</td></> : <td className="n max-sm:hidden">{share}</td>}
+                    <td className="n">{hasTarget ? rpc(r.actual) : rpf(r.actual)}</td>
+                    {hasTarget ? <><td className="n">{r.target == null ? "—" : rpc(r.target)}</td><td className={`n font-semibold ${ach != null && ach >= tg ? "text-emerald-600" : "text-rose-600"}`}>{ach == null ? "—" : pct(ach, 0)}</td></> : <td className="n max-sm:hidden">{share}</td>}
                     <td className="n">{num(r.qty)}</td>
                   </tr>
                 );
               })}
-              {Math.abs(other) >= 1 && <tr><td className="text-slate-500">Lainnya</td><td className="n">{rpf(other)}</td>{hasTarget ? <><td /><td /></> : <td className="n max-sm:hidden">{total ? pct((other / total) * 100, 0) : "—"}</td>}<td /></tr>}
+              {Math.abs(other) >= 1 && <tr><td className="text-slate-500">Lainnya</td><td className="n">{hasTarget ? rpc(other) : rpf(other)}</td>{hasTarget ? <><td /><td /></> : <td className="n max-sm:hidden">{total ? pct((other / total) * 100, 0) : "—"}</td>}<td /></tr>}
             </tbody>
             <tfoot>
-              <tr><td>Total</td><td className="n">{rpf(total)}</td>{hasTarget ? <><td /><td /></> : <td className="max-sm:hidden" />}<td className="n">{num(counted.reduce((a, r) => a + r.qty, 0))}</td></tr>
+              <tr><td>Total</td><td className="n">{hasTarget ? rpc(total) : rpf(total)}</td>{hasTarget ? <><td className="n">{rpc(sumTarget)}</td><td className="n">{sumTarget ? pct((total / sumTarget) * 100, 0) : "—"}</td></> : <td className="max-sm:hidden" />}<td className="n">{num(counted.reduce((a, r) => a + r.qty, 0))}</td></tr>
             </tfoot>
           </table>
         </div>
