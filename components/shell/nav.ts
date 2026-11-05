@@ -34,6 +34,7 @@ export const NAV: NavEntry[] = [
       { href: "/summary", label: "Daily Summary", icon: "summary", color: "text-amber-400" },
       { href: "/week-performance", label: "Weekly Performance", icon: "chart", color: "text-lime-400" },
       { href: "/staff", label: "Staff Performance", icon: "users", color: "text-violet-400" },
+      { href: "/qoala", label: "Qoala", icon: "shield", color: "text-emerald-400" },
       { href: "/incentive", label: "Est. Incentive", icon: "wallet", color: "text-cyan-400" },
       { href: "/soh", label: "SOH", icon: "package", color: "text-orange-400" },
       { href: "/stokan", label: "Stokan", icon: "stokan", color: "text-slate-300" },
