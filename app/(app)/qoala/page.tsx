@@ -11,8 +11,6 @@ import { loadPage, type SearchParams } from "@/lib/page";
 import { getMonthLines } from "@/lib/services/dashboard";
 import type { StoreTarget } from "@/types/domain";
 
-/** Minimum device units before a staff counts for "best AR" (avoids 1/1 = 100%). */
-const MIN_DEV = 3;
 
 const ar = (n: number | null) => (n == null ? "–" : pct(n, 0));
 
@@ -63,11 +61,12 @@ export default async function QoalaPage({ searchParams }: { searchParams: Search
   const missed = v.missed.filter((m) => m.staff !== "Online");
 
   // highlights: best value, best AR on Apple / Android (with enough devices), most missed
-  const best = (f: (s: QStaffRow) => number | null, min: (s: QStaffRow) => boolean) =>
-    staff.filter(min).sort((a, b) => (f(b) ?? -1) - (f(a) ?? -1))[0];
+  // best AR: highest AR; same AR → more policies, then more devices (no minimum)
+  const best = (ar: (s: QStaffRow) => number | null, q: (s: QStaffRow) => number, dev: (s: QStaffRow) => number) =>
+    staff.filter((s) => dev(s) > 0 && (ar(s) ?? 0) > 0).sort((a, b) => (ar(b) ?? 0) - (ar(a) ?? 0) || q(b) - q(a) || dev(b) - dev(a))[0];
   const topValue = staff[0];
-  const topApple = best((s) => s.cur.arApple, (s) => s.cur.devApple >= MIN_DEV && (s.cur.arApple ?? 0) > 0);
-  const topAndroid = best((s) => s.cur.arAndroid, (s) => s.cur.devAndroid >= MIN_DEV && (s.cur.arAndroid ?? 0) > 0);
+  const topApple = best((s) => s.cur.arApple, (s) => s.cur.qApple, (s) => s.cur.devApple);
+  const topAndroid = best((s) => s.cur.arAndroid, (s) => s.cur.qAndroid, (s) => s.cur.devAndroid);
   const mostMissed = [...staff].sort((a, b) => b.cur.missed - a.cur.missed)[0];
 
   return (
@@ -117,8 +116,8 @@ export default async function QoalaPage({ searchParams }: { searchParams: Search
       {staff.length > 0 && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Hero label="Top Value Qoala" name={topValue?.name} value={rpc(topValue?.cur.value ?? null)} sub={`${num(topValue?.cur.q ?? 0)} polis · AR ${ar(topValue?.cur.ar ?? null)}`} />
-          <Hero label="AR Apple Tertinggi" name={topApple?.name} value={ar(topApple?.cur.arApple ?? null)} sub={topApple ? `${num(topApple.cur.qApple)} polis dari ${num(topApple.cur.devApple)} device Apple` : `belum ada (min. ${MIN_DEV} device)`} />
-          <Hero label="AR Android Tertinggi" name={topAndroid?.name} value={ar(topAndroid?.cur.arAndroid ?? null)} sub={topAndroid ? `${num(topAndroid.cur.qAndroid)} polis dari ${num(topAndroid.cur.devAndroid)} device Android` : `belum ada (min. ${MIN_DEV} device)`} />
+          <Hero label="AR Apple Tertinggi" name={topApple?.name} value={ar(topApple?.cur.arApple ?? null)} sub={topApple ? `${num(topApple.cur.qApple)} polis dari ${num(topApple.cur.devApple)} device Apple` : "belum ada polis Apple"} />
+          <Hero label="AR Android Tertinggi" name={topAndroid?.name} value={ar(topAndroid?.cur.arAndroid ?? null)} sub={topAndroid ? `${num(topAndroid.cur.qAndroid)} polis dari ${num(topAndroid.cur.devAndroid)} device Android` : "belum ada polis Android"} />
           <Hero label="Perlu Follow-up" name={mostMissed?.cur.missed ? mostMissed.name : undefined} value={mostMissed?.cur.missed ? `${num(mostMissed.cur.missed)} device` : "–"} sub="device terjual belum ada Qoala" tone="rose" />
         </div>
       )}
