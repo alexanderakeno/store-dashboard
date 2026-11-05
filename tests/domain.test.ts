@@ -184,3 +184,24 @@ test("staff target per Android brand follows the Total Target brand split", asyn
   assert.equal(staffItemTarget({ ...base, staff }, "Ana", "Android", "Samsung"), 100);
   assert.equal(staffItemTarget({ ...base, staff }, "Nobody", "Android", "Samsung"), 0);
 });
+
+test("sheet error cells (#REF!) are not staff or products", async () => {
+  const { isSheetError, parseControlSheet } = await import("@/lib/parsers/controlSheet");
+  const { CONTROL_GRID } = await import("./fixtures");
+  assert.equal(isSheetError("#REF! (Array result was not expanded because it would overwrite data in Q82.)"), true);
+  assert.equal(isSheetError("#N/A"), true);
+  assert.equal(isSheetError("Adi"), false);
+  const grid = CONTROL_GRID.map((r) => [...r]);
+  // copy an SP row and break its name + amount like a spilled array formula does
+  const at = grid.findIndex((r) => r.includes("Staff A"));
+  const bad = [...grid[at]];
+  const s = bad.indexOf("Staff A");
+  bad[s] = "#REF! (Array result was not expanded because it would overwrite data in Q82.)";
+  bad[s + 3] = "0";
+  grid.splice(at + 1, 0, bad);
+  const before = parseControlSheet(CONTROL_GRID, "2026-10");
+  const after = parseControlSheet(grid, "2026-10");
+  assert.equal(after.sales.length, before.sales.length);
+  assert.ok(after.sales.every((l) => !l.staffName.startsWith("#")));
+  assert.ok(after.warnings.some((w) => w.includes("#REF!")));
+});
