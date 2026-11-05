@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { PageIntro, Panel, Stat, Trend } from "@/components/kit";
-import { MobileGrid } from "@/components/kit/MobileGrid";
 import { ParamSelect } from "@/components/kit/controls";
 import { JumpChips } from "@/components/modules/JumpChips";
 import { PageStatus } from "@/components/layout/PageStatus";
@@ -124,79 +123,28 @@ export default async function QoalaPage({ searchParams }: { searchParams: Search
         </div>
       )}
 
-      <Panel id="ranking" title="Ranking Staff" desc={`Urut value Qoala tertinggi · ${period} vs ${prevPeriod}.`}>
-        <MobileGrid
-          cols={[{ label: "Staff" }, { label: "Value", w: "4.6rem" }, { label: "Polis", w: "2.4rem" }, { label: "AR", w: "2.8rem" }]}
-          rows={v.staff.map((s, i) => ({
-            key: s.key,
-            cells: [<b key="n" className="leading-tight">{s.online ? "" : `${i + 1}. `}{s.name}</b>, <b key="v">{rpc(s.cur.value)}</b>, num(s.cur.q), <b key="a">{ar(s.cur.ar)}</b>],
-            sub: (
-              <>
-                Apple {num(s.cur.qApple)}/{num(s.cur.devApple)} ({ar(s.cur.arApple)}) · Android {num(s.cur.qAndroid)}/{num(s.cur.devAndroid)} ({ar(s.cur.arAndroid)}) · terlewat {num(s.cur.missed)} · <Trend value={s.growth} /> MTM
-              </>
-            ),
-          }))}
-          foot={["TOTAL", rpc(c.value), num(c.q), ar(c.ar)]}
-        />
-        <div className="sd-table-wrap max-sm:hidden">
-          <table className="sd-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Staff</th>
-                <th className="n">Value Qoala</th>
-                {tg.store > 0 && <th className="n">% Target</th>}
-                <th className="n">vs Bln Lalu</th>
-                <th className="n">Polis</th>
-                <th className="n">Device</th>
-                <th className="n">AR</th>
-                <th className="n">AR Bln Lalu</th>
-                <th className="n">Apple</th>
-                <th className="n">Android</th>
-                <th className="n">Terlewat</th>
-              </tr>
-            </thead>
-            <tbody>
-              {v.staff.map((s, i) => {
-                const t = tg.staff.get(s.key) ?? 0;
-                return (
-                  <tr key={s.key}>
-                    <td className="text-slate-400">{s.online ? "" : i + 1}</td>
-                    <td className="font-bold">{s.name}</td>
-                    <td className="n font-bold">{rpf(s.cur.value)}</td>
-                    {tg.store > 0 && <td className="n">{t ? pct((s.cur.value / t) * 100, 0) : "–"}</td>}
-                    <td className="n"><Trend value={s.growth} /></td>
-                    <td className="n">{num(s.cur.q)}</td>
-                    <td className="n">{num(s.cur.dev)}</td>
-                    <td className="n font-black">{ar(s.cur.ar)}</td>
-                    <td className="n text-slate-500">{ar(s.prev?.ar ?? null)} <Pp cur={s.cur.ar} prev={s.prev?.ar} /></td>
-                    <td className="n"><Split q={s.cur.qApple} dev={s.cur.devApple} ar={s.cur.arApple} /></td>
-                    <td className="n"><Split q={s.cur.qAndroid} dev={s.cur.devAndroid} ar={s.cur.arAndroid} /></td>
-                    <td className={`n ${s.cur.missed ? "font-bold text-rose-600" : "text-slate-400"}`}>{num(s.cur.missed)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td />
-                <td>TOTAL</td>
-                <td className="n">{rpf(c.value)}</td>
-                {tg.store > 0 && <td className="n">{pct((c.value / tg.store) * 100, 0)}</td>}
-                <td className="n"><Trend value={pv?.value ? (c.value / pv.value - 1) * 100 : null} /></td>
-                <td className="n">{num(c.q)}</td>
-                <td className="n">{num(c.dev)}</td>
-                <td className="n">{ar(c.ar)}</td>
-                <td className="n">{ar(pv?.ar ?? null)}</td>
-                <td className="n"><Split q={c.qApple} dev={c.devApple} ar={c.arApple} /></td>
-                <td className="n"><Split q={c.qAndroid} dev={c.devAndroid} ar={c.arAndroid} /></td>
-                <td className="n">{num(c.missed)}</td>
-              </tr>
-            </tfoot>
-          </table>
+      <Panel id="ranking" title="Ranking Staff" desc={`Urut value Qoala tertinggi · ${period} dibanding ${prevPeriod}.`}>
+        <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-500">
+          <span><b className="text-slate-700 dark:text-slate-200">AR</b> = polis Qoala ÷ device</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-2 w-5 rounded-full bg-emerald-500" /> AR bulan ini</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-3 w-0.5 bg-slate-700 dark:bg-slate-200" /> AR bulan lalu</span>
         </div>
-        <p className="mt-2 text-xs text-slate-500 max-sm:hidden">Apple/Android = polis/device (AR). Polis dihubungkan ke device lewat nomor invoice.</p>
-        {online && <p className="mt-1 text-xs text-slate-500">Online ikut di total, tidak diberi ranking.</p>}
+        {/* desktop header */}
+        <div className="grid grid-cols-[2.2rem_minmax(9rem,1.3fr)_minmax(8rem,1fr)_minmax(9rem,1.2fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_5.5rem] gap-4 px-4 pb-2 text-[11px] font-extrabold tracking-wide text-slate-500 uppercase max-xl:hidden">
+          <span>#</span><span>Staff</span><span>Value Qoala</span><span>AR total</span><span>Apple</span><span>Android</span><span className="text-right">Terlewat</span>
+        </div>
+        <ol className="space-y-2">
+          {v.staff.map((s, i) => (
+            <RankRow key={s.key} rank={s.online ? null : i + 1} s={s} target={tg.staff.get(s.key) ?? 0} />
+          ))}
+          <RankRow
+            total
+            rank={null}
+            s={{ key: "__total", name: "Total toko", online: false, cur: c, prev: pv, growth: pv?.value ? (c.value / pv.value - 1) * 100 : null, days: [] }}
+            target={tg.store}
+          />
+        </ol>
+        {online && <p className="mt-2 text-xs text-slate-500">Online ikut di total, tidak diberi ranking.</p>}
       </Panel>
 
       <Panel id="harian" title="Rekap Harian" desc={`Ketuk tanggal untuk rincian per staff · pembanding = tanggal yang sama ${monthLabel(pm)}.`}>
@@ -277,16 +225,6 @@ function Hero({ label, name, value, sub, tone }: { label: string; name?: string;
   );
 }
 
-function Split({ q, dev, ar: a }: { q: number; dev: number; ar: number | null }) {
-  if (!dev && !q) return <span className="text-slate-400">–</span>;
-  return (
-    <span className="leading-tight">
-      <b className="block">{ar(a)}</b>
-      <span className="text-[11px] text-slate-500">{num(q)}/{num(dev)}</span>
-    </span>
-  );
-}
-
 /** Compact per-staff / per-day table inside a details panel (fits phones: 5 short columns). */
 function StaffTable({ rows, first = "Staff" }: { rows: Array<{ key: string; label: string; s: QStats }>; first?: string }) {
   return (
@@ -312,5 +250,68 @@ function StaffTable({ rows, first = "Staff" }: { rows: Array<{ key: string; labe
         ))}
       </tbody>
     </table>
+  );
+}
+
+
+/** Medal colours for the top 3. */
+const MEDAL = ["bg-amber-400 text-amber-950", "bg-slate-300 text-slate-800", "bg-orange-300 text-orange-950"];
+
+/** One staff in the ranking: card on phones, one aligned row on desktop. */
+function RankRow({ rank, s, target, total = false }: { rank: number | null; s: QStaffRow; target: number; total?: boolean }) {
+  const c = s.cur;
+  return (
+    <li className={`rounded-2xl border px-4 py-3 ${total ? "border-slate-300 bg-slate-100 dark:border-slate-600 dark:bg-slate-800" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}`}>
+      <div className="grid grid-cols-[2.2rem_1fr_auto] items-center gap-x-3 gap-y-3 xl:grid-cols-[2.2rem_minmax(9rem,1.3fr)_minmax(8rem,1fr)_minmax(9rem,1.2fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_5.5rem] xl:gap-x-4">
+        {/* rank */}
+        <span className={`flex size-8 items-center justify-center rounded-full text-sm font-black ${rank && rank <= 3 ? MEDAL[rank - 1] : "bg-slate-100 text-slate-500 dark:bg-slate-800"}`}>{rank ?? (total ? "Σ" : "–")}</span>
+        {/* name */}
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-black text-slate-950 dark:text-white">{s.name}</p>
+          <p className="text-[12px] text-slate-500 tabular-nums">{num(c.q)} polis · {num(c.dev)} device</p>
+        </div>
+        {/* value (phones: right of the name) */}
+        <div className="text-right xl:text-left">
+          <p className="text-[17px] font-black text-slate-950 tabular-nums dark:text-white">{rpc(c.value)}</p>
+          <p className="text-[12px] tabular-nums"><Trend value={s.growth} /> <span className="text-slate-500">vs {rpc(s.prev?.value ?? null)}</span></p>
+          {target > 0 && <p className="text-[11px] text-slate-500">{pct((c.value / target) * 100, 0)} dari target</p>}
+        </div>
+        {/* AR total */}
+        <div className="col-span-3 xl:col-span-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="flex items-baseline gap-2">
+              <span className="text-[11px] font-extrabold tracking-wide text-slate-500 uppercase xl:hidden">AR total</span>
+              <span className="text-[18px] font-black tabular-nums">{ar(c.ar)}</span>
+            </span>
+            <span className="text-[12px] text-slate-500 tabular-nums">bln lalu {ar(s.prev?.ar ?? null)}</span>
+          </div>
+          <ArBar value={c.ar} prev={s.prev?.ar} />
+        </div>
+        {/* Apple / Android */}
+        <div className="col-span-3 grid grid-cols-2 gap-3 xl:contents">
+          <Mini label="Apple" q={c.qApple} dev={c.devApple} a={c.arApple} prev={s.prev?.arApple} />
+          <Mini label="Android" q={c.qAndroid} dev={c.devAndroid} a={c.arAndroid} prev={s.prev?.arAndroid} />
+        </div>
+        {/* missed */}
+        <div className="col-span-3 flex items-center justify-between rounded-xl bg-rose-50 px-3 py-1.5 xl:col-span-1 xl:block xl:bg-transparent xl:p-0 xl:text-right dark:bg-rose-950/20 xl:dark:bg-transparent">
+          <span className="text-[11px] font-extrabold tracking-wide text-rose-700 uppercase xl:hidden">Terlewat</span>
+          <span className={`text-[15px] font-black tabular-nums ${c.missed ? "text-rose-600" : "text-slate-400"}`}>{num(c.missed)}<span className="ml-1 text-[11px] font-semibold">device</span></span>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+/** Apple / Android block: AR big, "polis / device" small, thin bar. */
+function Mini({ label, q, dev, a, prev }: { label: string; q: number; dev: number; a: number | null; prev?: number | null }) {
+  return (
+    <div className="rounded-xl bg-slate-50 px-3 py-2 xl:bg-transparent xl:p-0 dark:bg-slate-800/50 xl:dark:bg-transparent">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[11px] font-extrabold tracking-wide text-slate-500 uppercase xl:hidden">{label}</span>
+        <span className={`text-[16px] font-black tabular-nums ${dev ? "" : "text-slate-400"}`}>{dev ? ar(a) : "–"}</span>
+      </div>
+      <p className="text-[12px] text-slate-500 tabular-nums">{num(q)} polis / {num(dev)} device</p>
+      {dev > 0 && <ArBar value={a} prev={prev} />}
+    </div>
   );
 }
