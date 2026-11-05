@@ -156,8 +156,8 @@ export function generateMonth(month: MonthKey, lastDay: ISODate): { control: Gri
   const target: Grid = [
     ["", "SYNTHETIC"],
     ["", "Target Store"],
-    ["", "Total Target", "Apple", "Android", "Accessories", "VAS"],
-    ["", fmt(base), fmt(g.Apple), fmt(g.Android), fmt(g.ACC), fmt(g.VAS)],
+    ["", "Total Target", "Apple", "Android", "Accessories", "VAS", "", "Samsung", "Oppo", "Xiaomi"],
+    ["", fmt(base), fmt(g.Apple), fmt(g.Android), fmt(g.ACC), fmt(g.VAS), "", fmt(g.Android * 0.55), fmt(g.Android * 0.2), fmt(g.Android * 0.25)],
     [],
     ...section("Apple", g.Apple, [["iPhone", 0.74], ["iPad", 0.1], ["Mac", 0.1], ["Apple Watch", 0.06]]),
     ...section("Android", g.Android, [["Samsung", 0.6], ["Oppo", 0.2], ["Xiaomi", 0.2]]),
