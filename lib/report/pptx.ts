@@ -131,14 +131,59 @@ const down: CellOpts = { fill: { color: C.red }, color: C.redText };
 const upDown = (v: number | null | undefined, text: string, o: CellOpts = {}) => N(text, { ...(v == null || Math.round(v) === 0 ? {} : v > 0 ? up : down), ...o });
 const has = (v: number) => N(n0(v), { ...(v ? up : down), align: "center" });
 
-/** Row height filling `space` inches with `rows` rows, capped; font follows the row height. */
-function rowsIn(rows: number, space: number, max = 0.5) {
-  const h = Math.max(0.24, Math.min(max, space / rows));
-  return { rowH: h, fontSize: Math.max(10, Math.min(16, Math.round(h * 46))) };
+/**
+ * Row height filling `space` inches with `rows` rows, capped; the font follows the row height and
+ * leaves room for the line height (1.2×) + cell margins, so PowerPoint / Google Slides / Keynote
+ * never have to grow a row (a grown row pushes the table off the slide).
+ */
+export function rowsIn(rows: number, space: number, max = 0.5) {
+  const h = Math.max(0.17, Math.min(max, space / rows));
+  return { rowH: h, fontSize: fontFor(h) };
+}
+
+/** Largest font (pt, half-point steps) whose single line (1.2×) + cell margins fits a row of `h` inches. */
+export const fontFor = (h: number) => Math.max(7, Math.min(16, Math.floor((h - 0.04) * 50 * 2) / 2));
+
+/** Text width in inches from per-glyph widths (em), sized for the wider fallback fonts (Arial/Liberation). */
+export function textW(t: string, pt: number, bold = false): number {
+  let em = 0;
+  for (const ch of t) em += /[.,:;'|!il]/.test(ch) ? 0.28 : /[0-9]/.test(ch) ? 0.56 : ch === " " ? 0.28 : /[()\-]/.test(ch) ? 0.34 : /[A-Z%MW]/.test(ch) ? 0.68 : 0.56;
+  return (em * (bold ? 1.06 : 1) * pt) / 72;
+}
+
+const cellText = (c: Cell) => (typeof c.text === "string" ? c.text : Array.isArray(c.text) ? c.text.map((x) => x.text ?? "").join("") : "");
+
+/** Font size that keeps every single-column cell on one line (no wrap = no taller rows). */
+export function fitFont(rows: Cell[][], colW: number[], fontSize: number, padX: number): number {
+  let fs = fontSize;
+  const busy: number[] = []; // rows still covered by a rowspan, per column
+  for (const row of rows) {
+    let ci = 0;
+    for (const c of row) {
+      while ((busy[ci] ?? 0) > 0) ci++;
+      const span = c.options?.colspan ?? 1;
+      const rs = c.options?.rowspan ?? 1;
+      if (rs > 1) for (let k = 0; k < span; k++) busy[ci + k] = rs;
+      const w = colW.slice(ci, ci + span).reduce((a, b) => a + b, 0) - 2 * padX - 0.02;
+      const t = cellText(c);
+      if (t && w > 0) {
+        const need = textW(t, fs, !!c.options?.bold);
+        if (need > w) fs = Math.min(fs, Math.floor((fs * w) / need * 2) / 2);
+      }
+      ci += span;
+    }
+    for (let k = 0; k < busy.length; k++) if (busy[k]) busy[k]--;
+  }
+  return Math.max(7, fs);
 }
 
 function table(s: Slide, rows: Cell[][], o: PptxGenJS.TableProps) {
-  s.addTable(rows, { fontFace: BODY_FONT, fontSize: 14, color: C.text, border: { type: "solid", pt: 0.5, color: C.line }, valign: "middle", margin: [0.02, 0.09, 0.02, 0.09], autoPage: false, ...o });
+  const margin = (o.margin as [number, number, number, number] | undefined) ?? [0.02, 0.09, 0.02, 0.09];
+  let fontSize = (o.fontSize as number | undefined) ?? 14;
+  const colW = Array.isArray(o.colW) ? (o.colW as number[]) : null;
+  if (colW) fontSize = fitFont(rows, colW, fontSize, margin[1]);
+  if (typeof o.rowH === "number") fontSize = Math.min(fontSize, fontFor(o.rowH));
+  s.addTable(rows, { fontFace: BODY_FONT, color: C.text, border: { type: "solid", pt: 0.5, color: C.line }, valign: "middle", autoPage: false, ...o, margin, fontSize });
 }
 
 /** Column widths: first column `first` inches, the rest share what is left of `w`. */
@@ -403,7 +448,7 @@ function slideProductivity(s: Slide, d: ReportData, m: ReportManual) {
       [H(d.storeCode || "Toko", { align: "left" }), H(d.mode === "closing" ? "This Month" : d.curLabel), H(d.mode === "closing" ? "Last Month" : d.prevLabel), ...(withGrowth ? [H("Growth")] : [])],
       ...rows.map(([k, a, b, g]) => [L(k), N(a), N(b), ...(withGrowth ? [g == null ? N("-", { align: "center" }) : upDown(g, `${g >= 0 ? "+" : ""}${Math.round(g)}%`, { align: "center", bold: true })] : [])]),
     ],
-    { x: X + (CW - w) / 2, y: TOP + 0.2, w, rowH: 0.56, fontSize: 16, colW: withGrowth ? [2.2, 2.3, 2.3, 1.4] : [2.0, 2.1, 2.1] },
+    { x: X + (CW - w) / 2, y: TOP + 0.1, w, rowH: 0.54, fontSize: 16, colW: withGrowth ? [2.2, 2.3, 2.3, 1.4] : [2.0, 2.1, 2.1] },
   );
 }
 
@@ -549,9 +594,23 @@ function slideIssue(s: Slide, d: ReportData, m: ReportManual) {
     .map((i) => ({ issue: (m.issues[i] || "").trim() || d.issues[i] || "", fb: (m.feedback[i] || "").trim() }))
     .filter((r) => r.issue || r.fb);
   const bullets = (t: string): PptxGenJS.TextProps[] => t.split(/\n+/).map((x) => x.replace(/^[•\-*]\s*/, "").trim()).filter(Boolean).map((x) => ({ text: x, options: { bullet: { indent: 14 }, breakLine: true, paraSpaceAfter: 4 } }));
-  const totalLen = rows.reduce((a, r) => a + Math.max(r.issue.length, r.fb.length), 0);
-  const fs = totalLen > 900 ? 12 : totalLen > 600 ? 13 : 15;
-  const rowH = Math.min(1.75, (BOTTOM - 1.75 - 0.6) / Math.max(1, rows.length));
+  // pick the largest font whose wrapped lines fit every row on the slide
+  const issueW = 5.1;
+  const pad = 0.14;
+  const lines = (t: string, w: number, fs: number) => t.split(/\n+/).map((x) => x.trim()).filter(Boolean).reduce((a, x) => a + Math.max(1, Math.ceil(textW(x, fs) / w)), 0);
+  const need = (fs: number) =>
+    rows.map((r) => {
+      const li = r.issue ? lines(r.issue, issueW - 2 * pad, fs) : 1;
+      const nb = r.fb ? r.fb.split(/\n+/).filter((x) => x.trim()).length : 0;
+      const lf = r.fb ? lines(r.fb, CW - issueW - 2 * pad - 0.25, fs) : 1;
+      return Math.max(li * fs * 1.2, lf * fs * 1.2 + nb * 4) / 72 + 0.2;
+    });
+  const avail = BOTTOM - 1.75 - 0.6;
+  let fs = 15;
+  while (fs > 7 && need(fs).reduce((a, b) => a + b, 0) > avail) fs--;
+  const minH = need(fs);
+  const spare = Math.max(0, avail - minH.reduce((a, b) => a + b, 0));
+  const rowHs = minH.map((h) => Math.max(h, Math.min(1.75, h + spare / Math.max(1, rows.length))));
   s.addTable(
     [
       [H("Issue"), H("Analisa & Feedback")],
@@ -560,7 +619,7 @@ function slideIssue(s: Slide, d: ReportData, m: ReportManual) {
         r.fb ? { text: bullets(r.fb), options: { align: "left" as const, fill: { color: "FFFFFF" } } } : { text: "", options: { fill: { color: "FFFFFF" } } },
       ]),
     ] as Cell[][],
-    { x: X, y: 1.75, w: CW, colW: [5.1, CW - 5.1], fontFace: BODY_FONT, fontSize: fs, color: C.text, border: { type: "solid", pt: 0.5, color: C.line }, valign: "middle", margin: [0.08, 0.14, 0.08, 0.14], rowH: [0.6, ...rows.map(() => rowH)] },
+    { x: X, y: 1.75, w: CW, colW: [issueW, CW - issueW], fontFace: BODY_FONT, fontSize: fs, color: C.text, border: { type: "solid", pt: 0.5, color: C.line }, valign: "middle", margin: [0.08, 0.14, 0.08, 0.14], rowH: [0.6, ...rowHs] },
   );
 }
 
