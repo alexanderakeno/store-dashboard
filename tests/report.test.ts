@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import PptxGenJS from "pptxgenjs";
 import { buildReport, type ReportInput } from "@/lib/domain/report";
-import { bnplRows, buildDeck, defaultManual } from "@/lib/report/pptx";
+import { bnplRows, buildDeck, defaultManual, fitFont, fontFor, rowsIn } from "@/lib/report/pptx";
 import type { Group, SalesLine, StoreTarget } from "@/types/domain";
 
 let inv = 0;
@@ -198,4 +198,17 @@ test("first names on the slides; BNPL typed in the pop-up", () => {
   const b = bnplRows(d, m);
   assert.equal(b.value, 473769285);
   assert.equal(b.qty, 24);
+});
+
+test("PPT tables fit the slide: rows never forced taller than the space, font fits row and column", () => {
+  // 22 rows (Android/Apple split slide with 9 staff) in the 4.93" left under the title
+  const { rowH, fontSize } = rowsIn(22, 4.93, 0.36);
+  assert.ok(rowH * 22 <= 4.93 + 1e-9);
+  assert.ok((fontSize * 1.2) / 72 + 0.04 <= rowH); // one line + cell margins fits the row
+  assert.equal(fontFor(0.62), 16);
+  // a long negative variance in a 1.27" column shrinks the font instead of wrapping
+  const cell = { text: "(2.863.582.357)", options: { bold: true } };
+  const fs = fitFont([[cell]], [1.27], 11, 0.05);
+  assert.ok(fs < 11 && fs >= 7);
+  assert.equal(fitFont([[{ text: "Adi" }]], [1.6], 14, 0.09), 14);
 });
