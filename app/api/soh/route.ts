@@ -22,7 +22,13 @@ export async function POST(req: Request) {
       if (!item.category || !item.article || !Number.isInteger(item.qty)) throw new BadRequest(`Baris SOH tidak valid: ${item.article || "(tanpa artikel)"}`);
       // unit price from the Excel report (AirPods price); optional
       const price = Number(r?.price);
-      return Number.isFinite(price) && price > 0 && price < 1e11 ? { ...item, price: Math.round(price) } : item;
+      const out: SohItem = Number.isFinite(price) && price > 0 && price < 1e11 ? { ...item, price: Math.round(price) } : item;
+      // barcodes from the Excel report (Scan Harga); optional
+      if (Array.isArray(r?.barcodes)) {
+        const bc = (r.barcodes as unknown[]).map((x) => String(x ?? "").toUpperCase().replace(/[^0-9A-Z]/g, "")).filter((x) => x.length >= 6 && x.length <= 32).slice(0, 5);
+        if (bc.length) out.barcodes = bc;
+      }
+      return out;
     });
     const categories = [...new Set(items.map((x) => x.category))];
     await dataSource().saveSoh({ date, categories, items, source: str(b.source, 200) }, s.nik);
