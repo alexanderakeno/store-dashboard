@@ -16,7 +16,7 @@ import type { AccessEntry } from "@/types/access";
 export const dynamic = "force-dynamic";
 
 /** Newest rows read from the log per page load. */
-const READ_LIMIT = 5000;
+const READ_LIMIT = 2500;
 /** Rows shown in the activity list. */
 const SHOW_LIMIT = 300;
 
