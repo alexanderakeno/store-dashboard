@@ -33,7 +33,7 @@ export const MASTER_TABS = {
   priceHistory: { name: "APP_PriceHistory", header: ["ts", "kind", "date", "prevDate", "brand", "series", "name", "change", "oldNormal", "newNormal", "oldPromo", "newPromo", "oldCredit", "newCredit", "oldStatus", "newStatus", "by"] },
   access: { name: "APP_Access", header: ["ts", "nik", "name", "role", "event", "path", "ip", "location", "device"] },
   records: { name: "APP_Records", header: ["kind", "date", "key", "data", "updatedAt", "updatedBy"] },
-  soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy", "price"] },
+  soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy", "price", "barcode"] },
   priceList: { name: "APP_PriceList", header: ["kind", "brand", "series", "name", "normal", "promo", "status", "extra", "date", "source", "updatedAt", "updatedBy"] },
   accPrice: { name: "APP_AccPrice", header: ["article", "brand", "description", "category", "srp", "current", "price", "remark", "date", "source", "updatedAt", "updatedBy"] },
   samsungPromo: { name: "APP_SamsungPromo", header: ["kind", "data", "source", "updatedAt", "updatedBy"] },
@@ -255,7 +255,8 @@ export class SheetsSource implements DataSource {
     const first = rows[0];
     const items = rows.map((r) => {
       const price = parseNumber(r.price);
-      return { category: normalizeText(r.category), article: normalizeText(r.article), description: normalizeText(r.description), qty: parseNumber(r.qty), ...(price > 0 ? { price } : {}) };
+      const barcodes = normalizeText(r.barcode).split(" ").filter(Boolean);
+      return { category: normalizeText(r.category), article: normalizeText(r.article), description: normalizeText(r.description), qty: parseNumber(r.qty), ...(price > 0 ? { price } : {}), ...(barcodes.length ? { barcodes } : {}) };
     });
     return {
       date: parseDate(first.date),
@@ -269,7 +270,7 @@ export class SheetsSource implements DataSource {
 
   async saveSoh(snap: Omit<SohSnapshot, "updatedAt" | "updatedBy">, by: string): Promise<void> {
     const now = new Date().toISOString();
-    await this.rewrite("soh", snap.items.map((x) => [x.category, x.article, x.description, x.qty, snap.date ?? "", snap.source, now, by, x.price ?? ""]), true);
+    await this.rewrite("soh", snap.items.map((x) => [x.category, x.article, x.description, x.qty, snap.date ?? "", snap.source, now, by, x.price ?? "", x.barcodes?.join(" ") ?? ""]), true);
   }
 
   async getPriceList(): Promise<PriceList | null> {
