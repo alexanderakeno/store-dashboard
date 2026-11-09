@@ -91,10 +91,27 @@ export function StokanApp({ isAdmin, candidates, active, history, sohDate, sohTo
   );
 }
 
+type Preview = { items: number; units: number; reasons: Record<string, number>; brands: Array<{ brand: string; items: number; units: number }> };
+
+/** Even split suggestion: biggest brands first, each to the staff with the fewest articles so far. */
+function suggest(brands: Preview["brands"], staff: string[]): Record<string, string> {
+  const load = new Map(staff.map((n) => [n, 0]));
+  const out: Record<string, string> = {};
+  for (const b of brands) {
+    const who = staff.reduce((best, n) => (load.get(n)! < load.get(best)! ? n : best), staff[0]);
+    if (!who) continue;
+    out[b.brand] = who;
+    load.set(who, load.get(who)! + b.items);
+  }
+  return out;
+}
+
 function StartForm({ candidates, sohDate, sohToday, onStarted }: { candidates: StokanStaff[]; sohDate: string | null; sohToday: boolean; onStarted: () => void }) {
   const [mode, setMode] = useState<StokanMode>("rolling");
   const [picked, setPicked] = useState<Set<string>>(() => new Set(candidates.map((c) => c.nik)));
-  const [preview, setPreview] = useState<Record<StokanMode, { items: number; units: number; reasons: Record<string, number> } | null>>({ rolling: null, full: null });
+  const [preview, setPreview] = useState<Record<StokanMode, Preview | null>>({ rolling: null, full: null });
+  const [split, setSplit] = useState<"auto" | "manual">("auto");
+  const [assign, setAssign] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   useEffect(() => {
@@ -103,18 +120,35 @@ function StartForm({ candidates, sohDate, sohToday, onStarted }: { candidates: S
         .then((p) => setPreview((x) => ({ ...x, [m]: p })))
         .catch((e) => setErr((e as Error).message));
   }, []);
+  const p = (m: StokanMode) => preview[m];
+  const staffList = candidates.filter((c) => picked.has(c.nik));
+  const brands = p(mode)?.brands ?? [];
+  // manual split: start from an even suggestion, keep the admin's changes; staff no longer picked fall back to the suggestion
+  const fill = () => setAssign(suggest(brands, staffList.map((c) => c.nik)));
+  useEffect(() => {
+    if (split !== "manual") return;
+    setAssign((a) => {
+      const sug = suggest(brands, staffList.map((c) => c.nik));
+      const out: Record<string, string> = {};
+      for (const b of brands) out[b.brand] = b.brand in a && (a[b.brand] === "" || picked.has(a[b.brand])) ? a[b.brand] : (sug[b.brand] ?? "");
+      return out;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [split, mode, picked, preview]);
+  const load = (nik: string) => brands.filter((b) => assign[b.brand] === nik).reduce((a, b) => a + b.items, 0);
+  const counted = split === "manual" ? brands.filter((b) => assign[b.brand]).reduce((a, b) => a + b.items, 0) : (p(mode)?.items ?? 0);
+
   const start = async () => {
     setBusy(true);
     setErr("");
     try {
-      await post({ action: "start", mode, staff: [...picked] });
+      await post({ action: "start", mode, staff: [...picked], ...(split === "manual" ? { assign } : {}) });
       onStarted();
     } catch (e) {
       setErr((e as Error).message);
       setBusy(false);
     }
   };
-  const p = (m: StokanMode) => preview[m];
   return (
     <section className="sd-panel space-y-4 p-5 sm:p-6">
       <div>
@@ -136,20 +170,57 @@ function StartForm({ candidates, sohDate, sohToday, onStarted }: { candidates: S
         <span>Acuan SOH: <b>{sohDate ? sohDate.split("-").reverse().join("/") : "belum ada"}</b>{sohToday ? " — terbaru." : " — bukan hari ini. Import SOH hari ini dulu supaya selisihnya akurat."}</span>
       </div>
       <div>
-        <p className="mb-2 text-[11px] font-black tracking-[.1em] text-slate-500 uppercase">Staff yang ikut ({picked.size}) · bagian dibagi otomatis per brand & dirotasi tiap stokan</p>
+        <p className="mb-2 text-[11px] font-black tracking-[.1em] text-slate-500 uppercase">Staff yang ikut ({picked.size})</p>
         <div className="flex flex-wrap gap-2">
           {candidates.map((c) => (
             <label key={c.nik} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold ${picked.has(c.nik) ? "border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-950/30 dark:text-blue-200" : "border-slate-200 text-slate-500 dark:border-slate-700"}`}>
               <input type="checkbox" className="sr-only" checked={picked.has(c.nik)} onChange={() => setPicked((s) => { const n = new Set(s); if (n.has(c.nik)) n.delete(c.nik); else n.add(c.nik); return n; })} />
-              {c.name}
+              {c.name}{split === "manual" && picked.has(c.nik) ? <span className="text-xs font-semibold opacity-70">· {load(c.nik)}</span> : null}
             </label>
           ))}
           {!candidates.length && <p className="text-sm text-slate-500">Belum ada user staff. Tambahkan di Settings → User.</p>}
         </div>
       </div>
+      <div>
+        <p className="mb-2 text-[11px] font-black tracking-[.1em] text-slate-500 uppercase">Pembagian bagian</p>
+        <div className="inline-flex rounded-2xl bg-slate-100 p-1 dark:bg-slate-800" role="radiogroup" aria-label="Pembagian bagian">
+          {(["auto", "manual"] as const).map((k) => (
+            <button key={k} type="button" role="radio" aria-checked={split === k} onClick={() => setSplit(k)} className={`rounded-xl px-4 py-2 text-sm font-bold ${split === k ? "bg-white text-slate-950 shadow-sm dark:bg-slate-600 dark:text-white" : "text-slate-500"}`}>
+              {k === "auto" ? "Otomatis (rotasi per brand)" : "Atur sendiri per brand"}
+            </button>
+          ))}
+        </div>
+        {split === "auto" && <p className="mt-2 text-xs text-slate-500">Brand dibagi rata ke staff dan bergeser setiap stokan, supaya tidak selalu menghitung brand yang sama.</p>}
+        {split === "manual" && (
+          <div className="mt-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-slate-500">Pilih staff untuk tiap brand. Pilih <b>Tidak dihitung</b> untuk melewati brand di stokan ini. {num(counted)} dari {num(p(mode)?.items ?? 0)} artikel akan dihitung.</p>
+              <button type="button" className="sd-btn !min-h-8 text-xs" onClick={fill} disabled={!staffList.length}>Bagi rata otomatis</button>
+            </div>
+            <div className="sd-table-wrap max-h-[420px] overflow-y-auto"><table className="sd-table">
+              <thead><tr><th>Brand</th><th className="n">Artikel</th><th className="n">Pcs</th><th>Staff</th></tr></thead>
+              <tbody>
+                {brands.map((b) => (
+                  <tr key={b.brand}>
+                    <td className="font-bold">{b.brand}</td>
+                    <td className="n">{b.items}</td>
+                    <td className="n">{num(b.units)}</td>
+                    <td>
+                      <select className="sd-input !min-h-9 !py-1 text-sm" value={assign[b.brand] ?? ""} onChange={(e) => setAssign((a) => ({ ...a, [b.brand]: e.target.value }))} aria-label={`Staff untuk ${b.brand}`}>
+                        <option value="">— Tidak dihitung —</option>
+                        {staffList.map((c) => <option key={c.nik} value={c.nik}>{c.name}</option>)}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+          </div>
+        )}
+      </div>
       {err && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700" role="alert">{err}</p>}
-      <button type="button" className="sd-btn primary w-full justify-center !py-3 !text-base sm:w-auto" disabled={busy || !picked.size || !p(mode)?.items} onClick={() => void start()}>
-        {busy ? <Loader2 className="size-5 animate-spin" /> : <Play className="size-5" />} Mulai Stokan {p(mode) ? `(${num(p(mode)!.items)} artikel)` : ""}
+      <button type="button" className="sd-btn primary w-full justify-center !py-3 !text-base sm:w-auto" disabled={busy || !picked.size || !counted} onClick={() => void start()}>
+        {busy ? <Loader2 className="size-5 animate-spin" /> : <Play className="size-5" />} Mulai Stokan {counted ? `(${num(counted)} artikel)` : ""}
       </button>
     </section>
   );
@@ -254,6 +325,7 @@ function Monitor({ session, live, onChanged }: { session: StokanSession; live: b
             </tbody>
           </table></div>
           <p className="mt-2 text-[11px] text-slate-500">Speed = artikel per jam. Akurasi = hitungan pertama yang terbukti benar (muncul setelah hitung ulang).</p>
+          {counting && live && <Reassign session={session} view={v} onDone={load} />}
         </section>
         <section className="sd-panel p-4">
           <p className="mb-2 text-[11px] font-black tracking-[.1em] text-slate-500 uppercase">Selisih terbesar (Rp)</p>
@@ -283,6 +355,45 @@ function Monitor({ session, live, onChanged }: { session: StokanSession; live: b
         </section>
       </div>
     </div>
+  );
+}
+
+/** "Ubah bagian": move a brand to another staff while counting (their phone picks it up when they reopen the counter). */
+function Reassign({ session, view, onDone }: { session: StokanSession; view: MonitorView; onDone: () => Promise<void> }) {
+  const [brand, setBrand] = useState("");
+  const [nik, setNik] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const name = new Map(session.staff.map((s) => [s.nik, s.name]));
+  const go = async () => {
+    setBusy(true);
+    setMsg("");
+    try {
+      const r = await post({ action: "reassign", id: session.id, brand, nik });
+      setMsg(`${r.moved} artikel ${brand} dipindah ke ${name.get(nik)}. Minta ${name.get(nik)} buka ulang layar hitung.`);
+      await onDone();
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <details className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <summary className="cursor-pointer text-sm font-bold">Ubah bagian staff</summary>
+      <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+        <select className="sd-input" value={brand} onChange={(e) => setBrand(e.target.value)} aria-label="Brand">
+          <option value="">Pilih brand…</option>
+          {view.brands.map((b) => <option key={`${b.brand}|${b.assignee}`} value={b.brand}>{b.brand} · {name.get(b.assignee) ?? b.assignee} ({b.counted}/{b.items})</option>)}
+        </select>
+        <select className="sd-input" value={nik} onChange={(e) => setNik(e.target.value)} aria-label="Pindah ke staff">
+          <option value="">Pindah ke…</option>
+          {session.staff.map((s) => <option key={s.nik} value={s.nik}>{s.name}</option>)}
+        </select>
+        <button type="button" className="sd-btn primary justify-center" disabled={!brand || !nik || busy} onClick={() => void go()}>{busy ? <Loader2 className="size-4 animate-spin" /> : null} Pindahkan</button>
+      </div>
+      {msg && <p className="mt-2 text-xs font-semibold text-slate-600 dark:text-slate-300">{msg}</p>}
+    </details>
   );
 }
 

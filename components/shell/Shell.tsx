@@ -79,6 +79,18 @@ function Sidebar({ open, onClose, onCollapse, storeCode, storeName, isAdmin }: {
   const visible = (l: NavLink) => !l.adminOnly || isAdmin;
   const initialOpen = () => Object.fromEntries(NAV.filter(isGroup).map((g) => [g.label, true]));
   const [groups, setGroups] = useState<Record<string, boolean>>(initialOpen);
+  const router = useRouter();
+  // warm a page as soon as the finger / mouse is on its menu item: the click then lands on a page that is (almost) ready
+  const warmed = useRef(new Set<string>());
+  const warm = (to: string) => () => {
+    if (warmed.current.has(to) || to === path) return;
+    warmed.current.add(to);
+    try {
+      // full = the page with its data (not only the loading skeleton); kept 30 s (next.config staleTimes)
+      router.prefetch(to, { kind: "full" } as unknown as Parameters<typeof router.prefetch>[1]);
+    } catch {}
+    setTimeout(() => warmed.current.delete(to), 30_000);
+  };
 
   return (
     <aside className="sd-sidebar" data-open={open} aria-label="Menu utama">
@@ -101,7 +113,7 @@ function Sidebar({ open, onClose, onCollapse, storeCode, storeName, isAdmin }: {
             if (!isGroup(entry)) {
               if (!visible(entry)) return null;
               return (
-                <Link key={entry.href} href={href(entry.href)} prefetch={false} className="sd-nav-item !pl-4 !text-sm !font-bold" aria-current={isActive(path, entry.href) ? "page" : undefined}>
+                <Link key={entry.href} href={href(entry.href)} prefetch={false} onMouseEnter={warm(href(entry.href))} onTouchStart={warm(href(entry.href))} onFocus={warm(href(entry.href))} className="sd-nav-item !pl-4 !text-sm !font-bold" aria-current={isActive(path, entry.href) ? "page" : undefined}>
                   <NavIcon name={entry.icon} className={`size-4 shrink-0 ${entry.color}`} />
                   <span>{entry.label}</span>
                 </Link>
@@ -120,7 +132,7 @@ function Sidebar({ open, onClose, onCollapse, storeCode, storeName, isAdmin }: {
                 {isOpen && (
                   <div className="mt-2 ml-4 space-y-1 border-l border-white/10 pl-3 lg:mt-1 lg:ml-0 lg:border-l-0 lg:pl-0">
                     {items.map((l) => (
-                      <Link key={l.href} href={href(l.href)} prefetch={false} className="sd-nav-item" aria-current={isActive(path, l.href) ? "page" : undefined}>
+                      <Link key={l.href} href={href(l.href)} prefetch={false} onMouseEnter={warm(href(l.href))} onTouchStart={warm(href(l.href))} onFocus={warm(href(l.href))} className="sd-nav-item" aria-current={isActive(path, l.href) ? "page" : undefined}>
                         <NavIcon name={l.icon} className={`size-3.5 shrink-0 ${l.color}`} />
                         <span>{l.label}</span>
                       </Link>

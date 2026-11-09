@@ -65,10 +65,21 @@ export async function previewStart(mode: StokanMode) {
   const items = selectItems({ soh: soh.items, acc: acc?.items ?? [], sold, prevDiff: await previousDiffs(sessions), mode, seed: new Date().toISOString().slice(0, 10) });
   const reasons: Record<string, number> = {};
   for (const x of items) reasons[x.reason] = (reasons[x.reason] ?? 0) + 1;
-  return { items: items.length, units: items.reduce((a, x) => a + x.expected, 0), reasons, sohDate: soh.date, sohUpdatedAt: soh.updatedAt };
+  const brands = new Map<string, { brand: string; items: number; units: number }>();
+  for (const x of items) {
+    const b = brands.get(x.brand) ?? { brand: x.brand, items: 0, units: 0 };
+    b.items++;
+    b.units += x.expected;
+    brands.set(x.brand, b);
+  }
+  return { items: items.length, units: items.reduce((a, x) => a + x.expected, 0), reasons, brands: [...brands.values()].sort((a, b) => b.items - a.items || a.brand.localeCompare(b.brand)), sohDate: soh.date, sohUpdatedAt: soh.updatedAt };
 }
 
-export async function startSession(mode: StokanMode, staff: StokanStaff[], by: string): Promise<StokanSession> {
+/**
+ * `manual` = the admin's split: brand → staff NIK ("" = this brand is not counted). Brands it does not mention are
+ * split automatically between the staff.
+ */
+export async function startSession(mode: StokanMode, staff: StokanStaff[], by: string, manual?: Record<string, string>): Promise<StokanSession> {
   if (await activeSession()) throw new Error("Masih ada stokan yang berjalan — selesaikan atau batalkan dulu.");
   if (!staff.length) throw new Error("Pilih minimal 1 staff.");
   const [soh, acc, sold, sessions] = await Promise.all([getSoh(), getAccPriceList().catch(() => null), soldLastWeek(), dataSource().listStokan()]);
@@ -77,7 +88,14 @@ export async function startSession(mode: StokanMode, staff: StokanStaff[], by: s
   const id = now.toISOString();
   const picked = selectItems({ soh: soh.items, acc: acc?.items ?? [], sold, prevDiff: await previousDiffs(sessions), mode, seed: id.slice(0, 10) });
   if (!picked.length) throw new Error("Tidak ada aksesoris dengan stok di SOH.");
-  const items = assignItems(picked, staff, sessions.length);
+  let items: StokanItem[];
+  if (manual && Object.keys(manual).length) {
+    const niks = new Set(staff.map((x) => x.nik));
+    const fixed = picked.filter((x) => x.brand in manual && niks.has(manual[x.brand])).map((x) => ({ ...x, assignee: manual[x.brand] }));
+    const rest = picked.filter((x) => !(x.brand in manual));
+    items = [...fixed, ...assignItems(rest, staff, sessions.length)];
+    if (!items.length) throw new Error("Tidak ada brand yang dibagikan ke staff.");
+  } else items = assignItems(picked, staff, sessions.length);
   const today = todayIn(appConfig().timeZone);
   const session: StokanSession = { id, label: `${stokanLabel(today, MONTHS[Number(today.slice(5, 7)) - 1])}${mode === "full" ? " · Penuh" : ""}`, mode, status: "count", startedAt: id, startedBy: by, sohDate: soh.date, sohUpdatedAt: soh.updatedAt, staff };
   // items first: a session row without its items would show an empty count
@@ -137,4 +155,17 @@ export async function closeSession(id: string, cancel = false): Promise<StokanSe
 
 export async function appendEvents(id: string, events: StokanEvent[]) {
   await dataSource().appendStokanLog(id, events);
+}
+
+/** Admin: moves every article of a brand to another staff while the count runs (counts stay — they are per article). */
+export async function reassignBrand(id: string, brand: string, nik: string): Promise<number> {
+  const s = await sessionById(id);
+  if (!s || s.status !== "count") throw new Error("Bagian hanya bisa diubah saat tahap hitung.");
+  if (!s.staff.some((x) => x.nik === nik)) throw new Error("Staff tidak ikut stokan ini.");
+  const items = await dataSource().getStokanItems(id);
+  let n = 0;
+  const next = items.map((x) => (x.brand === brand && x.assignee !== nik ? (n++, { ...x, assignee: nik }) : x));
+  if (n) await dataSource().saveStokanItems(id, next);
+  invalidate("stokan:");
+  return n;
 }
