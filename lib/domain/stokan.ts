@@ -217,6 +217,8 @@ export interface MonitorView {
   diffs: DiffRow[];
   extras: Array<{ code: string; article: string; times: number; by: string }>;
   reasons: Record<string, number>;
+  /** Brand → who counts it (for "Ubah bagian"). */
+  brands: Array<{ brand: string; assignee: string; items: number; counted: number }>;
 }
 
 export function monitorView(session: StokanSession, items: StokanItem[], events: StokanEvent[], now: Date): MonitorView {
@@ -305,6 +307,13 @@ export function monitorView(session: StokanSession, items: StokanItem[], events:
     diffs: open,
     extras: [...t.extras.values()].sort((a, b) => b.times - a.times),
     reasons,
+    brands: [...items.reduce((m, x) => {
+      const k = `${x.brand}|${x.assignee}`;
+      const b = m.get(k) ?? { brand: x.brand, assignee: x.assignee, items: 0, counted: 0 };
+      b.items++;
+      if (t.counts.get(x.article)?.count != null) b.counted++;
+      return m.set(k, b);
+    }, new Map<string, { brand: string; assignee: string; items: number; counted: number }>()).values()].sort((a, b) => a.brand.localeCompare(b.brand)),
   };
 }
 
