@@ -58,7 +58,10 @@ async function jpegOf(d: TicketData, ov: Overrides): Promise<{ jpeg: Uint8Array;
   return { jpeg: new Uint8Array(await blob.arrayBuffer()), px, py };
 }
 
-const fileName = (s: string) => s.replace(/[^\w.-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+/** Characters a file name (and a WhatsApp caption taken from it) cannot carry. */
+const fileName = (s: string) => s.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+/** "Samsung Galaxy A57 5G" — the brand in front unless the name already says it (Redmi is Xiaomi's own range). */
+const itemName = (t: TicketTemplate) => (new RegExp(`^(${t.brand}|Redmi)\\b`, "i").test(t.name) ? t.name : `${t.brand} ${t.name}`);
 function save(bytes: Uint8Array, name: string) {
   const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
   const a = document.createElement("a");
@@ -79,7 +82,7 @@ function a4Grid(w: number, h: number) {
 }
 
 /** All tickets: one page each at their real size, or A4 sheets with as many as fit (cut lines). */
-async function pdfOf(list: TicketData[], ov: Overrides, layout: "single" | "a4"): Promise<Uint8Array> {
+async function pdfOf(list: TicketData[], ov: Overrides, layout: "single" | "a4", title: string): Promise<Uint8Array> {
   const images = [];
   for (const d of list) images.push(await jpegOf(d, ov));
   const pages: PdfPage[] = [];
@@ -98,11 +101,13 @@ async function pdfOf(list: TicketData[], ov: Overrides, layout: "single" | "a4")
       pages.push({ w: g.W, h: g.H, items: batch.map((img, k) => ({ img, x: mx + (k % g.cols) * w, y: my + Math.floor(k / g.cols) * h, w, h, cut: true })) });
     }
   }
-  return buildPdf(images, pages);
+  return buildPdf(images, pages, title);
 }
 
 const cm = (mm: number) => String(mm / 10).replace(".", ",");
 const sizeText = (t: TicketTemplate) => `${cm(t.size[0])}×${cm(t.size[1])} cm`;
+/** Size as written in a file name ("10x16 cm") — plain x travels better in shared file names. */
+const sizeFile = (t: TicketTemplate) => `${cm(t.size[0])}x${cm(t.size[1])} cm`;
 
 function Preview({ d, ov }: { d: TicketData; ov: Overrides }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -213,11 +218,13 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
   const missing = list.filter((t) => t.slots.some((s) => s.status === "missing")).length;
   const sizes = [...new Set(list.map((t) => sizeText(t.tpl)))].join(" / ");
 
+  /** `name` without extension: the PDF's file name (the caption when it is shared) and its title. */
   const run = async (id: string, items: TicketData[], layout: "single" | "a4", name: string) => {
     setBusy(id);
     setErr("");
     try {
-      save(await pdfOf(items, ov, layout), name);
+      const title = fileName(name);
+      save(await pdfOf(items, ov, layout, title), `${title}.pdf`);
     } catch (e) {
       setErr((e as Error).message || "PDF gagal dibuat");
     } finally {
@@ -241,10 +248,10 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
           {missing > 0 && <b className="text-amber-700 dark:text-amber-300">{missing} ticket punya varian yang tidak ada di price list (pakai harga desain).</b>}
         </p>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="sd-btn primary" disabled={!!busy} onClick={() => run("all", list, "single", `Price-Ticket-${fileName(brand)}-10x10.pdf`)}>
+          <button type="button" className="sd-btn primary" disabled={!!busy} onClick={() => run("all", list, "single", `Price Ticket ${brand} (${[...new Set(list.map((t) => sizeFile(t.tpl)))].join(", ")})`)}>
             {busy === "all" ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} Download semua ({sizes})
           </button>
-          <button type="button" className="sd-btn" disabled={!!busy} onClick={() => run("a4", list, "a4", `Price-Ticket-${fileName(brand)}-A4.pdf`)}>
+          <button type="button" className="sd-btn" disabled={!!busy} onClick={() => run("a4", list, "a4", `Price Ticket ${brand} (A4)`)}>
             {busy === "a4" ? <Loader2 className="size-4 animate-spin" /> : <FileStack className="size-4" />} Download A4 (beberapa per halaman)
           </button>
         </div>
@@ -266,7 +273,7 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
                 <SlotRow key={i} d={d} i={i} ov={ov} setOv={setOv} />
               ))}
             </ul>
-            <button type="button" className="sd-btn primary mt-auto justify-center" disabled={!!busy} onClick={() => run(d.tpl.id, [d], "single", `Price-Ticket-${fileName(d.tpl.name)}.pdf`)}>
+            <button type="button" className="sd-btn primary mt-auto justify-center" disabled={!!busy} onClick={() => run(d.tpl.id, [d], "single", `${itemName(d.tpl)} (${sizeFile(d.tpl)})`)}>
               {busy === d.tpl.id ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} PDF {sizeText(d.tpl)}
             </button>
           </article>
