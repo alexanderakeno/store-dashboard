@@ -106,3 +106,20 @@ export function accSummary(rows: AccRow[], soh: SohItem[] | null): AccSummary {
 export type AccTuple = [article: string, description: string, brand: string, category: string, qty: number | null, price: number | null, srp: number | null, current: number | null, remark: string, src: AccPriceSource];
 export const packAcc = (r: AccRow): AccTuple => [r.article, r.description, r.brand, r.category, r.qty, r.price, r.srp, r.current, r.remark, r.src];
 export const unpackAcc = (t: AccTuple): AccRow => ({ article: t[0], description: t[1], brand: t[2], category: t[3], qty: t[4], price: t[5], srp: t[6], current: t[7], remark: t[8], src: t[9] });
+
+/** Price per SOH accessory for the SOH page: [price, SRP, from the SOH unit price (1) or the list (0)]. */
+export type AccPriceCell = [price: number, srp: number, soh: 0 | 1];
+export type AccPriceMap = Record<string, AccPriceCell>;
+
+export function accPriceMap(list: AccPriceItem[], soh: SohItem[]): AccPriceMap {
+  const byArticle = new Map(list.map((x) => [x.article, x]));
+  const out: AccPriceMap = {};
+  for (const s of soh) {
+    if (!isAcc(s)) continue;
+    const a = s.article.trim().toUpperCase();
+    const x = byArticle.get(a);
+    if (x) out[a] = [x.price, x.srp, 0];
+    else if (s.price) out[a] = [s.price, s.price, 1];
+  }
+  return out;
+}
