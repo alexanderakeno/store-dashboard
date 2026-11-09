@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getMonthSnapshot, getRules, resolveMonth } from "@/lib/services/dashboard";
 import { getPriceList } from "@/lib/pricelist";
+import { getAccPriceList } from "@/lib/accPrice";
 import { getSamsungPromo } from "@/lib/samsungPromo";
 import { getSoh } from "@/lib/soh";
 
@@ -16,7 +17,7 @@ export const maxDuration = 30;
  */
 export async function GET() {
   const t0 = Date.now();
-  const tasks: Array<Promise<unknown>> = [getRules(), getSoh(), getPriceList(), getSamsungPromo()];
+  const tasks: Array<Promise<unknown>> = [getRules(), getSoh(), getPriceList(), getAccPriceList(), getSamsungPromo()];
   const month = await resolveMonth(undefined).catch(() => null);
   if (month) tasks.push(getMonthSnapshot(month));
   const res = await Promise.allSettled(tasks);

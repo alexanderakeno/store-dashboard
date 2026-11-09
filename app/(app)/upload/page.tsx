@@ -15,6 +15,8 @@ import { ApplePriceListImportForm } from "@/components/modules/ApplePriceListImp
 import { SalesImportForm } from "@/components/modules/SalesImportForm";
 import { getHistoryList } from "@/lib/services/dashboard";
 import { rpf } from "@/lib/format";
+import { getAccPriceList } from "@/lib/accPrice";
+import { AccPriceImport } from "@/components/modules/AccPriceImport";
 
 export default async function UploadPage({ searchParams }: { searchParams: SearchParams }) {
   const p = await loadPage(searchParams);
@@ -36,6 +38,13 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
     price = await getPriceList();
   } catch (e) {
     priceError = (e as Error).message;
+  }
+  let acc: Awaited<ReturnType<typeof getAccPriceList>> = null;
+  let accError: string | null = null;
+  try {
+    acc = await getAccPriceList();
+  } catch (e) {
+    accError = (e as Error).message;
   }
   let history: Awaited<ReturnType<typeof getHistoryList>> = [];
   let historyError: string | null = null;
@@ -71,6 +80,11 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
         : priceError
           ? `Gagal membaca APP_PriceList: ${priceError}`
           : "Belum ada — import PDF price list Android / Apple di atas",
+    },
+    {
+      name: "Price List Aksesoris",
+      ok: !!acc,
+      detail: acc ? `${num(acc.items.length)} artikel${acc.date ? ` (${dmy(acc.date)})` : ""} · harga = Repricing Cash` : accError ? `Gagal membaca APP_AccPrice: ${accError}` : "Belum ada — import Excel price list aksesoris di atas",
     },
     { name: "Stokan Aksesoris", ok: false, detail: "Format file stokan belum ada" },
     { name: "Jadwal / Shift Staff", ok: false, detail: "Untuk status Masuk Shift di Daily Sales" },
@@ -145,6 +159,11 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
       <div id="pricelist-apple" className="scroll-mt-20">
         <Panel title="Import Price List Apple" desc="Upload 2 PDF price list Apple sekaligus, atau 1 file Excel price list DIGIMAP → Dashboard › Price List › Apple." right={priceCount("apple") ? <Link href="/pricelist?k=apple" prefetch={false} className="sd-btn">Lihat Apple</Link> : undefined}>
           {isAdmin ? <ApplePriceListImportForm current={price?.dates.apple ?? null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
+        </Panel>
+      </div>
+      <div id="pricelist-acc" className="scroll-mt-20">
+        <Panel title="Import Price List Aksesoris" desc="Upload Excel price list aksesoris (Digimap/Digiplus) → Dashboard › Price List › Aksesoris." right={acc ? <Link href="/pricelist?k=acc" prefetch={false} className="sd-btn">Lihat Aksesoris</Link> : undefined}>
+          {isAdmin ? <AccPriceImport current={acc?.date ?? null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
         </Panel>
       </div>
       <Panel title="Sumber Data">

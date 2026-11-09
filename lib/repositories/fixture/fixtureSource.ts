@@ -13,6 +13,7 @@ import type { SohSnapshot } from "@/types/soh";
 import type { SamsungPromo } from "@/types/samsungPromo";
 import type { PriceList } from "@/types/pricelist";
 import type { PriceListInput } from "../types";
+import type { AccPriceList } from "@/types/accPrice";
 import type { AccessEntry } from "@/types/access";
 import type { PriceChange } from "@/lib/domain/priceHistory";
 
@@ -32,6 +33,7 @@ interface Store {
   records: AppRecord[];
   soh: SohSnapshot | null;
   priceList: PriceList | null;
+  accPrice: AccPriceList | null;
   samsungPromo: SamsungPromo | null;
 }
 
@@ -55,7 +57,7 @@ function store(): Store {
     const end = m.month === cur ? addDays(today, -1) : monthEnd(m.month);
     for (let d = `${m.month}-01`; d <= end; d = addDays(d, 1)) traffic.push({ date: d, traffic: 60 + ((Number(d.slice(8)) * 37) % 40) });
   }
-  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], access: [], priceHistory: [], history: {}, records: [], soh: null, priceList: null, samsungPromo: null };
+  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], access: [], priceHistory: [], history: {}, records: [], soh: null, priceList: null, accPrice: null, samsungPromo: null };
   return g.__fixtureStore;
 }
 
@@ -133,6 +135,12 @@ export class FixtureSource implements DataSource {
   }
   async saveSamsungPromo(promo: Omit<SamsungPromo, "updatedAt" | "updatedBy">, by: string) {
     store().samsungPromo = { ...promo, updatedAt: new Date().toISOString(), updatedBy: by };
+  }
+  async getAccPriceList() {
+    return store().accPrice;
+  }
+  async saveAccPriceList(list: Omit<AccPriceList, "updatedAt" | "updatedBy">, by: string) {
+    store().accPrice = { ...list, updatedAt: new Date().toISOString(), updatedBy: by };
   }
   async getPriceList() {
     return store().priceList;

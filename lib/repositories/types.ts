@@ -4,6 +4,7 @@ import type { ISODate, MerchLine, MonthKey, StoreTarget, TrafficEntry } from "@/
 import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList, QoalaTier } from "@/types/pricelist";
+import type { AccPriceList } from "@/types/accPrice";
 import type { AccessEntry } from "@/types/access";
 import type { PriceChange } from "@/lib/domain/priceHistory";
 import type { SamsungPromo } from "@/types/samsungPromo";
@@ -122,6 +123,11 @@ export interface DataSource {
    * import never wipes the other). `qoala` replaces the Qoala tiers when non-empty.
    */
   savePriceList(input: PriceListInput, by: string): Promise<void>;
+
+  /** Latest imported accessories price list (null = never imported). */
+  getAccPriceList(): Promise<AccPriceList | null>;
+  /** Replaces the stored accessories price list. */
+  saveAccPriceList(list: Omit<AccPriceList, "updatedAt" | "updatedBy">, by: string): Promise<void>;
 
   /** Latest imported Samsung promo workbook (null = never imported). */
   getSamsungPromo(): Promise<SamsungPromo | null>;
