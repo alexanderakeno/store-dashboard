@@ -14,7 +14,7 @@ export function nameTokens(s: string): string[] {
   const t = s
     .toUpperCase()
     .replace(/WI-?FI/g, "WIFI")
-    .replace(/(\d+)\s*\+\s*\d+\s*\/\s*/g, "$1/") // 8+8/128 (RAM + extended RAM) → 8/128
+    .replace(/\b(\d+)\+\d+\//g, "$1/") // 8+8/128 (RAM + extended RAM) → 8/128
     .replace(/(\d+)\s*GB?\s*\+\s*(\d+)/g, "$1/$2") // 8GB+256GB → 8/256
     .replace(/\s*\/\s*/g, "/")
     .replace(/(\d)\s*GB\b/g, "$1")
@@ -39,7 +39,9 @@ export function matchRow(slot: Pick<TicketSlot, "key" | "canva">, items: PriceIt
     const extra = have.filter((w) => !want.includes(w));
     // another model (PRO, 5G, …) or another version (a number) is not a free extra word
     if (extra.some((w) => MODEL_WORDS.has(w) || (/\d/.test(w) && !/^\d+MM$/.test(w)))) continue;
-    const score = extra.length * 2 + (row.normal === designNormal ? 0 : 1);
+    // same-name rows (colours, bundles): the one with the design's normal price, then its selling price
+    const sell = row.promo > 0 && row.promo < row.normal ? row.promo : row.normal;
+    const score = extra.length * 4 + (row.normal === designNormal ? 0 : 2) + (sell === slot.canva.price ? 0 : 1);
     if (!best || score < best.extra) best = { row, extra: score };
   }
   return best?.row ?? null;
