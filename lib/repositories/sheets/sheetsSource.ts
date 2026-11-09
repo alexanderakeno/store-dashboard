@@ -94,6 +94,8 @@ export class SheetsSource implements DataSource {
       return toObjects(await readTab(this.master, name));
     } catch (e) {
       if (!(e instanceof SheetsError) || e.status !== 400) throw e;
+      // the tab list may have been checked before this tab existed in MASTER_TABS — check again
+      this.ensured = null;
       await this.ensureTabs();
       return toObjects(await readTab(this.master, name));
     }

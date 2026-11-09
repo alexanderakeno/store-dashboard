@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { accDate, isAccPriceListXlsx, parseAccPriceListXlsx } from "@/lib/parsers/accPricelist";
-import { accRows, accSummary, packAcc, unpackAcc } from "@/lib/domain/accPrice";
+import { accPriceMap, accRows, accSummary, packAcc, unpackAcc } from "@/lib/domain/accPrice";
 import type { SohItem } from "@/types/soh";
 
 const grid = [
@@ -72,4 +72,16 @@ test("SOH accessories missing from the list get a brand from the article prefix"
   ];
   const b = Object.fromEntries(accRows(list, soh).map((r) => [r.article, r.brand]));
   assert.deepEqual(b, { "SSUEF-OA176TBEGWW": "Samsung", UNQ8886463699999: "UNIQ", ZZZ1: "Lainnya" });
+});
+
+test("SOH page price per accessory: list price + SRP, SOH unit price when missing from the list", () => {
+  const list = [{ article: "APPMD3J4ZA/A", brand: "APPLE", description: "20W", category: "Charger", srp: 549000, current: 499000, price: 549000 }, { article: "LKN1", brand: "Belkin", description: "60W", category: "Charger", srp: 499000, current: 499000, price: 399000 }];
+  const soh: SohItem[] = [
+    { category: "Aksesoris", article: "appmd3j4za/a ", description: "20W", qty: 1, price: 499000 },
+    { category: "Aksesoris", article: "LKN1", description: "60W", qty: 1 },
+    { category: "Aksesoris", article: "SSU1", description: "case", qty: 1, price: 199000 },
+    { category: "Aksesoris", article: "NOPRICE", description: "?", qty: 1 },
+    { category: "iPhone", article: "APPX", description: "IPHONE", qty: 1, price: 15e6 },
+  ];
+  assert.deepEqual(accPriceMap(list, soh), { "APPMD3J4ZA/A": [549000, 549000, 0], LKN1: [399000, 499000, 0], SSU1: [199000, 199000, 1] });
 });

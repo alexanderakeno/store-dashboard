@@ -5,6 +5,7 @@ import { ChevronRight, Search, Tag, X } from "lucide-react";
 import { EmptyBlock, Panel } from "@/components/kit";
 import { LOW_DAYS, SLOW_DAYS, unpackSohRows, type PackedSohRow, type SohRow } from "@/lib/domain/soh";
 import type { SkuPrices } from "@/lib/domain/skuPrice";
+import type { AccPriceCell, AccPriceMap } from "@/lib/domain/accPrice";
 import { PromoBox } from "./PriceBoard";
 import { DEVICE_TYPES, SAMSUNG_SERIES, deviceType, isSamsung, samsungSeries, splitsByType, type DeviceType } from "@/lib/domain/sohGroups";
 
@@ -14,6 +15,17 @@ const nf = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 const num = (n: number) => nf.format(n);
 const rp = (n: number) => `Rp ${nf.format(n)}`;
 const isEol = (s: string) => /EOL/i.test(s);
+
+/** Accessory price: list price, the SRP struck through when higher, "SOH" when it is the SOH unit price. */
+function AccPrice({ a, small = false }: { a: AccPriceCell; small?: boolean }) {
+  return (
+    <span className={`whitespace-nowrap ${small ? "text-[11px]" : ""}`}>
+      <span className="font-semibold text-slate-800 dark:text-slate-100">{rp(a[0])}</span>
+      {a[1] > a[0] && <span className="ml-1 text-slate-400 line-through">{rp(a[1])}</span>}
+      {a[2] === 1 && <span className="ml-1 text-[10px] font-bold text-amber-600" title="Tidak ada di price list aksesoris — harga dari SOH">SOH</span>}
+    </span>
+  );
+}
 
 /** Price popup of one SKU: its price-list model with every storage; the SKU's own variant is preselected. */
 function SkuPricePopup({ prices, row, onClose, today }: { prices: SkuPrices; row: SohRow | null; onClose: () => void; today: string }) {
@@ -122,7 +134,7 @@ function syncUrl(patch: Record<string, string | null>) {
 /** Rows rendered before "Tampilkan semua". */
 const ROW_LIMIT = 150;
 
-export function SohView({ categories, packed, prices, today = "", initialCat, initialSearch, initialType = "", initialSeries = "" }: { categories: string[]; packed: PackedSohRow[]; prices?: SkuPrices; today?: string; initialCat: string; initialSearch: string; initialType?: string; initialSeries?: string }) {
+export function SohView({ categories, packed, prices, accPrices, today = "", initialCat, initialSearch, initialType = "", initialSeries = "" }: { categories: string[]; packed: PackedSohRow[]; prices?: SkuPrices; accPrices?: AccPriceMap; today?: string; initialCat: string; initialSearch: string; initialType?: string; initialSeries?: string }) {
   // rows arrive as compact tuples (≈ half the page payload of objects)
   const rows = useMemo(() => unpackSohRows(packed, categories), [packed, categories]);
   const [open, setOpen] = useState<SohRow | null>(null);
@@ -131,6 +143,10 @@ export function SohView({ categories, packed, prices, today = "", initialCat, in
     const h = prices?.byArticle[r.article.toUpperCase()];
     return h ? prices!.models[h[0]].variants[h[1]].promo : null;
   };
+  // accessories: price from the accessories price list (or the SOH unit price) — no popup, just the price
+  const accOf = (r: SohRow) => (priced(r) ? undefined : accPrices?.[r.article.toUpperCase()]);
+  const hasPrice = !!prices || !!accPrices;
+
   const show = (r: SohRow) => {
     if (!priced(r)) return;
     setOpen(r);
@@ -265,6 +281,7 @@ export function SohView({ categories, packed, prices, today = "", initialCat, in
                       {r.description || r.article}
                       <span className="mt-0.5 block font-mono text-[11px] font-medium text-slate-400">{r.article}{searching && <> · {r.category}</>}</span>
                       {priceOf(r) != null && <span className="mt-0.5 flex items-center gap-1 text-[11px] font-bold text-blue-600"><Tag className="size-3" /> {rp(priceOf(r)!)} ›</span>}
+                      {accOf(r) && <span className="mt-0.5 flex items-center gap-1 text-[11px]"><Tag className="size-3 text-slate-400" /> <AccPrice a={accOf(r)!} small /></span>}
                     </span>
                     <b className={`shrink-0 text-base tabular-nums ${r.balance === "low" ? "text-rose-600" : "text-slate-950 dark:text-white"}`}>{num(r.qty)}</b>
                   </button>
@@ -278,10 +295,10 @@ export function SohView({ categories, packed, prices, today = "", initialCat, in
           <div className="flex justify-between border-t border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-extrabold dark:border-slate-700 dark:bg-slate-800/60"><span>TOTAL</span><span className="tabular-nums">{num(totSoh)}</span></div>
         </div>
         <div className="sd-table-wrap max-sm:hidden"><table className="sd-table">
-          <thead><tr><th>Article</th><th>Description</th>{searching && <th>Kategori</th>}<th className="n">Qty SOH</th><th className="n">Qty Sold</th><th>Balance View</th>{prices && <th className="n">Harga</th>}</tr></thead>
+          <thead><tr><th>Article</th><th>Description</th>{searching && <th>Kategori</th>}<th className="n">Qty SOH</th><th className="n">Qty Sold</th><th>Balance View</th>{hasPrice && <th className="n">Harga</th>}</tr></thead>
           <tbody>
             {shown.length ? visible.flatMap((g) => [
-              ...(g.label ? [<tr key={`g|${g.label}`} className="bg-slate-50 dark:bg-slate-800/60"><td colSpan={2} className="text-xs font-extrabold tracking-wider text-slate-600 uppercase dark:text-slate-300">{g.label}</td><td className="n font-extrabold">{num(sumQty(g.all))}</td><td className="n font-extrabold">{num(g.all.reduce((a, r) => a + r.sold, 0))}</td><td />{prices && <td />}</tr>] : []),
+              ...(g.label ? [<tr key={`g|${g.label}`} className="bg-slate-50 dark:bg-slate-800/60"><td colSpan={2} className="text-xs font-extrabold tracking-wider text-slate-600 uppercase dark:text-slate-300">{g.label}</td><td className="n font-extrabold">{num(sumQty(g.all))}</td><td className="n font-extrabold">{num(g.all.reduce((a, r) => a + r.sold, 0))}</td><td />{hasPrice && <td />}</tr>] : []),
               ...g.rows.map((r) => (
               <tr key={`${r.category}|${r.article}`} onClick={() => show(r)} className={priced(r) ? "cursor-pointer hover:bg-blue-50/60 dark:hover:bg-blue-950/20" : undefined}>
                 <td className="font-mono text-xs">{r.article}</td>
@@ -290,12 +307,12 @@ export function SohView({ categories, packed, prices, today = "", initialCat, in
                 <td className="n">{num(r.qty)}</td>
                 <td className="n">{num(r.sold)}</td>
                 <td><span className={`sd-badge ${BALANCE[r.balance].cls}`}>{BALANCE[r.balance].label(r)}</span></td>
-                {prices && <td className="n whitespace-nowrap">{priceOf(r) != null ? <span className="font-semibold text-blue-600">{rp(priceOf(r)!)} ›</span> : <span className="text-slate-400">—</span>}</td>}
+                {hasPrice && <td className="n whitespace-nowrap">{priceOf(r) != null ? <span className="font-semibold text-blue-600">{rp(priceOf(r)!)} ›</span> : accOf(r) ? <AccPrice a={accOf(r)!} /> : <span className="text-slate-400">—</span>}</td>}
               </tr>
               )),
-            ]) : <tr><td colSpan={(searching ? 6 : 5) + (prices ? 1 : 0)}><EmptyBlock title="Tidak ada artikel" need={false}>{searching ? "Tidak ada Article/Description yang cocok." : "Kategori ini kosong."}</EmptyBlock></td></tr>}
+            ]) : <tr><td colSpan={(searching ? 6 : 5) + (hasPrice ? 1 : 0)}><EmptyBlock title="Tidak ada artikel" need={false}>{searching ? "Tidak ada Article/Description yang cocok." : "Kategori ini kosong."}</EmptyBlock></td></tr>}
           </tbody>
-          <tfoot><tr><td>TOTAL</td><td />{searching && <td />}<td className="n">{num(totSoh)}</td><td className="n">{num(totSold)}</td><td />{prices && <td />}</tr></tfoot>
+          <tfoot><tr><td>TOTAL</td><td />{searching && <td />}<td className="n">{num(totSoh)}</td><td className="n">{num(totSold)}</td><td />{hasPrice && <td />}</tr></tfoot>
         </table></div>
         {capped && (
           <button type="button" className="sd-btn mt-3 w-full justify-center" onClick={() => setMore(viewKey)}>
