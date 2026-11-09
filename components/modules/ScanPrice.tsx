@@ -3,49 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, Check, History, Keyboard, Loader2, ScanLine, X, Zap } from "lucide-react";
 import type { ScanHit } from "@/lib/domain/scan";
+import { useBarcodeCamera } from "./useBarcodeCamera";
 
 type Hit = ScanHit & { sold: number | null };
 type Result = { state: "idle" } | { state: "loading"; code: string } | { state: "hit"; hit: Hit } | { state: "miss"; code: string } | { state: "error"; msg: string };
 
 const nf = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 const rp = (n: number) => `Rp ${nf.format(Math.round(n))}`;
-const ZXING_URL = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js";
-const FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "qr_code"];
 const HISTORY_KEY = "sd-scan-history";
-
-type Detector = { detect: (src: CanvasImageSource) => Promise<Array<{ rawValue: string }>> };
-type ZXingReader = { decodeFromConstraints: (c: MediaStreamConstraints, v: HTMLVideoElement, cb: (r: { getText: () => string } | null) => void) => Promise<unknown>; reset: () => void };
-type ZXingNS = { BrowserMultiFormatReader: new () => ZXingReader };
-
-let zxing: Promise<ZXingNS> | null = null;
-function loadZXing(): Promise<ZXingNS> {
-  const w = window as unknown as { ZXing?: ZXingNS };
-  if (w.ZXing) return Promise.resolve(w.ZXing);
-  zxing ??= new Promise<ZXingNS>((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = ZXING_URL;
-    s.async = true;
-    s.onload = () => (w.ZXing ? resolve(w.ZXing) : reject(new Error("Pembaca barcode gagal dimuat")));
-    s.onerror = () => {
-      zxing = null;
-      reject(new Error("Pembaca barcode gagal dimuat — cek koneksi"));
-    };
-    document.head.appendChild(s);
-  });
-  return zxing;
-}
-
-async function nativeDetector(): Promise<Detector | null> {
-  const BD = (window as unknown as { BarcodeDetector?: { new (o: { formats: string[] }): Detector; getSupportedFormats?: () => Promise<string[]> } }).BarcodeDetector;
-  if (!BD) return null;
-  try {
-    const sup = (await BD.getSupportedFormats?.()) ?? FORMATS;
-    const formats = FORMATS.filter((f) => sup.includes(f));
-    return formats.includes("ean_13") ? new BD({ formats }) : null;
-  } catch {
-    return null;
-  }
-}
 
 function readHistory(): Array<{ code: string; description: string; price: number | null }> {
   try {
@@ -73,16 +38,9 @@ export function ScanPrice() {
 }
 
 function ScanOverlay({ onClose }: { onClose: () => void }) {
-  const video = useRef<HTMLVideoElement>(null);
-  const stream = useRef<MediaStream | null>(null);
-  const reader = useRef<ZXingReader | null>(null);
   const busy = useRef(false);
-  const paused = useRef(false);
-  const [camError, setCamError] = useState("");
-  const [starting, setStarting] = useState(true);
-  const [torch, setTorch] = useState<boolean | null>(null);
-  const [result, setResult] = useState<Result>({ state: "idle" });
   const [typing, setTyping] = useState(false);
+  const [result, setResult] = useState<Result>({ state: "idle" });
   const [typed, setTyped] = useState("");
   const [history, setHistory] = useState(readHistory);
   const [showHistory, setShowHistory] = useState(false);
@@ -124,73 +82,16 @@ function ScanOverlay({ onClose }: { onClose: () => void }) {
     paused.current = false;
   };
 
-  // camera + decoder; stopped on close
+  const { video, paused, error: camError, starting, torch, toggleTorch } = useBarcodeCamera((c) => void lookup(c));
   useEffect(() => {
-    let stop = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
     document.documentElement.style.overflow = "hidden";
-    (async () => {
-      try {
-        if (!navigator.mediaDevices?.getUserMedia) throw new Error("Browser ini tidak bisa membuka kamera. Pakai Chrome / Safari terbaru, atau ketik kodenya.");
-        const det = await nativeDetector();
-        if (det) {
-          const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-          if (stop) return s.getTracks().forEach((t) => t.stop());
-          stream.current = s;
-          const v = video.current!;
-          v.srcObject = s;
-          await v.play();
-          const caps = (s.getVideoTracks()[0]?.getCapabilities?.() ?? {}) as { torch?: boolean };
-          setTorch(caps.torch ? false : null);
-          setStarting(false);
-          const tick = async () => {
-            if (stop) return;
-            if (!paused.current && v.readyState >= 2) {
-              try {
-                const codes = await det.detect(v);
-                if (codes[0]?.rawValue) void lookup(codes[0].rawValue);
-              } catch {}
-            }
-            timer = setTimeout(tick, 180);
-          };
-          void tick();
-        } else {
-          const Z = await loadZXing();
-          if (stop) return;
-          const r = new Z.BrowserMultiFormatReader();
-          reader.current = r;
-          await r.decodeFromConstraints({ video: { facingMode: { ideal: "environment" } }, audio: false }, video.current!, (res) => {
-            if (res && !paused.current) void lookup(res.getText());
-          });
-          stream.current = (video.current?.srcObject as MediaStream) ?? null;
-          setStarting(false);
-        }
-      } catch (e) {
-        const err = e as Error & { name?: string };
-        setCamError(err.name === "NotAllowedError" ? "Izin kamera ditolak. Aktifkan izin kamera untuk situs ini di pengaturan browser, atau ketik kodenya." : err.name === "NotFoundError" ? "Kamera tidak ditemukan. Ketik kodenya di bawah." : err.message || "Kamera tidak bisa dibuka.");
-        setStarting(false);
-        setTyping(true);
-      }
-    })();
     return () => {
-      stop = true;
-      if (timer) clearTimeout(timer);
-      reader.current?.reset();
-      stream.current?.getTracks().forEach((t) => t.stop());
       document.documentElement.style.overflow = "";
     };
-  }, [lookup]);
-
-  const toggleTorch = async () => {
-    const t = stream.current?.getVideoTracks()[0];
-    if (!t || torch === null) return;
-    try {
-      await t.applyConstraints({ advanced: [{ torch: !torch } as MediaTrackConstraintSet] });
-      setTorch(!torch);
-    } catch {
-      setTorch(null);
-    }
-  };
+  }, []);
+  useEffect(() => {
+    if (camError) setTyping(true);
+  }, [camError]);
 
   const sheet = result.state !== "idle" || typing || showHistory;
 

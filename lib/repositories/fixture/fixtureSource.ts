@@ -14,6 +14,7 @@ import type { SamsungPromo } from "@/types/samsungPromo";
 import type { PriceList } from "@/types/pricelist";
 import type { PriceListInput } from "../types";
 import type { AccPriceList } from "@/types/accPrice";
+import type { StokanEvent, StokanItem, StokanSession } from "@/types/stokan";
 import type { AccessEntry } from "@/types/access";
 import type { PriceChange } from "@/lib/domain/priceHistory";
 
@@ -34,6 +35,9 @@ interface Store {
   soh: SohSnapshot | null;
   priceList: PriceList | null;
   accPrice: AccPriceList | null;
+  stokan: StokanSession[];
+  stokanItems: Record<string, StokanItem[]>;
+  stokanLog: Record<string, StokanEvent[]>;
   samsungPromo: SamsungPromo | null;
 }
 
@@ -57,7 +61,7 @@ function store(): Store {
     const end = m.month === cur ? addDays(today, -1) : monthEnd(m.month);
     for (let d = `${m.month}-01`; d <= end; d = addDays(d, 1)) traffic.push({ date: d, traffic: 60 + ((Number(d.slice(8)) * 37) % 40) });
   }
-  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], access: [], priceHistory: [], history: {}, records: [], soh: null, priceList: null, accPrice: null, samsungPromo: null };
+  g.__fixtureStore = { months, rules: {}, traffic, users: [], audit: [], access: [], priceHistory: [], history: {}, records: [], soh: null, priceList: null, accPrice: null, stokan: [], stokanItems: {}, stokanLog: {}, samsungPromo: null };
   return g.__fixtureStore;
 }
 
@@ -135,6 +139,30 @@ export class FixtureSource implements DataSource {
   }
   async saveSamsungPromo(promo: Omit<SamsungPromo, "updatedAt" | "updatedBy">, by: string) {
     store().samsungPromo = { ...promo, updatedAt: new Date().toISOString(), updatedBy: by };
+  }
+  async listStokan() {
+    return [...store().stokan].sort((a, b) => b.id.localeCompare(a.id));
+  }
+  async saveStokan(x: StokanSession) {
+    const s = store();
+    s.stokan = [x, ...s.stokan.filter((y) => y.id !== x.id)];
+  }
+  async getStokanItems(id: string) {
+    return store().stokanItems[id] ?? [];
+  }
+  async saveStokanItems(id: string, items: StokanItem[]) {
+    store().stokanItems[id] = items;
+  }
+  async getStokanLog(id: string) {
+    return store().stokanLog[id] ?? [];
+  }
+  async appendStokanLog(id: string, events: StokanEvent[]) {
+    const s = store();
+    (s.stokanLog[id] ??= []).push(...events);
+  }
+  async pruneStokanLog(keep: string[]) {
+    const s = store();
+    for (const k of Object.keys(s.stokanLog)) if (!keep.includes(k)) delete s.stokanLog[k];
   }
   async getAccPriceList() {
     return store().accPrice;

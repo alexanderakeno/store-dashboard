@@ -1,42 +1,28 @@
 import { appConfig } from "@/config/app";
-import { NeedData, PageIntro, Panel } from "@/components/kit";
-import { PageStatus } from "@/components/layout/PageStatus";
-import { staffNames } from "@/components/modules/staffList";
-import { loadPage, type SearchParams } from "@/lib/page";
+import { PageIntro } from "@/components/kit";
+import { requireSession } from "@/lib/auth/session";
+import { StokanApp } from "@/components/modules/StokanApp";
+import { listSessions, staffCandidates } from "@/lib/stokan";
+import { getSoh } from "@/lib/soh";
+import { todayIn } from "@/lib/domain/period";
 
-export default async function StokanPage({ searchParams }: { searchParams: SearchParams }) {
-  const p = await loadPage(searchParams);
-  if (p.state !== "ok") return <PageStatus title="Stokan" p={p} />;
+export default async function StokanPage() {
+  const session = await requireSession();
+  const isAdmin = session.role === "admin";
   const code = appConfig().storeCode || "STORE";
-  const names = staffNames(p.snap);
+  let error: string | null = null;
+  const sessions = await listSessions().catch((e: Error) => {
+    error = e.message;
+    return [];
+  });
+  const active = sessions.find((s) => s.status === "count" || s.status === "recount") ?? null;
+  const [candidates, soh] = isAdmin ? await Promise.all([staffCandidates(), getSoh().catch(() => null)]) : [[], null];
+  const today = todayIn(appConfig().timeZone);
   return (
     <div className="sd-content">
-      <PageIntro eyebrow={code} title="Stokan" desc={`${code} • Inventory`} />
-      <section className="sd-hero p-6">
-        <p className="text-xs font-black tracking-[.12em] text-white/80 uppercase">Stokan Aksesoris</p>
-        <p className="mt-1 text-2xl font-black">Stokan mingguan Accessories {code}</p>
-        <div className="mt-5 grid max-w-2xl gap-3 sm:grid-cols-2">
-          <label className="block"><span className="text-[11px] font-black tracking-[.08em] text-white/80 uppercase">Periode Stokan</span><input className="sd-input mt-1" disabled placeholder="Week…" /></label>
-          <label className="block"><span className="text-[11px] font-black tracking-[.08em] text-white/80 uppercase">Tanggal</span><input className="sd-input mt-1" type="date" disabled /></label>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className="sd-btn" disabled>Upload File Stokan</button>
-          <button type="button" className="sd-btn" disabled>Clear Stokan</button>
-        </div>
-      </section>
-      <Panel title="Stokan Siap Print" desc="PDF A4 Landscape • hemat kertas • 40 artikel/halaman" right={<div className="flex items-center gap-2"><NeedData /><button type="button" className="sd-btn" disabled>Print / PDF Semua</button></div>}>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {names.map((n) => (
-            <div key={n} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
-              <p className="font-black text-slate-950">{n}</p>
-              <p className="text-sm text-slate-500">— Artikel • estimasi — halaman</p>
-              <div className="mt-3 flex gap-2"><button type="button" className="sd-btn !min-h-8 text-xs" disabled>Lihat Detail</button><button type="button" className="sd-btn !min-h-8 text-xs" disabled>PDF</button></div>
-            </div>
-          ))}
-        </div>
-        <p className="mt-3 text-xs text-slate-500">Butuh file stokan (daftar artikel aksesoris per minggu) — dibagi otomatis ke staff setelah file diupload.</p>
-      </Panel>
-      <Panel title="Histori Stokan" right={<NeedData />}><p className="text-sm text-slate-500">Belum ada histori stokan.</p></Panel>
+      <PageIntro eyebrow={code} title="Stokan Aksesoris" desc={isAdmin ? "Hitung stok aksesoris dengan scan barcode · staff tidak melihat jumlah SOH · selisih dihitung ulang oleh staff lain." : "Hitung stok aksesoris bagian Anda dengan kamera HP."} />
+      {error && <div className="alert error" role="alert">Data stokan tidak bisa dibaca: {error}</div>}
+      <StokanApp isAdmin={isAdmin} candidates={candidates} active={active} history={sessions.filter((s) => s !== active).slice(0, 20)} sohDate={soh?.date ?? null} sohToday={!!soh && (soh.date === today || (soh.updatedAt ?? "").slice(0, 10) === today)} />
     </div>
   );
 }

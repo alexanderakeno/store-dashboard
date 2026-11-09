@@ -47,6 +47,16 @@ const isAcc = (x: SohItem) => ACC_SOH_CATEGORIES.includes(x.category);
 /** SAP article prefixes of brands that are not in the accessories list (Samsung / Xiaomi / … own accessories, VAS). */
 const PREFIX_BRAND: Record<string, string> = { SSU: "Samsung", XMI: "Xiaomi", HWI: "Huawei", OPP: "Oppo", IFX: "Infinix", KLA: "Qoala", TSL: "Telkomsel", MOT: "Motorola", VIV: "Vivo", RLM: "Realme" };
 
+/** Brand of any article: the list's brand, else the article prefix (SSU → Samsung, UNQ → UNIQ), else "Lainnya". */
+export function brandResolver(list: AccPriceItem[]): (article: string) => string {
+  const by = new Map(list.map((x) => [x.article, x.brand]));
+  const pre = prefixBrands(list);
+  return (a) => {
+    const k = a.trim().toUpperCase();
+    return by.get(k) ?? pre.get(k.slice(0, 3)) ?? "Lainnya";
+  };
+}
+
 /** Brand per 3-letter article prefix, learnt from the list (a prefix used by one brand only, e.g. UNQ → UNIQ). */
 function prefixBrands(list: AccPriceItem[]): Map<string, string> {
   const seen = new Map<string, Set<string>>();

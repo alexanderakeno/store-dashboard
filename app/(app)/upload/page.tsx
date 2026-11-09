@@ -86,7 +86,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
       ok: !!acc,
       detail: acc ? `${num(acc.items.length)} artikel${acc.date ? ` (${dmy(acc.date)})` : ""} · harga = Repricing Cash` : accError ? `Gagal membaca APP_AccPrice: ${accError}` : "Belum ada — import Excel price list aksesoris di atas",
     },
-    { name: "Stokan Aksesoris", ok: false, detail: "Format file stokan belum ada" },
+    { name: "Stokan Aksesoris", ok: true, detail: "Hitung dengan scan barcode di menu Stokan → tersimpan di master sheet tab APP_Stokan / APP_StokanItem / APP_StokanLog" },
     { name: "Jadwal / Shift Staff", ok: false, detail: "Untuk status Masuk Shift di Daily Sales" },
     { name: "Master Staff (jabatan)", ok: false, detail: "Cashier / Sales Assistant / Store Trainer" },
     { name: "Skema Incentive", ok: false, detail: "Untuk Est. Incentive" },
