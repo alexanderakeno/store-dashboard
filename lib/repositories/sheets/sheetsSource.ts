@@ -13,6 +13,7 @@ import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList } from "@/types/pricelist";
 import type { PriceListInput } from "../types";
 import type { AccPriceItem, AccPriceList } from "@/types/accPrice";
+import type { StokanEvent, StokanItem, StokanSession } from "@/types/stokan";
 import type { SamsungPromo } from "@/types/samsungPromo";
 import type { AccessEntry, AccessEvent } from "@/types/access";
 import type { PriceChange, PriceChangeType } from "@/lib/domain/priceHistory";
@@ -36,6 +37,9 @@ export const MASTER_TABS = {
   soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy", "price", "barcode"] },
   priceList: { name: "APP_PriceList", header: ["kind", "brand", "series", "name", "normal", "promo", "status", "extra", "date", "source", "updatedAt", "updatedBy"] },
   accPrice: { name: "APP_AccPrice", header: ["article", "brand", "description", "category", "srp", "current", "price", "remark", "date", "source", "updatedAt", "updatedBy"] },
+  stokan: { name: "APP_Stokan", header: ["id", "label", "mode", "status", "startedAt", "startedBy", "sohDate", "sohUpdatedAt", "staff", "recountAt", "closedAt", "summary"] },
+  stokanItem: { name: "APP_StokanItem", header: ["session", "article", "description", "brand", "category", "expected", "price", "assignee", "recount", "barcodes", "reason", "final"] },
+  stokanLog: { name: "APP_StokanLog", header: ["session", "id", "ts", "nik", "name", "article", "code", "kind", "value", "phase"] },
   samsungPromo: { name: "APP_SamsungPromo", header: ["kind", "data", "source", "updatedAt", "updatedBy"] },
 } as const;
 
@@ -320,6 +324,102 @@ export class SheetsSource implements DataSource {
     for (const x of input.items) out.push([x.kind, x.brand, x.series, x.name, x.normal, x.promo, x.status, extra(x), input.date ?? "", input.source, now, by]);
     for (const q of input.qoala) out.push(["qoala", q.tier, q.range, "", "", "", "", JSON.stringify(q.fees), input.date ?? "", input.source, now, by]);
     await this.rewrite("priceList", out);
+  }
+
+  async listStokan(): Promise<StokanSession[]> {
+    const json = <T,>(v: unknown, d: T): T => {
+      try {
+        return v ? (JSON.parse(String(v)) as T) : d;
+      } catch {
+        return d;
+      }
+    };
+    return (await this.rows("stokan"))
+      .map((r) => ({
+        id: normalizeText(r.id),
+        label: normalizeText(r.label),
+        mode: (normalizeText(r.mode) === "full" ? "full" : "rolling") as StokanSession["mode"],
+        status: (normalizeText(r.status) || "count") as StokanSession["status"],
+        startedAt: normalizeText(r.startedAt),
+        startedBy: normalizeText(r.startedBy),
+        sohDate: parseDate(r.sohDate),
+        sohUpdatedAt: normalizeText(r.sohUpdatedAt),
+        staff: json<StokanSession["staff"]>(r.staff, []),
+        ...(normalizeText(r.recountAt) ? { recountAt: normalizeText(r.recountAt) } : {}),
+        ...(normalizeText(r.closedAt) ? { closedAt: normalizeText(r.closedAt) } : {}),
+        ...(normalizeText(r.summary) ? { summary: json<NonNullable<StokanSession["summary"]>>(r.summary, { items: 0, matched: 0, diff: 0, diffValue: 0, units: 0, counted: 0 }) } : {}),
+      }))
+      .filter((x) => x.id)
+      .sort((a, b) => b.id.localeCompare(a.id));
+  }
+
+  async saveStokan(x: StokanSession): Promise<void> {
+    const all = [x, ...(await this.listStokan()).filter((s) => s.id !== x.id)].sort((a, b) => b.id.localeCompare(a.id)).slice(0, 60);
+    await this.rewrite("stokan", all.map((s) => [s.id, s.label, s.mode, s.status, s.startedAt, s.startedBy, s.sohDate ?? "", s.sohUpdatedAt, JSON.stringify(s.staff), s.recountAt ?? "", s.closedAt ?? "", s.summary ? JSON.stringify(s.summary) : ""]));
+  }
+
+  async getStokanItems(sessionId: string): Promise<StokanItem[]> {
+    return (await this.rows("stokanItem"))
+      .filter((r) => normalizeText(r.session) === sessionId)
+      .map((r) => {
+        const bc = normalizeText(r.barcodes).split(" ").filter(Boolean);
+        const fin = normalizeText(r.final);
+        return {
+          article: normalizeText(r.article),
+          description: normalizeText(r.description),
+          brand: normalizeText(r.brand),
+          category: normalizeText(r.category),
+          expected: parseNumber(r.expected),
+          price: parseNumber(r.price),
+          assignee: normalizeText(r.assignee),
+          ...(normalizeText(r.recount) ? { recount: normalizeText(r.recount) } : {}),
+          ...(bc.length ? { barcodes: bc } : {}),
+          reason: (normalizeText(r.reason) || "full") as StokanItem["reason"],
+          ...(fin !== "" ? { final: parseNumber(fin) } : {}),
+        };
+      });
+  }
+
+  async saveStokanItems(sessionId: string, items: StokanItem[]): Promise<void> {
+    const header = MASTER_TABS.stokanItem.header;
+    const old = (await this.rows("stokanItem")).filter((r) => normalizeText(r.session) && normalizeText(r.session) !== sessionId);
+    // history: keep the items of the 12 newest other sessions (previous differences pick next week's articles)
+    const keep = new Set([...new Set(old.map((r) => normalizeText(r.session)))].sort().reverse().slice(0, 12));
+    const out: unknown[][] = old.filter((r) => keep.has(normalizeText(r.session))).map((r) => header.map((h) => r[h] ?? ""));
+    for (const x of items) out.push([sessionId, x.article, x.description, x.brand, x.category, x.expected, x.price, x.assignee, x.recount ?? "", x.barcodes?.join(" ") ?? "", x.reason, x.final ?? ""]);
+    await this.rewrite("stokanItem", out);
+  }
+
+  async getStokanLog(sessionId: string): Promise<StokanEvent[]> {
+    return (await this.rows("stokanLog"))
+      .filter((r) => normalizeText(r.session) === sessionId)
+      .map((r) => {
+        const code = normalizeText(r.code);
+        return { id: normalizeText(r.id), ts: normalizeText(r.ts), nik: normalizeText(r.nik), name: normalizeText(r.name), article: normalizeText(r.article), ...(code ? { code } : {}), kind: normalizeText(r.kind) as StokanEvent["kind"], value: parseNumber(r.value), phase: (normalizeText(r.phase) === "recount" ? "recount" : "count") as StokanEvent["phase"] };
+      });
+  }
+
+  async appendStokanLog(sessionId: string, events: StokanEvent[]): Promise<void> {
+    if (!events.length) return;
+    const t = MASTER_TABS.stokanLog.name;
+    const rows = events.map((e) => [sessionId, e.id, e.ts, e.nik, e.name, e.article, e.code ?? "", e.kind, e.value, e.phase]);
+    try {
+      await appendRows(this.master, t, rows);
+    } catch (e) {
+      if (!(e instanceof SheetsError) || e.status !== 400) throw e;
+      this.ensured = null;
+      await this.ensureTabs();
+      await appendRows(this.master, t, rows);
+    }
+  }
+
+  async pruneStokanLog(keep: string[]): Promise<void> {
+    const header = MASTER_TABS.stokanLog.header;
+    const k = new Set(keep);
+    const rows = await this.rows("stokanLog");
+    const out = rows.filter((r) => k.has(normalizeText(r.session)));
+    if (out.length === rows.length) return;
+    await this.rewrite("stokanLog", out.map((r) => header.map((h) => r[h] ?? "")));
   }
 
   async getAccPriceList(): Promise<AccPriceList | null> {
