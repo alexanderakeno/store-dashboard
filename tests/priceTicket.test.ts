@@ -83,6 +83,7 @@ test("name matching: variants, RAM+ext RAM, model words", () => {
   assert.deepEqual(nameTokens("Galaxy A57 5G 8+8/128GB"), ["A57", "5G", "8/128"]);
   assert.deepEqual(nameTokens("Galaxy Tab S12 Plus 12/256GB Wi-Fi"), ["TAB", "S12+", "12/256", "WIFI"]);
   assert.deepEqual(nameTokens("OPPO A6s 8GB + 128GB"), ["A6S", "8/128"]);
+  assert.deepEqual(nameTokens("GALAXY TAB S12+ 12/256GB WIFI"), nameTokens("GALAXY TAB S12 PLUS WIFI 12GB/256GB").sort((a, b) => ["TAB", "S12+", "12/256", "WIFI"].indexOf(a) - ["TAB", "S12+", "12/256", "WIFI"].indexOf(b)));
   const rows = [row("HUAWEI WATCH GT 7 PRO 46MM", 5499000, 4999000), row("HUAWEI WATCH GT 7 46MM", 4399000, 3899000), row("REDMI NOTE 17 5G 6/128GB", 4599000)];
   assert.equal(matchRow({ key: "WATCH GT 7", canva: { price: 3899000 } }, rows)?.name, "HUAWEI WATCH GT 7 46MM");
   assert.equal(matchRow({ key: "WATCH GT 7 PRO", canva: { price: 4999000 } }, rows)?.name, "HUAWEI WATCH GT 7 PRO 46MM");
