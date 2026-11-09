@@ -5,6 +5,7 @@ import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList, QoalaTier } from "@/types/pricelist";
 import type { AccPriceList } from "@/types/accPrice";
+import type { StokanEvent, StokanItem, StokanSession } from "@/types/stokan";
 import type { AccessEntry } from "@/types/access";
 import type { PriceChange } from "@/lib/domain/priceHistory";
 import type { SamsungPromo } from "@/types/samsungPromo";
@@ -123,6 +124,19 @@ export interface DataSource {
    * import never wipes the other). `qoala` replaces the Qoala tiers when non-empty.
    */
   savePriceList(input: PriceListInput, by: string): Promise<void>;
+
+  /** Stokan sessions, newest first. */
+  listStokan(): Promise<StokanSession[]>;
+  /** Inserts / replaces a session (by id). */
+  saveStokan(session: StokanSession): Promise<void>;
+  getStokanItems(sessionId: string): Promise<StokanItem[]>;
+  /** Replaces the items of a session (older sessions beyond the kept history are dropped). */
+  saveStokanItems(sessionId: string, items: StokanItem[]): Promise<void>;
+  getStokanLog(sessionId: string): Promise<StokanEvent[]>;
+  /** Appends counting events (several phones at once). */
+  appendStokanLog(sessionId: string, events: StokanEvent[]): Promise<void>;
+  /** Drops the events of sessions other than `keep`. */
+  pruneStokanLog(keep: string[]): Promise<void>;
 
   /** Latest imported accessories price list (null = never imported). */
   getAccPriceList(): Promise<AccPriceList | null>;
