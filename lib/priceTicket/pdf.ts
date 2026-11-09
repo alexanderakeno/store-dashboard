@@ -39,7 +39,9 @@ export function buildPdf(images: PdfImage[], pages: PdfPage[], title = "Price Ti
   push("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
   obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
   obj(2, `<< /Type /Pages /Kids [${pages.map((_, i) => `${pageObj(i)} 0 R`).join(" ")}] /Count ${pages.length} >>`);
-  obj(3, `<< /Title (${title.replace(/[()\\]/g, "")}) /Producer (Store Dashboard) >>`);
+  // title as UTF-16BE hex: "Galaxy Tab S12+ (10x16 cm)" keeps its brackets and any non-ASCII letter
+  const hex = [...title].map((c) => c.charCodeAt(0).toString(16).padStart(4, "0")).join("");
+  obj(3, `<< /Title <FEFF${hex}> /Producer (Store Dashboard) >>`);
   images.forEach((im, i) => obj(imgObj(i), [`<< /Type /XObject /Subtype /Image /Width ${im.px} /Height ${im.py} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.jpeg.length} >>\nstream\n`, im.jpeg, "\nendstream"]));
   pages.forEach((p, i) => {
     const W = p.w * MM;
