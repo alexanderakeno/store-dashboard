@@ -21,6 +21,12 @@ const LAST = ["Aksesoris", "Elektronik"];
 /** Product groups that are not sellable stock: display units, warranty cards / printing, vouchers. */
 const SKIP: Record<string, string> = { DEMO: "unit demo", SUPPORTING: "supporting (kartu garansi, printing)", MERCHANDISE: "merchandise / voucher" };
 
+/** Barcode cell → digits/letters only ("8886463690277"; a numeric cell keeps all its digits). Serial-number-like or empty → "". */
+export function barcodeOf(v: unknown): string {
+  const s = typeof v === "number" ? (Number.isFinite(v) && v > 0 ? BigInt(Math.round(v)).toString() : "") : clean(v).toUpperCase().replace(/[^0-9A-Z]/g, "");
+  return s.length >= 6 && s.length <= 32 ? s : "";
+}
+
 /** True when the grid is the "Stock Position Report" Excel (header row says so). */
 export function isSohXlsx(rows: unknown[][]): boolean {
   return rows.slice(0, 3).some((r) => (r ?? []).some((c) => /STOCK POSITION REPORT/i.test(clean(c))));
@@ -99,11 +105,13 @@ export function parseSohXlsx(rows: unknown[][]): SohParse {
       ? AIRPODS
       : group === "DEVICES" ? (brand === "APPLE" ? APPLE[cat] ?? "Apple" : brandName(brand)) : group === "ACCESSORIES" ? "Aksesoris" : "Elektronik";
     const price = num(r[6]);
+    const barcode = barcodeOf(r[5]);
     const it = byArticle.get(article);
     if (it) {
       it.qty += units;
       if (Number.isFinite(price) && price > (it.price ?? 0)) it.price = price;
-    } else byArticle.set(article, { category, article, description, qty: units, ...(Number.isFinite(price) && price > 0 ? { price } : {}) });
+      if (barcode && !(it.barcodes ??= []).includes(barcode) && it.barcodes.length < 5) it.barcodes.push(barcode);
+    } else byArticle.set(article, { category, article, description, qty: units, ...(Number.isFinite(price) && price > 0 ? { price } : {}), ...(barcode ? { barcodes: [barcode] } : {}) });
   }
 
   const items = [...byArticle.values()];
