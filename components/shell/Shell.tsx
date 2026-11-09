@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { ScanPrice } from "@/components/modules/ScanPrice";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, Moon, RefreshCw, Sun, Upload } from "lucide-react";
@@ -66,6 +67,7 @@ export function Shell({ children, storeCode, storeName, userName, isAdmin, fixtu
         <Header storeCode={storeCode} userName={userName} isAdmin={isAdmin} fixture={fixture} onMenu={() => setOpen(true)} collapsed={collapsed} onExpand={toggleCollapsed} />
         {children}
         <TableFit />
+        <ScanPrice />
       </main>
     </div>
   );
