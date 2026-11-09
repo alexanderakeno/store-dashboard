@@ -9,6 +9,8 @@ export interface SohItem {
   qty: number;
   /** Unit price printed in the SOH Excel (used as the AirPods price; the Apple price list has none). */
   price?: number;
+  /** Barcodes (EAN / UPC) printed in the SOH Excel for this article — used by Scan Harga. */
+  barcodes?: string[];
 }
 
 /** Latest imported stock on hand (master sheet `APP_SOH`) — one snapshot, replaced on every import. */
