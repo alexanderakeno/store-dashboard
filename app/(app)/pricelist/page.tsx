@@ -17,10 +17,17 @@ import { todayIn } from "@/lib/domain/period";
 import type { SearchParams } from "@/lib/page";
 import type { PriceKind, PriceList } from "@/types/pricelist";
 import type { SohSnapshot } from "@/types/soh";
+import { getAccPriceList } from "@/lib/accPrice";
+import { accRows, accSummary, packAcc } from "@/lib/domain/accPrice";
+import { AccPriceBoard } from "@/components/modules/AccPriceBoard";
+import { AccPriceImport } from "@/components/modules/AccPriceImport";
+import { num } from "@/lib/format";
 
-const TABS: Array<{ key: PriceKind | "history"; label: string; href: string }> = [
+type Tab = PriceKind | "acc" | "history";
+const TABS: Array<{ key: Tab; label: string; href: string }> = [
   { key: "android", label: "Android", href: "/pricelist" },
   { key: "apple", label: "Apple", href: "/pricelist?k=apple" },
+  { key: "acc", label: "Aksesoris", href: "/pricelist?k=acc" },
   { key: "history", label: "Riwayat Harga", href: "/pricelist?k=history" },
 ];
 
@@ -28,6 +35,7 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
   const session = await requireSession();
   const q = await searchParams;
   if (q.k === "history") return <HistoryTab />;
+  if (q.k === "acc") return <AccTab isAdmin={session.role === "admin"} all={q.semua === "1"} />;
   const kind: PriceKind = q.k === "apple" ? "apple" : "android";
   const isAdmin = session.role === "admin";
   const update = isAdmin ? <Link href={`/upload#pricelist-${kind}`} prefetch={false} className="sd-btn primary">Update Price List {kind === "apple" ? "Apple" : "Android"}</Link> : undefined;
@@ -112,9 +120,9 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
   );
 }
 
-function Tabs({ current }: { current: PriceKind | "history" }) {
+function Tabs({ current }: { current: Tab }) {
   return (
-    <nav className="sd-tabs grid-cols-3" aria-label="Jenis price list">
+    <nav className="sd-tabs grid-cols-4" aria-label="Jenis price list">
       {TABS.map((t) => (
         <Link key={t.key} href={t.href} prefetch={false} className="sd-tab" aria-current={current === t.key ? "page" : undefined}>
           {t.label}
@@ -137,6 +145,73 @@ async function HistoryTab() {
       <Tabs current="history" />
       {error && <div className="alert error">Riwayat harga tidak bisa dibaca: {error}</div>}
       <PriceHistory updates={groupUpdates(lines).slice(0, 40)} timeZone={appConfig().timeZone} />
+    </div>
+  );
+}
+
+/** "Aksesoris": the accessories price list joined with the accessories in the SOH (by article). */
+async function AccTab({ isAdmin, all }: { isAdmin: boolean; all: boolean }) {
+  const action = isAdmin ? <AccPriceImport compact /> : undefined;
+  let list: Awaited<ReturnType<typeof getAccPriceList>> = null;
+  let error: string | null = null;
+  try {
+    list = await getAccPriceList();
+  } catch (e) {
+    error = (e as Error).message;
+  }
+  let soh: SohSnapshot | null = null;
+  try {
+    soh = await getSoh();
+  } catch {}
+  const items = list?.items ?? [];
+  const rows = items.length || soh ? accRows(items, soh?.items ?? null, all) : [];
+  const sum = accSummary(rows, soh?.items ?? null);
+  const desc = list ? `Price list aksesoris ${list.date ? dmy(list.date) : ""}${list.updatedAt ? ` · diimport ${timeAgo(Date.parse(list.updatedAt))}` : ""}${soh?.date ? ` · SOH ${dmy(soh.date)}` : ""}` : "Harga aksesoris per artikel, dicocokkan dengan stok di SOH.";
+
+  return (
+    <div className="sd-content">
+      <PageIntro title="Price List" desc={desc} actions={action} />
+      <Tabs current="acc" />
+      {error && <div className="alert error" role="alert">Price list aksesoris tidak bisa dibaca: {error}</div>}
+      {!items.length && !error && (
+        <Panel>
+          <EmptyBlock title="Price list aksesoris">
+            Belum ada price list aksesoris. {isAdmin ? "Klik Import Price List Aksesoris di atas lalu pilih file Excel-nya." : "Minta admin import file Excel price list aksesoris."}
+            {soh ? " Sementara ini harga diambil dari SOH." : ""}
+          </EmptyBlock>
+        </Panel>
+      )}
+      {soh && (
+        <>
+          <p className="text-xs text-slate-500">
+            {all ? (
+              <>Menampilkan semua artikel price list ({num(items.length)}), termasuk yang tidak ada stok. <Link href="/pricelist?k=acc" prefetch={false} className="font-semibold text-blue-600">Hanya yang ada stok</Link></>
+            ) : (
+              <>Hanya aksesoris yang ada stoknya di SOH ({num(sum.articles)} artikel · {num(sum.units)} pcs).{items.length ? <> <Link href="/pricelist?k=acc&semua=1" prefetch={false} className="font-semibold text-blue-600">Tampilkan semua price list ({num(items.length)})</Link></> : null}</>
+            )}
+          </p>
+          {items.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Stat label="Harga dari price list" value={sum.fromList} sub={`dari ${num(sum.articles)} artikel stok`} tone="green" />
+              <Stat label="Harga dari SOH" value={sum.fromSoh} sub="tidak ada di price list" tone="amber" />
+              <Stat label="Harga berubah" value={sum.changed} sub="ganti label harga" tone="blue" />
+              <Stat label="Di bawah SRP" value={sum.promo} sub="promo / repricing" tone="violet" />
+            </div>
+          )}
+        </>
+      )}
+      {rows.length > 0 && <AccPriceBoard key={all ? "all" : "stock"} rows={rows.map(packAcc)} hasSoh={!!soh} />}
+    </div>
+  );
+}
+
+function Stat({ label, value, sub, tone }: { label: string; value: number; sub: string; tone: "green" | "amber" | "blue" | "violet" }) {
+  const c = { green: "text-emerald-600", amber: "text-amber-600", blue: "text-blue-600", violet: "text-violet-600" }[tone];
+  return (
+    <div className="sd-panel p-3 sm:p-4">
+      <p className="text-[11px] font-black tracking-[.08em] text-slate-500 uppercase">{label}</p>
+      <p className={`text-2xl font-black tabular-nums ${c}`}>{num(value)}</p>
+      <p className="text-[11px] text-slate-400">{sub}</p>
     </div>
   );
 }
