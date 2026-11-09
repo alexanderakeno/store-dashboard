@@ -16,6 +16,8 @@ import { dmy, timeAgo } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { getSoh, stockKosong } from "@/lib/soh";
 import type { SohSnapshot } from "@/types/soh";
+import { getAccPriceList } from "@/lib/accPrice";
+import { accPriceMap } from "@/lib/domain/accPrice";
 
 /**
  * Price list per SOH article (+ Samsung PWP / trade in / EIP / ETP per variant), memoised per
@@ -123,6 +125,9 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
   // price popup per SKU (with Samsung promos): optional — a failed price-list read must not hide the stock
   const today = todayIn(appConfig().timeZone);
   const prices = await sohPrices(soh, today);
+  // accessories: the accessories price list per article (else the SOH unit price) — optional as well
+  const acc = await getAccPriceList().catch(() => null);
+  const accPrices = accPriceMap(acc?.items ?? [], soh.items);
 
   return (
     <div className="sd-content">
@@ -132,7 +137,7 @@ export default async function SohPage({ searchParams }: { searchParams: SearchPa
         actions={manage}
       />
       <Tabs kosong={false} count={kosongCount} />
-      <SohView categories={soh.categories} packed={packSohRows(sohRows(soh.items, p.snap.lines, p.asOf), soh.categories)} prices={prices} today={today} initialCat={p.q.cat ?? ""} initialSearch={(p.q.s ?? "").trim()} initialType={p.q.j ?? ""} initialSeries={p.q.sr ?? ""} />
+      <SohView categories={soh.categories} packed={packSohRows(sohRows(soh.items, p.snap.lines, p.asOf), soh.categories)} prices={prices} accPrices={Object.keys(accPrices).length ? accPrices : undefined} today={today} initialCat={p.q.cat ?? ""} initialSearch={(p.q.s ?? "").trim()} initialType={p.q.j ?? ""} initialSeries={p.q.sr ?? ""} />
     </div>
   );
 }
