@@ -12,6 +12,7 @@ import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList } from "@/types/pricelist";
 import type { PriceListInput } from "../types";
+import type { AccPriceItem, AccPriceList } from "@/types/accPrice";
 import type { SamsungPromo } from "@/types/samsungPromo";
 import type { AccessEntry, AccessEvent } from "@/types/access";
 import type { PriceChange, PriceChangeType } from "@/lib/domain/priceHistory";
@@ -34,6 +35,7 @@ export const MASTER_TABS = {
   records: { name: "APP_Records", header: ["kind", "date", "key", "data", "updatedAt", "updatedBy"] },
   soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy", "price"] },
   priceList: { name: "APP_PriceList", header: ["kind", "brand", "series", "name", "normal", "promo", "status", "extra", "date", "source", "updatedAt", "updatedBy"] },
+  accPrice: { name: "APP_AccPrice", header: ["article", "brand", "description", "category", "srp", "current", "price", "remark", "date", "source", "updatedAt", "updatedBy"] },
   samsungPromo: { name: "APP_SamsungPromo", header: ["kind", "data", "source", "updatedAt", "updatedBy"] },
 } as const;
 
@@ -315,6 +317,24 @@ export class SheetsSource implements DataSource {
     for (const x of input.items) out.push([x.kind, x.brand, x.series, x.name, x.normal, x.promo, x.status, extra(x), input.date ?? "", input.source, now, by]);
     for (const q of input.qoala) out.push(["qoala", q.tier, q.range, "", "", "", "", JSON.stringify(q.fees), input.date ?? "", input.source, now, by]);
     await this.rewrite("priceList", out);
+  }
+
+  async getAccPriceList(): Promise<AccPriceList | null> {
+    const rows = await this.rows("accPrice");
+    if (!rows.length) return null;
+    const items: AccPriceItem[] = rows
+      .map((r) => {
+        const remark = normalizeText(r.remark);
+        return { article: normalizeText(r.article).toUpperCase(), brand: normalizeText(r.brand), description: normalizeText(r.description), category: normalizeText(r.category), srp: parseNumber(r.srp), current: parseNumber(r.current), price: parseNumber(r.price), ...(remark ? { remark } : {}) };
+      })
+      .filter((x) => x.article && x.price > 0);
+    const first = rows[0];
+    return { date: parseDate(first.date), source: normalizeText(first.source), items, updatedAt: normalizeText(first.updatedAt), updatedBy: normalizeText(first.updatedBy) };
+  }
+
+  async saveAccPriceList(list: Omit<AccPriceList, "updatedAt" | "updatedBy">, by: string): Promise<void> {
+    const now = new Date().toISOString();
+    await this.rewrite("accPrice", list.items.map((x) => [x.article, x.brand, x.description, x.category, x.srp, x.current, x.price, x.remark ?? "", list.date ?? "", list.source, now, by]));
   }
 
   /** One row per program / article / pair / sheet, the record itself as JSON in `data`. */
