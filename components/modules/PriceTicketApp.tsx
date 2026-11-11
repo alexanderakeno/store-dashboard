@@ -117,14 +117,20 @@ async function pdfOf(list: TicketData[], ov: Overrides, layout: "single" | "a4",
   const pages: PdfPage[] = [];
   if (layout === "single") list.forEach((d, i) => pages.push({ w: d.tpl.size[0], h: d.tpl.size[1], items: [{ img: i, x: 0, y: 0, w: d.tpl.size[0], h: d.tpl.size[1] }] }));
   else {
-    // tickets of the same size share sheets
+    // tickets of the same size share sheets (grouped by size, original order kept within a size)
+    const order = list.map((_, i) => i);
+    const sizeKey = (d: TicketData) => d.tpl.size.join("x");
+    const first = new Map<string, number>();
+    list.forEach((d, i) => first.has(sizeKey(d)) || first.set(sizeKey(d), i));
+    order.sort((a, b) => first.get(sizeKey(list[a]))! - first.get(sizeKey(list[b]))! || a - b);
+    const at = (k: number) => list[order[k]];
     let i = 0;
     while (i < list.length) {
-      const [w, h] = list[i].tpl.size;
+      const [w, h] = at(i).tpl.size;
       const g = a4Grid(w, h);
       const per = g.cols * g.rows;
       const batch: number[] = [];
-      while (i < list.length && batch.length < per && list[i].tpl.size[0] === w && list[i].tpl.size[1] === h) batch.push(i++);
+      while (i < list.length && batch.length < per && at(i).tpl.size[0] === w && at(i).tpl.size[1] === h) batch.push(order[i++]);
       const mx = (g.W - g.cols * w) / 2;
       const my = (g.H - g.rows * h) / 2;
       pages.push({ w: g.W, h: g.H, items: batch.map((img, k) => ({ img, x: mx + (k % g.cols) * w, y: my + Math.floor(k / g.cols) * h, w, h, cut: true })) });
@@ -252,11 +258,30 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [detail, setDetail] = useState<string | null>(null);
+  /** Tickets ticked for the A4 sheet (ids, any brand). */
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const list = tickets.filter((t) => t.tpl.brand === brand);
   const changed = list.filter((t) => t.slots.some((s) => s.status === "updated")).length;
   const missing = list.filter((t) => t.slots.some((s) => s.status === "missing")).length;
   const open = detail ? tickets.find((t) => t.tpl.id === detail) ?? null : null;
   const sizes = [...new Set(list.map((t) => sizeText(t.tpl)))].join(" / ");
+  const chosen = tickets.filter((t) => picked.has(t.tpl.id));
+  const chosenBrands = [...new Set(chosen.map((t) => t.tpl.brand))];
+  const pickedHere = list.filter((t) => picked.has(t.tpl.id)).length;
+  const toggle = (id: string) =>
+    setPicked((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const pickAll = (on: boolean) =>
+    setPicked((s) => {
+      const n = new Set(s);
+      list.forEach((t) => (on ? n.add(t.tpl.id) : n.delete(t.tpl.id)));
+      return n;
+    });
+  const a4Name = chosen.length ? `Price Ticket ${chosenBrands.length === 1 ? chosenBrands[0] + " " : ""}pilihan (A4)` : `Price Ticket ${brand} (A4)`;
 
   /** `name` without extension: the PDF's file name (the caption when it is shared) and its title. */
   const run = async (id: string, items: TicketData[], layout: "single" | "a4", name: string) => {
@@ -291,9 +316,20 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
           <button type="button" className="sd-btn primary" disabled={!!busy} onClick={() => run("all", list, "single", `Price Ticket ${brand} (${[...new Set(list.map((t) => sizeFile(t.tpl)))].join(", ")})`)}>
             {busy === "all" ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} Download semua ({sizes})
           </button>
-          <button type="button" className="sd-btn" disabled={!!busy} onClick={() => run("a4", list, "a4", `Price Ticket ${brand} (A4)`)}>
-            {busy === "a4" ? <Loader2 className="size-4 animate-spin" /> : <FileStack className="size-4" />} Download A4 (beberapa per halaman)
+          <button type="button" className="sd-btn" disabled={!!busy} onClick={() => run("a4", chosen.length ? chosen : list, "a4", a4Name)}>
+            {busy === "a4" ? <Loader2 className="size-4 animate-spin" /> : <FileStack className="size-4" />} {chosen.length ? `Download A4 · ${chosen.length} ticket dipilih` : `Download A4 (semua ${brand})`}
           </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+          <span>Centang ticket di bawah untuk digabung jadi A4{chosenBrands.length > 1 ? ` (bisa beda brand: ${chosenBrands.join(", ")})` : ""}.</span>
+          <button type="button" className="font-bold text-blue-600 hover:underline" onClick={() => pickAll(pickedHere < list.length)}>
+            {pickedHere < list.length ? `Pilih semua ${brand}` : `Hapus pilihan ${brand}`}
+          </button>
+          {chosen.length > 0 && (
+            <button type="button" className="font-bold text-slate-500 hover:underline" onClick={() => setPicked(new Set())}>
+              Kosongkan pilihan ({chosen.length})
+            </button>
+          )}
         </div>
         <p className="text-[11px] text-slate-400">Saat print, pilih ukuran asli / skala 100% (jangan &quot;Fit to page&quot;) supaya ukuran ticket tepat {sizes}.</p>
         {err && <div className="alert error" role="alert">{err}</div>}
@@ -301,8 +337,14 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {list.map((d) => (
-          <article key={d.tpl.id} className="sd-panel flex flex-col gap-3 p-3 sm:p-4">
-            <Preview d={d} ov={ov} />
+          <article key={d.tpl.id} className={`sd-panel flex flex-col gap-3 p-3 sm:p-4 ${picked.has(d.tpl.id) ? "ring-2 ring-blue-500" : ""}`}>
+            <div className="relative">
+              <Preview d={d} ov={ov} />
+              <label className="absolute left-2 top-2 flex cursor-pointer items-center gap-1.5 rounded-lg bg-white/90 px-2 py-1 text-xs font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 backdrop-blur">
+                <input type="checkbox" className="size-4 accent-blue-600" checked={picked.has(d.tpl.id)} onChange={() => toggle(d.tpl.id)} />
+                A4
+              </label>
+            </div>
             <div className="flex items-start gap-2">
               <h3 className="flex-1 text-base font-black text-slate-950">{d.tpl.name}</h3>
               {d.slots.every((s) => s.status === "same") ? <CheckCircle2 className="size-5 text-emerald-500" aria-label="Sesuai price list" /> : d.slots.some((s) => s.status === "missing") ? <AlertTriangle className="size-5 text-amber-500" aria-label="Ada varian di luar price list" /> : null}
