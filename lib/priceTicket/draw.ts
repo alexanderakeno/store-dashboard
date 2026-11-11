@@ -24,7 +24,24 @@ export function measure(str: string, H: number, track: number): number {
 }
 
 /** Glyphs bottom-aligned on `baseline` from `x`; returns the right edge. */
-function drawStr(ctx: CanvasRenderingContext2D, str: string, x: number, baseline: number, H: number, track: number): number {
+/**
+ * Fills a glyph; `w` (glyph units) makes it heavier (outline stroked in the ink) or lighter (outline stroked in white —
+ * the price area is erased to white first), so the digits print with the design's weight.
+ */
+function fillWeighted(ctx: CanvasRenderingContext2D, p: Path2D, w: number) {
+  ctx.fill(p);
+  if (!w) return;
+  const ink = ctx.fillStyle;
+  ctx.save();
+  ctx.strokeStyle = w > 0 ? ink : "#fff";
+  ctx.lineWidth = Math.abs(w);
+  ctx.lineJoin = "round";
+  ctx.stroke(p);
+  ctx.restore();
+}
+
+/** `wt` = extra stroke weight in px: matches the weight the design's text printed with. */
+function drawStr(ctx: CanvasRenderingContext2D, str: string, x: number, baseline: number, H: number, track: number, wt = 0): number {
   [...str].forEach((ch, i) => {
     const g = GLYPHS[ch];
     const s = H / g.srcH;
@@ -32,7 +49,7 @@ function drawStr(ctx: CanvasRenderingContext2D, str: string, x: number, baseline
     ctx.save();
     ctx.translate(x - g.pad * s, baseline - (g.pad + g.h) * s);
     ctx.scale(s, s);
-    ctx.fill(path(ch));
+    fillWeighted(ctx, path(ch), wt / s);
     ctx.restore();
     x += g.w * s;
   });
@@ -44,8 +61,9 @@ const rpWidth = (H: number) => {
   return GLYPHS.R.w * s + 0.08 * H + GLYPHS.p.w * s + 0.093 * H + GLYPHS["r."].w * s;
 };
 
-/** "Rp." ending just left of `digitsX`, baseline 0.48·H under the digit top. Returns its left edge. */
-function drawRp(ctx: CanvasRenderingContext2D, digitsX: number, digitTop: number, H: number): number {
+/** "Rp." ending `gap`·H left of `digitsX`, baseline 0.48·H under the digit top (H = digit height × `scale`). Returns its left edge. */
+function drawRp(ctx: CanvasRenderingContext2D, digitsX: number, digitTop: number, digitH: number, gap = 0.08, scale = 1, wt = 0): number {
+  const H = digitH * scale;
   const base = digitTop + 0.48 * H;
   const s = H / GLYPHS.R.srcH;
   const put = (k: string, x0: number, bottom: number) => {
@@ -53,11 +71,11 @@ function drawRp(ctx: CanvasRenderingContext2D, digitsX: number, digitTop: number
     ctx.save();
     ctx.translate(x0 - g.pad * s, bottom - (g.pad + g.h) * s);
     ctx.scale(s, s);
-    ctx.fill(path(k));
+    fillWeighted(ctx, path(k), wt / s);
     ctx.restore();
     return x0 + g.w * s;
   };
-  const left = digitsX - 0.08 * H - rpWidth(H);
+  const left = digitsX - gap * digitH - rpWidth(H);
   let x = put("R", left, base) + 0.08 * H;
   x = put("p", x, base + 0.173 * H) + 0.093 * H;
   put("r.", x, base);
@@ -74,9 +92,9 @@ function groupWidth(slot: TicketSlot, price: number, H: number) {
 function drawGroup(ctx: CanvasRenderingContext2D, slot: TicketSlot, price: number, x: number, top: number, H: number): number {
   const k = H / slot.H;
   const [main, sup] = splitPrice(price);
-  const end = drawStr(ctx, main, x, top + H, H, slot.track);
+  const end = drawStr(ctx, main, x, top + H, H, slot.track, (slot.wt ?? 0) * k);
   const sh = slot.sup.h * k;
-  return drawStr(ctx, sup, end + slot.sup.gap * k, top + slot.sup.dy * k + sh, sh, slot.sup.track);
+  return drawStr(ctx, sup, end + slot.sup.gap * k, top + slot.sup.dy * k + sh, sh, slot.sup.track, (slot.sup.wt ?? 0) * k);
 }
 
 /** Erases the design's price and draws `price` (and `strike`, the normal price struck through) in the design's style. */
@@ -97,12 +115,12 @@ export function drawSlot(ctx: CanvasRenderingContext2D, slot: TicketSlot, style:
   const k = sH / slot.H;
   const sw = groupWidth(slot, strike, slot.H) * k;
   const sx = st.align === "right" ? right + st.dx * slot.H - sw : slot.x + st.dx * slot.H;
-  const rpLeft = drawRp(ctx, sx, sTop, sH);
+  const rpLeft = drawRp(ctx, sx, sTop, sH, st.rpGap, st.rpH, st.rpWt);
   // strike digits in the main price's spacing, scaled down
   const [main, sup] = splitPrice(strike);
-  const end = drawStr(ctx, main, sx, sTop + sH, sH, slot.track);
+  const end = drawStr(ctx, main, sx, sTop + sH, sH, slot.track, st.wt ?? 0);
   const sh = slot.sup.h * k;
-  const sRight = drawStr(ctx, sup, end + slot.sup.gap * k, sTop + slot.sup.dy * k + sh, sh, slot.sup.track);
+  const sRight = drawStr(ctx, sup, end + slot.sup.gap * k, sTop + slot.sup.dy * k + sh, sh, slot.sup.track, st.wt ?? 0);
   const [x0, y0, x1, y1, lw] = st.line;
   ctx.strokeStyle = RED;
   ctx.lineWidth = Math.max(1.2, lw * sH);
@@ -131,17 +149,25 @@ export function loadTicketFonts(): Promise<void> {
 }
 
 /** Erases the design's text price and writes `value` (+ suffix) in its place, narrowed if it would run into the next text. */
-function drawText(ctx: CanvasRenderingContext2D, slot: TextSlot, value: number) {
+export function drawText(ctx: CanvasRenderingContext2D, slot: TextSlot, value: number) {
   ctx.fillStyle = "#fff";
   for (const [ex, ey, ew, eh] of slot.erase) ctx.fillRect(ex, ey, ew, eh);
   ctx.font = `${slot.bold ? 700 : 400} ${slot.size}px ${FACES[slot.font ?? "heros"].family}`;
   ctx.fillStyle = slot.color;
   ctx.textBaseline = "alphabetic";
-  const text = `${idNum(value)}${slot.suffix}`;
+  const fam = FACES[slot.font ?? "heros"].family;
+  const sfx = slot.suffixSize ?? slot.size;
+  const fontOf = (px: number) => `${slot.bold ? 700 : 400} ${px}px ${fam}`;
+  const widthOf = (v: number) => {
+    ctx.font = fontOf(slot.size);
+    const a = ctx.measureText(idNum(v)).width;
+    ctx.font = fontOf(sfx);
+    return a + (slot.suffix ? ctx.measureText(slot.suffix).width : 0);
+  };
   // the design's spacing: printed width / width of the same text in this font
-  const ref = ctx.measureText(`${idNum(slot.canva.price)}${slot.suffix}`).width;
+  const ref = widthOf(slot.canva.price);
   const k = ref > 0 ? Math.min(1.15, Math.max(0.85, slot.w / ref)) : 1;
-  const w = ctx.measureText(text).width * k;
+  const w = widthOf(value) * k;
   const room = slot.maxRight - slot.x;
   ctx.save();
   ctx.translate(slot.x, slot.y);
@@ -149,7 +175,14 @@ function drawText(ctx: CanvasRenderingContext2D, slot: TextSlot, value: number) 
   const narrow = w > room && room > 0 ? Math.max(0.88, room / w) : 1;
   const fit = w * narrow > room && room > 0 ? room / (w * narrow) : 1;
   ctx.scale(k * narrow * fit, fit);
-  ctx.fillText(text, 0, 0);
+  ctx.font = fontOf(slot.size);
+  const num = idNum(value);
+  ctx.fillText(num, 0, 0);
+  if (slot.suffix) {
+    const nw = ctx.measureText(num).width;
+    ctx.font = fontOf(sfx);
+    ctx.fillText(slot.suffix, nw, 0);
+  }
   ctx.restore();
 }
 
