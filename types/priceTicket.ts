@@ -52,6 +52,8 @@ export interface TicketSlot {
 export interface TextSlot {
   type: "text";
   key: string;
+  /** "acc" = matched in the accessories price list (Apple Pencil, Magic Keyboard, …) instead of the template's. */
+  list?: "acc";
   label: string;
   field: "price" | "monthly";
   /** Value printed in the design (the monthly amount for a monthly slot). */
