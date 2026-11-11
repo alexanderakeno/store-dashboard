@@ -117,3 +117,20 @@ test("online accounts (Digiplus.co.id, Mapemall): 5rb per Apple device, no Qoala
   assert.equal(v.rows.find((r) => r.name === "Mapemall")?.deviceFee, (2 - 1) * 5_000); // return subtracts
   assert.equal(v.rows.some((r) => /TOKOPEDIA/i.test(r.name)), false);
 });
+
+test("providers: Telkomsel + XL + Indosat value combined per staff, 20rb per full 1 jt; returns subtract; online ignored", () => {
+  const telco = (vasProvider: string, amount: number, staffName = "CHELSY ARRAHMAT") => line({ group: "VAS", lob: null, vasProvider, type: "ACCESSORIES", brand: vasProvider.toUpperCase(), amount, staffName, countsInQty: false });
+  const v = incentiveView(
+    [telco("Telkomsel", 1_400_000), telco("XL", 900_000), telco("Indosat", 750_000), telco("Telkomsel", -100_000), telco("XL", 5_000_000, "DIGIPLUS.CO.ID"), telco("Indosat", 999_000, "Budi")],
+    R, null, ["Chelsy Arrahmat", "Budi"],
+  );
+  const c = v.rows.find((x) => x.name === "Chelsy Arrahmat")!;
+  // 1,4 + 0,9 + 0,75 − 0,1 = 2,95 jt → 2 × 20rb
+  assert.equal(c.provider.value, 2_950_000);
+  assert.equal(c.provider.fee, 40_000);
+  assert.deepEqual(c.provider.byProvider, { Telkomsel: 1_300_000, XL: 900_000, Indosat: 750_000 });
+  assert.equal(v.rows.find((x) => x.name === "Budi")!.provider.fee, 0); // 999rb: below 1 jt
+  assert.equal(v.rows.find((x) => x.name === "Digiplus.co.id")?.provider.fee ?? 0, 0);
+  assert.equal(v.total.provider, 40_000);
+  assert.equal(c.total, 40_000);
+});
