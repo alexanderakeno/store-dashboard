@@ -53,6 +53,8 @@ export interface TextSlot {
   y: number;
   size: number;
   bold: boolean;
+  /** Face the design was rendered with: heros = Helvetica, liberation = Arial (default heros). */
+  font?: "heros" | "liberation";
   color: string;
   suffix: string;
   /** Width of the printed text in the design: its letter spacing is copied (Word spaces characters its own way). */
