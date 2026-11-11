@@ -14,6 +14,7 @@ export function validateRuleOverrides(input: unknown): Result {
   for (const [k, v] of Object.entries(input)) {
     switch (k) {
       case "vasBrands":
+      case "vasArticlePrefixes":
       case "appleLob":
       case "accSuppliers":
         if (!strMap(v)) return { ok: false, error: `${k}: harus objek { "BRAND": "Nama" }` };

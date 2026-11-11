@@ -15,13 +15,15 @@ export interface Classification {
   countsInQty: boolean;
 }
 
-export function classify(line: Pick<SalesLineRaw, "type" | "brand" | "category" | "description" | "nik" | "staffName">, rules: BusinessRules): Classification {
+export function classify(line: Pick<SalesLineRaw, "type" | "brand" | "category" | "description" | "nik" | "staffName"> & { article?: string }, rules: BusinessRules): Classification {
   const brand = normalizeKey(line.brand);
   const type = normalizeKey(line.type);
   const category = normalizeKey(line.category);
   const description = normalizeKey(line.description);
 
-  const vasProvider = rules.vasBrands[brand] ?? null;
+  const article = normalizeKey(line.article);
+  const prefix = Object.keys(rules.vasArticlePrefixes ?? {}).find((k) => k && article.startsWith(normalizeKey(k)));
+  const vasProvider = rules.vasBrands[brand] ?? (prefix ? rules.vasArticlePrefixes[prefix] : null);
   let group: Group;
   if (vasProvider) group = "VAS";
   else {

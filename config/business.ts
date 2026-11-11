@@ -8,6 +8,8 @@ import type { Group } from "@/types/domain";
 export interface BusinessRules {
   /** Raw brand → VAS provider display name. */
   vasBrands: Record<string, string>;
+  /** Article code prefix → VAS provider (e.g. XL data packages "XXL…" whose Type/Brand are empty). */
+  vasArticlePrefixes: Record<string, string>;
   /** brand|category → group overrides, applied after VAS detection. */
   groupOverrides: Array<{ brand: string; category?: string; type?: string; group: Group }>;
   /** Raw SP category → Apple LOB name. */
@@ -43,6 +45,7 @@ export interface IncentiveRules {
 
 export const DEFAULT_RULES: BusinessRules = {
   vasBrands: { KOALA: "Qoala", QOALA: "Qoala", TELKOMSEL: "Telkomsel", XL: "XL", INDOSAT: "Indosat" },
+  vasArticlePrefixes: { XXL: "XL" },
   groupOverrides: [
     { brand: "SAMSUNG", category: "WATCH", type: "DEVICES", group: "ACC" },
     { brand: "XIAOMI", category: "WATCH", type: "DEVICES", group: "ACC" },
