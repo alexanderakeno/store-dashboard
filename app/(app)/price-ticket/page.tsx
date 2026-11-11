@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth/session";
 import { getPriceList } from "@/lib/pricelist";
 import { resolveSlot } from "@/lib/domain/priceTicket";
 import { TICKET_TEMPLATES } from "@/lib/priceTicket/templates";
+import { APPLE_TEMPLATES } from "@/lib/priceTicket/apple";
 import { PriceTicketApp, type TicketData } from "@/components/modules/PriceTicketApp";
 import { dmy } from "@/lib/format";
 
@@ -18,8 +19,10 @@ export default async function PriceTicketPage() {
   });
   // without a readable price list every slot keeps the design's price ("missing")
   const items = list?.items ?? [];
-  const tickets: TicketData[] = TICKET_TEMPLATES.map((tpl) => ({ tpl, slots: tpl.slots.map((s) => resolveSlot(s, items)) }));
-  const date = list?.dates?.android ?? null;
+  // Apple after Samsung; the rest as generated
+  const all = [...TICKET_TEMPLATES.filter((t) => t.brand === "Xiaomi" || t.brand === "Samsung"), ...APPLE_TEMPLATES, ...TICKET_TEMPLATES.filter((t) => t.brand !== "Xiaomi" && t.brand !== "Samsung")];
+  const tickets: TicketData[] = all.map((tpl) => ({ tpl, slots: tpl.slots.map((s) => resolveSlot(s, items, tpl.kind ?? "android")) }));
+  const date = list?.dates?.android ?? list?.dates?.apple ?? null;
   return (
     <div className="sd-content">
       <PageIntro
