@@ -9,6 +9,12 @@ export interface StrikeStyle {
   /** "right": the strike group ends `dx`·H right of the main price's end; "left": its digits start `dx`·H right of the main digits. */
   align: "left" | "right";
   dx: number;
+  /** "Rp." of the strike price: gap before the digits (digit heights), size and stroke weight vs the digits (defaults 0.08, 1, 0). */
+  rpGap?: number;
+  rpH?: number;
+  rpWt?: number;
+  /** Extra stroke weight of the strike digits (px). */
+  wt?: number;
   /** Red line: start (from the strike "Rp." left) and end (from the group's right edge), x/y in strike digit heights; width. */
   line: [number, number, number, number, number];
 }
@@ -25,8 +31,10 @@ export interface TicketSlot {
   top: number;
   H: number;
   track: number;
-  /** Superscript thousands: gap after the digits, top offset from the digit top, height, letter spacing (all px / ratio). */
-  sup: { gap: number; dy: number; h: number; track: number };
+  /** Extra stroke weight (px) so the digits print as heavy as the design's. */
+  wt?: number;
+  /** Superscript thousands: gap after the digits, top offset from the digit top, height, letter spacing (all px / ratio), weight. */
+  sup: { gap: number; dy: number; h: number; track: number; wt?: number };
   /** Areas holding the printed price (digits, superscript, strike price) — one per letter, so nearby text stays. */
   erase: Array<[number, number, number, number]>;
   /** The price must end before this x (next price / icons). */
@@ -57,6 +65,8 @@ export interface TextSlot {
   font?: "heros" | "liberation";
   color: string;
   suffix: string;
+  /** Font size of the suffix when the design prints it smaller ("749.958 / bulan"). */
+  suffixSize?: number;
   /** Width of the printed text in the design: its letter spacing is copied (Word spaces characters its own way). */
   w: number;
   erase: Array<[number, number, number, number]>;
