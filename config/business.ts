@@ -35,7 +35,7 @@ export interface IncentiveRules {
   perUnit: Record<string, number>;
   /** Qoala fee per policy by policy price: the highest tier whose `min` ≤ price applies. */
   qoalaTiers: Array<{ min: number; fee: number }>;
-  /** Online sales accounts (Digiplus.co.id, Mapemall): a flat rupiah per Apple device, no Qoala. */
+  /** Online sales accounts (Digiplus.co.id, Mapemall): a flat rupiah per device (Apple & Android); no Qoala, provider or accessories. */
   online: { accounts: string[]; perUnit: number };
   /** Android devices: flat rupiah per unit, except the listed products (brand + description pattern, case-insensitive). */
   android?: { perUnit: number; exclude: Array<{ brand: string; match: string }> };

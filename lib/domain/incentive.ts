@@ -68,7 +68,8 @@ export function qoalaFee(price: number, tiers: IncentiveRules["qoalaTiers"]): nu
  * - Providers (Telkomsel, XL, Indosat): their sales value added up per staff; `provider.fee` per full
  *   `provider.step` of that sum (20rb per 1 jt).
  * - Accessories: taken as-is from the sheet's "LEADERBOARD ACC FOKUS" (its own date, MTD).
- * - Online accounts (`online.accounts`, e.g. Digiplus.co.id, Mapemall): `online.perUnit` per Apple device only.
+ * - Online accounts (`online.accounts`, e.g. Digiplus.co.id, Mapemall): `online.perUnit` per device (Apple & Android);
+ *   no Qoala, provider or accessory fee.
  * `lines` must already be limited to the period; other online channel lines are ignored.
  */
 export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: AccFocusBoard | null, staff: string[]): IncentiveView {
@@ -95,19 +96,19 @@ export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: Ac
   };
   for (const n of staff) row(n);
 
-  // online accounts (Digiplus.co.id, Mapemall): flat rate per Apple device, nothing else
+  // online accounts (Digiplus.co.id, Mapemall): flat rate per device (Apple & Android), nothing else
   const online = new Set((rules.online?.accounts ?? []).map(nameKey));
   for (const l of lines) {
     if (!l.staffName) continue;
     const isOnline = online.has(nameKey(l.staffName));
     if (l.isChannel && !isOnline) continue;
     const apple = l.group === "Apple" && l.lob ? rules.perUnit[l.lob] : undefined;
-    // Android: one column for every brand; online accounts are paid on Apple devices only
-    const android = !isOnline && l.type === "DEVICES" && rules.android && androidPaid(l, rules) ? rules.android.perUnit : undefined;
+    // Android: one column for every brand
+    const android = l.type === "DEVICES" && rules.android && androidPaid(l, rules) ? rules.android.perUnit : undefined;
     const base = apple ?? android;
     const col = apple !== undefined ? l.lob! : "Android";
-    const rate = apple !== undefined && isOnline ? (rules.online?.perUnit ?? 0) : base;
-    if (isOnline && (apple === undefined || !l.countsInQty)) continue;
+    const rate = base !== undefined && isOnline ? (rules.online?.perUnit ?? 0) : base;
+    if (isOnline && (base === undefined || !l.countsInQty)) continue;
     if (rate !== undefined && l.countsInQty) {
       const r = row(displayName(l.staffName));
       const d = (r.device[col] ??= { qty: 0, fee: 0 });
@@ -137,6 +138,7 @@ export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: Ac
   }
 
   for (const s of acc?.staff ?? []) {
+    if (online.has(nameKey(s.name))) continue; // online accounts: devices only, no accessory fee
     const r = row(rows.get(nameKey(s.name))?.name ?? displayName(s.name));
     r.acc = { ...s.total, bySupplier: s.bySupplier };
   }
