@@ -1,6 +1,15 @@
 import type { PriceItem } from "@/types/pricelist";
 import type { PriceKind } from "@/types/pricelist";
+import type { AccPriceItem } from "@/types/accPrice";
 import { isTextSlot, type AnySlot, type ResolvedSlot } from "@/types/priceTicket";
+
+/** Price list kinds a ticket reads: the phone lists plus the accessories list. */
+export type TicketKind = PriceKind | "acc";
+export type TicketPriceItem = Pick<PriceItem, "name" | "normal" | "promo"> & { kind: TicketKind };
+
+/** Accessories price list rows as ticket rows: selling price = "Repricing Cash", normal = the higher SRP. */
+export const accTicketItems = (items: AccPriceItem[]): TicketPriceItem[] =>
+  items.filter((x) => x.price > 0).map((x) => ({ kind: "acc", name: x.description, normal: Math.max(x.srp || 0, x.price), promo: x.price }));
 
 /** Brand / range words that price lists add or leave out freely. */
 const NOISE = new Set(["SAMSUNG", "GALAXY", "HUAWEI", "OPPO", "MOTOROLA", "MOTO", "INFINIX", "APPLE", "ONLY", "GB", "INCH"]);
@@ -29,9 +38,9 @@ export function nameTokens(s: string): string[] {
 export const normName = (s: string) => nameTokens(s).join(" ");
 
 /** Price list row for a slot: the row with every word of the slot and the fewest other (non-model) words. */
-export function matchRow(slot: Pick<AnySlot, "key" | "canva">, items: PriceItem[], kind: PriceKind = "android"): PriceItem | null {
+export function matchRow(slot: Pick<AnySlot, "key" | "canva">, items: TicketPriceItem[], kind: TicketKind = "android"): TicketPriceItem | null {
   const want = nameTokens(slot.key);
-  let best: { row: PriceItem; extra: number } | null = null;
+  let best: { row: TicketPriceItem; extra: number } | null = null;
   const designNormal = slot.canva.strike ?? slot.canva.price;
   for (const row of items) {
     if (row.kind !== kind || !(row.normal > 0)) continue;
@@ -49,8 +58,8 @@ export function matchRow(slot: Pick<AnySlot, "key" | "canva">, items: PriceItem[
 }
 
 /** Price list price for a ticket slot. Promo < normal → promo price with the normal price struck through. */
-export function resolveSlot(slot: AnySlot, items: PriceItem[], kind: PriceKind = "android"): ResolvedSlot {
-  const row = matchRow(slot, items, kind);
+export function resolveSlot(slot: AnySlot, items: TicketPriceItem[], kind: TicketKind = "android"): ResolvedSlot {
+  const row = matchRow(slot, items, isTextSlot(slot) && slot.list === "acc" ? "acc" : kind);
   const base = { key: slot.key, label: slot.label };
   if (!row) return { ...base, price: slot.canva.price, strike: slot.canva.strike, status: "missing" };
   const promo = row.promo > 0 && row.promo < row.normal ? row.promo : row.normal;
