@@ -113,13 +113,16 @@ export function drawSlot(ctx: CanvasRenderingContext2D, slot: TicketSlot, style:
   ctx.stroke();
 }
 
-/** Font of the text slots (Apple tickets: Helvetica → TeX Gyre Heros, the same face the design images were rendered with). */
-const TEXT_FONT = "TicketHeros";
+/** Fonts of the text slots, the same faces the Apple designs were rendered with: Helvetica → TeX Gyre Heros, Arial → Liberation Sans. */
+const FACES = {
+  heros: { family: "TicketHeros", regular: "/fonts/texgyreheros-regular.otf", bold: "/fonts/texgyreheros-bold.otf" },
+  liberation: { family: "TicketLiberation", regular: "/fonts/LiberationSans-Regular.ttf", bold: "/fonts/LiberationSans-Bold.ttf" },
+} as const;
 let fonts: Promise<void> | null = null;
 export function loadTicketFonts(): Promise<void> {
   fonts ??= (async () => {
-    const faces = [new FontFace(TEXT_FONT, "url(/fonts/texgyreheros-regular.otf)", { weight: "400" }), new FontFace(TEXT_FONT, "url(/fonts/texgyreheros-bold.otf)", { weight: "700" })];
-    for (const f of faces) document.fonts.add(await f.load());
+    const faces = Object.values(FACES).flatMap((f) => [new FontFace(f.family, `url(${f.regular})`, { weight: "400" }), new FontFace(f.family, `url(${f.bold})`, { weight: "700" })]);
+    for (const f of await Promise.all(faces.map((x) => x.load()))) document.fonts.add(f);
   })().catch((e) => {
     fonts = null;
     throw new Error(`Font ticket gagal dimuat: ${(e as Error).message}`);
@@ -131,7 +134,7 @@ export function loadTicketFonts(): Promise<void> {
 function drawText(ctx: CanvasRenderingContext2D, slot: TextSlot, value: number) {
   ctx.fillStyle = "#fff";
   for (const [ex, ey, ew, eh] of slot.erase) ctx.fillRect(ex, ey, ew, eh);
-  ctx.font = `${slot.bold ? 700 : 400} ${slot.size}px ${TEXT_FONT}`;
+  ctx.font = `${slot.bold ? 700 : 400} ${slot.size}px ${FACES[slot.font ?? "heros"].family}`;
   ctx.fillStyle = slot.color;
   ctx.textBaseline = "alphabetic";
   const text = `${idNum(value)}${slot.suffix}`;
