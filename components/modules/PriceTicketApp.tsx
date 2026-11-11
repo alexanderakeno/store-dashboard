@@ -265,7 +265,9 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
   const missing = list.filter((t) => t.slots.some((s) => s.status === "missing")).length;
   const open = detail ? tickets.find((t) => t.tpl.id === detail) ?? null : null;
   const sizes = [...new Set(list.map((t) => sizeText(t.tpl)))].join(" / ");
-  const chosen = tickets.filter((t) => picked.has(t.tpl.id));
+  // in the order they were ticked: the badge number = place on the A4 sheet
+  const chosen = [...picked].map((id) => tickets.find((t) => t.tpl.id === id)).filter((t): t is TicketData => !!t);
+  const order = new Map(chosen.map((t, i) => [t.tpl.id, i + 1]));
   const chosenBrands = [...new Set(chosen.map((t) => t.tpl.brand))];
   const pickedHere = list.filter((t) => picked.has(t.tpl.id)).length;
   const toggle = (id: string) =>
@@ -321,7 +323,7 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-          <span>Centang ticket di bawah untuk digabung jadi A4{chosenBrands.length > 1 ? ` (bisa beda brand: ${chosenBrands.join(", ")})` : ""}.</span>
+          <span>Klik bulatan A4 di sudut kartu untuk memilih ticket yang digabung jadi A4 (nomor = urutan di kertas){chosenBrands.length > 1 ? ` (bisa beda brand: ${chosenBrands.join(", ")})` : ""}.</span>
           <button type="button" className="font-bold text-blue-600 hover:underline" onClick={() => pickAll(pickedHere < list.length)}>
             {pickedHere < list.length ? `Pilih semua ${brand}` : `Hapus pilihan ${brand}`}
           </button>
@@ -337,20 +339,9 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {list.map((d) => (
-          <article key={d.tpl.id} className={`sd-panel flex flex-col gap-3 p-3 sm:p-4 ${picked.has(d.tpl.id) ? "ring-2 ring-blue-500" : ""}`}>
-            <div className="relative">
-              <Preview d={d} ov={ov} />
-              <label className="absolute left-1.5 top-1.5 flex cursor-pointer items-center gap-1 rounded-full bg-white/80 py-0.5 pl-0.5 pr-1.5 text-[9px] font-bold leading-none text-slate-500 ring-1 ring-slate-200/80 backdrop-blur" title="Centang untuk digabung jadi A4">
-                <input
-                  type="checkbox"
-                  className="size-3 shrink-0 cursor-pointer appearance-none rounded-full border border-slate-400 bg-white transition checked:border-blue-600 checked:bg-blue-600 checked:shadow-[inset_0_0_0_2px_#fff] focus-visible:outline-2 focus-visible:outline-blue-500"
-                  checked={picked.has(d.tpl.id)}
-                  onChange={() => toggle(d.tpl.id)}
-                  aria-label={`Pilih ${d.tpl.name} untuk A4`}
-                />
-                A4
-              </label>
-            </div>
+          <article key={d.tpl.id} className={`sd-panel relative flex flex-col gap-3 p-3 sm:p-4 ${picked.has(d.tpl.id) ? "ring-2 ring-blue-500" : ""}`}>
+            <Preview d={d} ov={ov} />
+            <A4Badge n={order.get(d.tpl.id)} name={d.tpl.name} onToggle={() => toggle(d.tpl.id)} />
             <div className="flex items-start gap-2">
               <h3 className="flex-1 text-base font-black text-slate-950">{d.tpl.name}</h3>
               {d.slots.every((s) => s.status === "same") ? <CheckCircle2 className="size-5 text-emerald-500" aria-label="Sesuai price list" /> : d.slots.some((s) => s.status === "missing") ? <AlertTriangle className="size-5 text-amber-500" aria-label="Ada varian di luar price list" /> : null}
@@ -376,6 +367,25 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
         </DetailDialog>
       )}
     </div>
+  );
+}
+
+/** Round badge on the card's corner, outside the design: "A4" when free, the sheet order number when ticked. */
+function A4Badge({ n, name, onToggle }: { n?: number; name: string; onToggle: () => void }) {
+  const on = n !== undefined;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={on}
+      aria-label={on ? `${name}: urutan ${n} di A4 — klik untuk batal` : `Pilih ${name} untuk A4`}
+      title={on ? `Urutan ${n} di A4 — klik untuk batal` : "Pilih untuk digabung jadi A4"}
+      className={`absolute -right-2 -top-2 z-10 grid size-7 place-items-center rounded-full font-extrabold leading-none shadow-md transition ${
+        on ? "border-2 border-white bg-blue-600 text-xs text-white" : "border border-slate-300 bg-white text-[9px] text-slate-400 hover:border-blue-400 hover:text-blue-600 dark:border-slate-600 dark:bg-slate-800"
+      }`}
+    >
+      {on ? n : "A4"}
+    </button>
   );
 }
 
