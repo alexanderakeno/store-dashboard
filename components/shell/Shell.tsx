@@ -37,6 +37,8 @@ function useTrackView(path: string) {
   }, [path]);
 }
 
+/** Menu groups that start folded on every login / page load. */
+const FOLDED = new Set(["Target Fokus", "Administrasi", "Reporting"]);
 const isActive = (path: string, href: string) => path === href || path.startsWith(`${href}/`);
 
 export function Shell({ children, storeCode, storeName, userName, isAdmin, fixture }: ShellProps) {
@@ -77,7 +79,9 @@ function Sidebar({ open, onClose, onCollapse, storeCode, storeName, isAdmin }: {
   const path = usePathname();
   const href = useHref();
   const visible = (l: NavLink) => !l.adminOnly || isAdmin;
-  const initialOpen = () => Object.fromEntries(NAV.filter(isGroup).map((g) => [g.label, true]));
+  // on login / page load Target Fokus, Administrasi and Reporting start folded (arrow down), except the group of the
+  // page being opened, so its active item stays visible
+  const initialOpen = () => Object.fromEntries(NAV.filter(isGroup).map((g) => [g.label, !FOLDED.has(g.label) || g.items.some((l) => isActive(path, l.href))]));
   const [groups, setGroups] = useState<Record<string, boolean>>(initialOpen);
   const router = useRouter();
   // warm a page as soon as the finger / mouse is on its menu item: the click then lands on a page that is (almost) ready
@@ -121,7 +125,7 @@ function Sidebar({ open, onClose, onCollapse, storeCode, storeName, isAdmin }: {
             }
             const items = entry.items.filter(visible);
             if (!items.length) return null;
-            const isOpen = groups[entry.label] ?? true;
+            const isOpen = groups[entry.label] ?? !FOLDED.has(entry.label);
             return (
               <div key={entry.label} className="sd-nav-group">
                 <button type="button" className="sd-nav-group-btn" aria-expanded={isOpen} onClick={() => setGroups((g) => ({ ...g, [entry.label]: !isOpen }))}>
