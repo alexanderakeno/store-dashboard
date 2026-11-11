@@ -170,6 +170,8 @@ const cards = [total, grpCard("apple", "Apple", grp.Apple), grpCard("android", "
         </div>
       </div>
 
+      <BrandBalance apple={grp.Apple} android={grp.Android} />
+
       <Panel title="Team Performance">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
           <Mini label="Total Staff" value={num(people.length)} />
@@ -408,6 +410,49 @@ function Kv({ label, value }: { label: React.ReactNode; value: React.ReactNode }
       <p className="text-xs text-slate-500">{label}</p>
       <p className="sd-num mt-1 font-black text-slate-950 sm:!text-lg">{value}</p>
     </div>
+  );
+}
+
+/** Apple : Android device mix this month, by qty and by value (devices only; AirPods count in ACC). */
+function BrandBalance({ apple, android }: { apple?: { qty: number; actual: number }; android?: { qty: number; actual: number } }) {
+  const rows = [
+    { label: "Qty", a: apple?.qty ?? 0, b: android?.qty ?? 0, fmt: (v: number) => `${num(v)} unit` },
+    { label: "Value", a: apple?.actual ?? 0, b: android?.actual ?? 0, fmt: (v: number) => rpf(v) },
+  ];
+  return (
+    <Panel title="Brand Balance" desc="Apple : Android · device saja, bulan terpilih (MTD).">
+      <div className="grid gap-5 md:grid-cols-2">
+        {rows.map((r) => {
+          const all = r.a + r.b;
+          const pa = all > 0 ? Math.round((r.a * 100) / all) : 0;
+          const pb = all > 0 ? 100 - pa : 0;
+          return (
+            <div key={r.label} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-xs font-black tracking-[.08em] text-slate-500 uppercase">By {r.label}</p>
+                <p className="text-xl font-black tracking-tight text-slate-950 tabular-nums">
+                  {all > 0 ? `${pa} : ${pb}` : "—"}
+                </p>
+              </div>
+              <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="img" aria-label={`Apple ${pa}% dan Android ${pb}% berdasarkan ${r.label.toLowerCase()}`}>
+                {pa > 0 && <div className="h-full bg-slate-900 dark:bg-slate-200" style={{ width: `${pa}%` }} />}
+                {pb > 0 && <div className="h-full bg-emerald-500" style={{ width: `${pb}%` }} />}
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3 text-[13px]">
+                <div>
+                  <p className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300"><span className="size-2.5 rounded-full bg-slate-900 dark:bg-slate-200" />Apple · {pa}%</p>
+                  <p className="mt-0.5 text-slate-500 tabular-nums">{r.fmt(r.a)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="flex items-center justify-end gap-1.5 font-bold text-slate-700 dark:text-slate-300"><span className="size-2.5 rounded-full bg-emerald-500" />Android · {pb}%</p>
+                  <p className="mt-0.5 text-slate-500 tabular-nums">{r.fmt(r.b)}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
   );
 }
 
