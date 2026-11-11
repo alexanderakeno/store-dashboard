@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { resolveSlot, splitPrice } from "../lib/domain/priceTicket";
 import { buildPdf } from "../lib/priceTicket/pdf";
 import { TICKET_TEMPLATES } from "../lib/priceTicket/templates";
+import { APPLE_TEMPLATES } from "../lib/priceTicket/apple";
+import { monthly } from "../lib/domain/priceTicket";
+import { isTextSlot, type TextSlot } from "../types/priceTicket";
 import { matchRow, nameTokens } from "../lib/domain/priceTicket";
 import { GLYPHS } from "../lib/priceTicket/glyphs";
 import type { PriceItem } from "../types/pricelist";
@@ -52,13 +55,14 @@ test("splitPrice", () => {
 test("templates: slots inside the frame, glyphs for every digit", () => {
   assert.equal(TICKET_TEMPLATES.filter((t) => t.brand === "Xiaomi").length, 10);
   assert.equal(new Set(TICKET_TEMPLATES.map((t) => t.id)).size, TICKET_TEMPLATES.length);
-  for (const t of TICKET_TEMPLATES) {
+  for (const t of [...TICKET_TEMPLATES, ...APPLE_TEMPLATES]) {
     assert.ok(t.slots.length > 0, t.id);
     assert.ok(Math.abs(t.frame[0] / t.frame[1] - t.size[0] / t.size[1]) < 0.03, `${t.id} aspect`);
     for (const s of t.slots) {
       assert.ok(s.erase.length > 0, `${t.id} ${s.key}`);
       for (const [x, y, w, h] of s.erase) assert.ok(x >= -3 && y >= -3 && x + w <= t.frame[0] + 3 && y + h <= t.frame[1] + 3, `${t.id} ${s.key}`);
-      assert.ok(s.x > 0 && s.x < s.maxRight && s.H > 10 && s.sup.h > 5, `${t.id} ${s.key}`);
+      if (isTextSlot(s)) assert.ok(s.x > 0 && s.x < s.maxRight && s.size > 10 && s.y < t.frame[1], `${t.id} ${s.key}`);
+      else assert.ok(s.x > 0 && s.x < s.maxRight && s.H > 10 && s.sup.h > 5, `${t.id} ${s.key}`);
     }
   }
   for (const ch of "0123456789.") assert.ok(GLYPHS[ch]?.d, ch);
@@ -89,4 +93,17 @@ test("name matching: variants, RAM+ext RAM, model words", () => {
   assert.equal(matchRow({ key: "WATCH GT 7 PRO", canva: { price: 4999000 } }, rows)?.name, "HUAWEI WATCH GT 7 PRO 46MM");
   assert.equal(matchRow({ key: "REDMI NOTE 17 6/128GB", canva: { price: 3999000 } }, rows), null);
   assert.equal(matchRow({ key: "GALAXY A57 5G 8+8/128GB", canva: { price: 1 } }, [row("SAMSUNG GALAXY A57 5G 8/128GB", 8499000)])?.normal, 8499000);
+});
+
+test("apple: monthly = price / 24 rounded down, matched in the Apple list only", () => {
+  assert.equal(monthly(17499000), 729125);
+  assert.equal(monthly(22249000), 927041);
+  const apple = (name: string, normal: number, promo = normal) => ({ ...row(name, normal, promo), kind: "apple" as const });
+  const items = [apple("iPhone 17 256GB", 20499000), apple("iPhone 17 Pro 256GB", 24999000, 22999000), row("iPhone 17 256GB", 1)];
+  const t = (field: "price" | "monthly", price: number): TextSlot => ({ type: "text", key: "iPhone 17 256GB", label: "256GB", field, canva: { price }, x: 10, y: 10, size: 20, bold: false, color: "#000", suffix: "", w: 50, erase: [], maxRight: 100, strikeRoom: false });
+  assert.deepEqual([resolveSlot(t("price", 17499000), items, "apple").price, resolveSlot(t("monthly", 729125), items, "apple").price], [20499000, 854125]);
+  assert.equal(resolveSlot(t("monthly", 854125), items, "apple").status, "same");
+  const cell = [apple("11-INCH IPAD WI-FI 128GB", 9499000, 8699000), apple("11-INCH IPAD WI-FI + CELLULAR 128GB", 12499000, 11699000)];
+  assert.equal(matchRow({ key: "11-INCH IPAD WI-FI 128GB", canva: { price: 1 } }, cell, "apple")?.promo, 8699000);
+  assert.equal(matchRow({ key: "11-INCH IPAD WI-FI + CELLULAR 128GB", canva: { price: 1 } }, cell, "apple")?.promo, 11699000);
 });

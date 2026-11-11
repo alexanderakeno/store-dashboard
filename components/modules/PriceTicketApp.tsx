@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Download, FileStack, Loader2, Pencil, RefreshCw, X } from "lucide-react";
-import { drawTicket, type SlotDraw } from "@/lib/priceTicket/draw";
+import { drawTicket, loadTicketFonts, type SlotDraw } from "@/lib/priceTicket/draw";
 import { buildPdf, type PdfPage } from "@/lib/priceTicket/pdf";
-import { rupiah } from "@/lib/domain/priceTicket";
-import type { ResolvedSlot, TicketTemplate } from "@/types/priceTicket";
+import { monthly, rupiah } from "@/lib/domain/priceTicket";
+import { isTextSlot, type ResolvedSlot, type TicketTemplate } from "@/types/priceTicket";
 
 export interface TicketData {
   tpl: TicketTemplate;
@@ -35,11 +35,40 @@ function loadImg(src: string) {
 
 const slotKey = (t: TicketTemplate, i: number) => `${t.id}|${i}`;
 
+/** Monthly slots follow the price slot of the same variant (its manual price too); they are not listed on their own. */
+const linkedTo = (t: TicketTemplate, i: number) => {
+  const s = t.slots[i];
+  if (!isTextSlot(s) || s.field !== "monthly") return -1;
+  return t.slots.findIndex((x) => isTextSlot(x) && x.field === "price" && x.key === s.key);
+};
+const listed = (t: TicketTemplate, i: number) => {
+  const s = t.slots[i];
+  if (isTextSlot(s) && s.field === "monthly" && linkedTo(t, i) >= 0) return false;
+  // the same variant printed twice (header + table): list it once
+  return t.slots.findIndex((x) => x.key === s.key && (!isTextSlot(x) || !isTextSlot(s) || x.field === s.field)) === i;
+};
+/** Override that applies to slot i: its own, or (monthly / repeated price) the listed slot of the same variant. */
+function overrideOf(t: TicketTemplate, ov: Overrides, i: number) {
+  const own = ov[slotKey(t, i)];
+  if (own) return own;
+  const s = t.slots[i];
+  const j = t.slots.findIndex((x, k) => listed(t, k) && x.key === s.key && (!isTextSlot(x) || x.field === "price"));
+  return j >= 0 && j !== i ? ov[slotKey(t, j)] : undefined;
+}
+
 /** What to draw for each slot: the design's pixels when the price did not change, else the new price. */
 function draws(d: TicketData, ov: Overrides): SlotDraw[] {
   return d.tpl.slots.map((slot, i) => {
-    const o = ov[slotKey(d.tpl, i)];
+    const o = overrideOf(d.tpl, ov, i);
     const r = d.slots[i];
+    if (isTextSlot(slot) && slot.field === "monthly") {
+      // always the variant's (shown) price / 24 — also fixes a monthly amount mistyped in the design
+      const j = linkedTo(d.tpl, i);
+      const full = o?.price ?? (j >= 0 ? d.slots[j].price : (r.full ?? r.price * 24));
+      const value = j >= 0 || o ? monthly(full) : r.price;
+      return { slot, price: value, redraw: value !== slot.canva.price };
+    }
+    if (o && isTextSlot(slot)) return { slot, price: o.price, redraw: true };
     if (o) return { slot, price: o.price, strike: o.strike && o.strike > o.price ? o.strike : undefined, redraw: true };
     return { slot, price: r.price, strike: r.strike, redraw: r.status === "updated" };
   });
@@ -47,7 +76,7 @@ function draws(d: TicketData, ov: Overrides): SlotDraw[] {
 
 /** The ticket at the stored image's full resolution (≈ 300–550 dpi) as JPEG. */
 async function jpegOf(d: TicketData, ov: Overrides): Promise<{ jpeg: Uint8Array; px: number; py: number }> {
-  const img = await loadImg(d.tpl.image);
+  const [img] = await Promise.all([loadImg(d.tpl.image), loadTicketFonts()]);
   const c = document.createElement("canvas");
   drawTicket(c, img, d.tpl, img.naturalWidth, draws(d, ov));
   const px = c.width;
@@ -61,7 +90,7 @@ async function jpegOf(d: TicketData, ov: Overrides): Promise<{ jpeg: Uint8Array;
 /** Characters a file name (and a WhatsApp caption taken from it) cannot carry. */
 const fileName = (s: string) => s.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
 /** "Samsung Galaxy A57 5G" — the brand in front unless the name already says it (Redmi is Xiaomi's own range). */
-const itemName = (t: TicketTemplate) => (new RegExp(`^(${t.brand}|Redmi)\\b`, "i").test(t.name) ? t.name : `${t.brand} ${t.name}`);
+const itemName = (t: TicketTemplate) => (new RegExp(`^(${t.brand}|Redmi|iPhone|iPad|MacBook|iMac)\\b`, "i").test(t.name) ? t.name : `${t.brand} ${t.name}`);
 function save(bytes: Uint8Array, name: string) {
   const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
   const a = document.createElement("a");
@@ -115,8 +144,8 @@ function Preview({ d, ov }: { d: TicketData; ov: Overrides }) {
   const list = useMemo(() => draws(d, ov), [d, ov]);
   useEffect(() => {
     let live = true;
-    loadImg(d.tpl.image)
-      .then((img) => live && ref.current && drawTicket(ref.current, img, d.tpl, PREVIEW, list))
+    Promise.all([loadImg(d.tpl.image), loadTicketFonts()])
+      .then(([img]) => live && ref.current && drawTicket(ref.current, img, d.tpl, PREVIEW, list))
       .catch((e: Error) => live && setErr(e.message));
     return () => {
       live = false;
@@ -148,6 +177,10 @@ function SlotRow({ d, i, ov, setOv }: { d: TicketData; i: number; ov: Overrides;
   const [strike, setStrike] = useState("");
   const st = STATUS[o ? "manual" : r.status];
   const shown = o ?? { price: r.price, strike: r.strike };
+  const slot = d.tpl.slots[i];
+  const perMonth = isTextSlot(slot) && slot.field === "monthly";
+  // an Apple price whose monthly amount is printed too
+  const cicilan = isTextSlot(slot) && slot.field === "price" && d.tpl.slots.some((x) => isTextSlot(x) && x.field === "monthly" && x.key === slot.key);
   const open = () => {
     setPrice(String(shown.price));
     setStrike(shown.strike ? String(shown.strike) : "");
@@ -164,7 +197,11 @@ function SlotRow({ d, i, ov, setOv }: { d: TicketData; i: number; ov: Overrides;
     <li className="py-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {r.label && <span className="text-xs font-bold text-slate-500">{r.label}</span>}
-        <span className="font-black text-slate-950 tabular-nums">{rupiah(shown.price)}</span>
+        <span className="font-black text-slate-950 tabular-nums">
+          {rupiah(shown.price)}
+          {perMonth && "/bln"}
+        </span>
+        {cicilan && <span className="text-xs text-slate-500 tabular-nums">cicilan {rupiah(monthly(shown.price))}/bln</span>}
         {shown.strike && <span className="text-xs text-slate-400 tabular-nums line-through">{rupiah(shown.strike)}</span>}
         <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${st.cls}`}>{st.text}</span>
         <span className="ml-auto flex gap-1">
@@ -269,9 +306,7 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
             </div>
             {d.tpl.note && <p className="-mt-2 text-[11px] font-semibold text-amber-600">{d.tpl.note}</p>}
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-              {d.slots.map((_, i) => (
-                <SlotRow key={i} d={d} i={i} ov={ov} setOv={setOv} />
-              ))}
+              {d.slots.map((_, i) => listed(d.tpl, i) && <SlotRow key={i} d={d} i={i} ov={ov} setOv={setOv} />)}
             </ul>
             <button type="button" className="sd-btn primary mt-auto justify-center" disabled={!!busy} onClick={() => run(d.tpl.id, [d], "single", `${itemName(d.tpl)} (${sizeFile(d.tpl)})`)}>
               {busy === d.tpl.id ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} PDF {sizeText(d.tpl)}

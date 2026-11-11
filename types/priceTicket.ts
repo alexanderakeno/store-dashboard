@@ -37,6 +37,35 @@ export interface TicketSlot {
   strike?: StrikeStyle;
 }
 
+/**
+ * A price written as plain text (Apple tickets): erased, then redrawn in the design's font at the same place.
+ * `monthly` = cicilan per bulan (selling price / 24), `price` = selling price.
+ */
+export interface TextSlot {
+  type: "text";
+  key: string;
+  label: string;
+  field: "price" | "monthly";
+  /** Value printed in the design (the monthly amount for a monthly slot). */
+  canva: { price: number; strike?: number };
+  /** Text start (left) and baseline, font size (frame px), bold, colour; text after the number ("/bln"). */
+  x: number;
+  y: number;
+  size: number;
+  bold: boolean;
+  color: string;
+  suffix: string;
+  /** Width of the printed text in the design: its letter spacing is copied (Word spaces characters its own way). */
+  w: number;
+  erase: Array<[number, number, number, number]>;
+  /** The text must end before this x; a longer text is made smaller to fit. */
+  maxRight: number;
+  strikeRoom: false;
+}
+
+export type AnySlot = TicketSlot | TextSlot;
+export const isTextSlot = (s: AnySlot): s is TextSlot => (s as TextSlot).type === "text";
+
 export interface TicketTemplate {
   id: string;
   brand: string;
@@ -46,7 +75,9 @@ export interface TicketTemplate {
   size: [number, number];
   /** Design frame in px [w, h] — the coordinate system of the slots (the image may be stored larger). */
   frame: [number, number];
-  slots: TicketSlot[];
+  slots: AnySlot[];
+  /** Price list the slots are matched in (default android). */
+  kind?: "android" | "apple";
   /** Strike style for prices that had none in the design. */
   strikeStyle: StrikeStyle;
   /** Remark about the design itself (e.g. a name that differs from the price list). */
@@ -62,6 +93,8 @@ export interface ResolvedSlot {
   price: number;
   strike?: number;
   status: TicketStatus;
+  /** Selling price behind a monthly value. */
+  full?: number;
   /** Price list row used. */
   match?: string;
   /** Normal price of a promo that cannot be struck through (no room on the design). */
