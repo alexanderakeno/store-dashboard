@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Download, FileStack, Loader2, Pencil, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronRight, Download, FileStack, Loader2, Pencil, RefreshCw, X } from "lucide-react";
 import { drawTicket, loadTicketFonts, type SlotDraw } from "@/lib/priceTicket/draw";
 import { buildPdf, type PdfPage } from "@/lib/priceTicket/pdf";
 import { monthly, rupiah } from "@/lib/domain/priceTicket";
@@ -141,6 +141,7 @@ const sizeFile = (t: TicketTemplate) => `${cm(t.size[0])}x${cm(t.size[1])} cm`;
 function Preview({ d, ov }: { d: TicketData; ov: Overrides }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [err, setErr] = useState("");
+  const [detail, setDetail] = useState<string | null>(null);
   const list = useMemo(() => draws(d, ov), [d, ov]);
   useEffect(() => {
     let live = true;
@@ -250,9 +251,11 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
   const [ov, setOv] = useState<Overrides>({});
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  const [detail, setDetail] = useState<string | null>(null);
   const list = tickets.filter((t) => t.tpl.brand === brand);
   const changed = list.filter((t) => t.slots.some((s) => s.status === "updated")).length;
   const missing = list.filter((t) => t.slots.some((s) => s.status === "missing")).length;
+  const open = detail ? tickets.find((t) => t.tpl.id === detail) ?? null : null;
   const sizes = [...new Set(list.map((t) => sizeText(t.tpl)))].join(" / ");
 
   /** `name` without extension: the PDF's file name (the caption when it is shared) and its title. */
@@ -304,15 +307,78 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
               <h3 className="flex-1 text-base font-black text-slate-950">{d.tpl.name}</h3>
               {d.slots.every((s) => s.status === "same") ? <CheckCircle2 className="size-5 text-emerald-500" aria-label="Sesuai price list" /> : d.slots.some((s) => s.status === "missing") ? <AlertTriangle className="size-5 text-amber-500" aria-label="Ada varian di luar price list" /> : null}
             </div>
-            {d.tpl.note && <p className="-mt-2 text-[11px] font-semibold text-amber-600">{d.tpl.note}</p>}
-            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-              {d.slots.map((_, i) => listed(d.tpl, i) && <SlotRow key={i} d={d} i={i} ov={ov} setOv={setOv} />)}
-            </ul>
+            <button type="button" className="sd-btn ghost -mt-1 justify-between !px-3 text-sm" onClick={() => setDetail(d.tpl.id)} aria-haspopup="dialog">
+              <span className="flex flex-wrap items-center gap-1.5">
+                Detail harga <span className="text-slate-400">· {d.tpl.slots.filter((_, i) => listed(d.tpl, i)).length} varian</span>
+                <Summary d={d} ov={ov} />
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-slate-400" />
+            </button>
             <button type="button" className="sd-btn primary mt-auto justify-center" disabled={!!busy} onClick={() => run(d.tpl.id, [d], "single", `${itemName(d.tpl)} (${sizeFile(d.tpl)})`)}>
               {busy === d.tpl.id ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} PDF {sizeText(d.tpl)}
             </button>
           </article>
         ))}
+      </div>
+      {open && (
+        <DetailDialog d={open} ov={ov} setOv={setOv} onClose={() => setDetail(null)}>
+          <button type="button" className="sd-btn primary w-full justify-center" disabled={!!busy} onClick={() => run(open.tpl.id, [open], "single", `${itemName(open.tpl)} (${sizeFile(open.tpl)})`)}>
+            {busy === open.tpl.id ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} PDF {sizeText(open.tpl)}
+          </button>
+        </DetailDialog>
+      )}
+    </div>
+  );
+}
+
+/** Counts of the listed prices by status, as small chips (manual prices count as "manual"). */
+function Summary({ d, ov }: { d: TicketData; ov: Overrides }) {
+  const n = { updated: 0, missing: 0, manual: 0 };
+  d.tpl.slots.forEach((_, i) => {
+    if (!listed(d.tpl, i)) return;
+    if (ov[slotKey(d.tpl, i)]) n.manual++;
+    else if (d.slots[i].status !== "same") n[d.slots[i].status as "updated" | "missing"]++;
+  });
+  const chip = (k: keyof typeof n, text: string) => n[k] > 0 && <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${STATUS[k].cls}`}>{n[k]} {text}</span>;
+  if (!n.updated && !n.missing && !n.manual) return <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${STATUS.same.cls}`}>Sesuai price list</span>;
+  return (
+    <>
+      {chip("updated", "diperbarui")}
+      {chip("missing", "tidak ada di price list")}
+      {chip("manual", "manual")}
+    </>
+  );
+}
+
+/** Pop-up with a ticket's prices: preview, every variant, manual edit and its PDF. Closes on Esc / backdrop / X. */
+function DetailDialog({ d, ov, setOv, onClose, children }: { d: TicketData; ov: Overrides; setOv: (f: (o: Overrides) => Overrides) => void; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", key);
+    const body = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", key);
+      document.body.style.overflow = body;
+    };
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={`Detail harga ${d.tpl.name}`} className="sd-panel flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-b-none sm:rounded-b-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+          <h3 className="flex-1 text-base font-black text-slate-950">{d.tpl.name}</h3>
+          <button type="button" className="sd-btn ghost !p-1.5" onClick={onClose} aria-label="Tutup">
+            <X className="size-5" />
+          </button>
+        </div>
+        <div className="space-y-3 overflow-y-auto px-4 py-3">
+          <div className="mx-auto max-w-xs">
+            <Preview d={d} ov={ov} />
+          </div>
+          {d.tpl.note && <p className="text-[11px] font-semibold text-amber-600">{d.tpl.note}</p>}
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">{d.slots.map((_, i) => listed(d.tpl, i) && <SlotRow key={i} d={d} i={i} ov={ov} setOv={setOv} />)}</ul>
+        </div>
+        <div className="border-t border-slate-100 px-4 py-3 dark:border-slate-800">{children}</div>
       </div>
     </div>
   );
