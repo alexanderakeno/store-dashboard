@@ -1,6 +1,6 @@
 import { GLYPHS } from "@/lib/priceTicket/glyphs";
-import { splitPrice } from "@/lib/domain/priceTicket";
-import type { StrikeStyle, TicketSlot, TicketTemplate } from "@/types/priceTicket";
+import { idNum, splitPrice } from "@/lib/domain/priceTicket";
+import { isTextSlot, type AnySlot, type StrikeStyle, type TextSlot, type TicketSlot, type TicketTemplate } from "@/types/priceTicket";
 
 const DOT = 1.19; // gap next to a dot, relative to the gap between digits
 const RED = "#e3262f";
@@ -113,8 +113,45 @@ export function drawSlot(ctx: CanvasRenderingContext2D, slot: TicketSlot, style:
   ctx.stroke();
 }
 
+/** Font of the text slots (Apple tickets: Helvetica → TeX Gyre Heros, the same face the design images were rendered with). */
+const TEXT_FONT = "TicketHeros";
+let fonts: Promise<void> | null = null;
+export function loadTicketFonts(): Promise<void> {
+  fonts ??= (async () => {
+    const faces = [new FontFace(TEXT_FONT, "url(/fonts/texgyreheros-regular.otf)", { weight: "400" }), new FontFace(TEXT_FONT, "url(/fonts/texgyreheros-bold.otf)", { weight: "700" })];
+    for (const f of faces) document.fonts.add(await f.load());
+  })().catch((e) => {
+    fonts = null;
+    throw new Error(`Font ticket gagal dimuat: ${(e as Error).message}`);
+  });
+  return fonts;
+}
+
+/** Erases the design's text price and writes `value` (+ suffix) in its place, narrowed if it would run into the next text. */
+function drawText(ctx: CanvasRenderingContext2D, slot: TextSlot, value: number) {
+  ctx.fillStyle = "#fff";
+  for (const [ex, ey, ew, eh] of slot.erase) ctx.fillRect(ex, ey, ew, eh);
+  ctx.font = `${slot.bold ? 700 : 400} ${slot.size}px ${TEXT_FONT}`;
+  ctx.fillStyle = slot.color;
+  ctx.textBaseline = "alphabetic";
+  const text = `${idNum(value)}${slot.suffix}`;
+  // the design's spacing: printed width / width of the same text in this font
+  const ref = ctx.measureText(`${idNum(slot.canva.price)}${slot.suffix}`).width;
+  const k = ref > 0 ? Math.min(1.15, Math.max(0.85, slot.w / ref)) : 1;
+  const w = ctx.measureText(text).width * k;
+  const room = slot.maxRight - slot.x;
+  ctx.save();
+  ctx.translate(slot.x, slot.y);
+  // a longer number than the room: a little narrower first, then smaller (same baseline)
+  const narrow = w > room && room > 0 ? Math.max(0.88, room / w) : 1;
+  const fit = w * narrow > room && room > 0 ? room / (w * narrow) : 1;
+  ctx.scale(k * narrow * fit, fit);
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
+}
+
 export interface SlotDraw {
-  slot: TicketSlot;
+  slot: AnySlot;
   price: number;
   strike?: number;
   /** false = keep the design's own pixels (price unchanged). */
@@ -135,6 +172,6 @@ export function drawTicket(canvas: HTMLCanvasElement, img: HTMLImageElement, tpl
   ctx.drawImage(img, 0, 0, width, height);
   ctx.save();
   ctx.scale(width / fw, height / fh);
-  for (const s of slots) if (s.redraw) drawSlot(ctx, s.slot, tpl.strikeStyle, s.price, s.strike);
+  for (const s of slots) if (s.redraw) (isTextSlot(s.slot) ? drawText(ctx, s.slot, s.price) : drawSlot(ctx, s.slot as TicketSlot, tpl.strikeStyle, s.price, s.strike));
   ctx.restore();
 }
