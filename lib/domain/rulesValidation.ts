@@ -67,6 +67,13 @@ export function validateRuleOverrides(input: unknown): Result {
           if (!ok) return { ok: false, error: 'incentive.online: { "accounts": ["DIGIPLUS.CO.ID", "MAPEMALL"], "perUnit": 5000 }' };
           inc.online = { ...(o.accounts !== undefined ? { accounts: o.accounts as string[] } : {}), ...(o.perUnit !== undefined ? { perUnit: o.perUnit as number } : {}) } as BusinessRules["incentive"]["online"];
         }
+        if (v.provider !== undefined) {
+          const o = v.provider;
+          const num = (x: unknown, max: number) => typeof x === "number" && x >= 0 && x <= max;
+          const ok = isObj(o) && (o.providers === undefined || (Array.isArray(o.providers) && o.providers.every((x) => typeof x === "string"))) && (o.step === undefined || (num(o.step, 1_000_000_000) && (o.step as number) > 0)) && (o.fee === undefined || num(o.fee, 10_000_000));
+          if (!ok) return { ok: false, error: 'incentive.provider: { "providers": ["Telkomsel", "XL", "Indosat"], "step": 1000000, "fee": 20000 }' };
+          inc.provider = { ...(o.providers !== undefined ? { providers: o.providers as string[] } : {}), ...(o.step !== undefined ? { step: o.step as number } : {}), ...(o.fee !== undefined ? { fee: o.fee as number } : {}) } as NonNullable<BusinessRules["incentive"]["provider"]>;
+        }
         out.incentive = inc as BusinessRules["incentive"];
         break;
       }

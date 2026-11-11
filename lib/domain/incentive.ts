@@ -31,6 +31,8 @@ export interface IncentiveRow {
   device: Record<string, { qty: number; fee: number }>;
   deviceFee: number;
   qoala: { policies: number; fee: number; tiers: QoalaTierCount[]; uncertain: number };
+  /** Telco providers combined: sales value per provider, their sum, and the fee per full step of the sum. */
+  provider: { value: number; fee: number; byProvider: Record<string, number> };
   /** From the sheet's ACC Fokus leaderboard (null = staff not on the board). */
   acc: (AccFocusCell & { bySupplier: Record<string, AccFocusCell> }) | null;
   total: number;
@@ -38,7 +40,7 @@ export interface IncentiveRow {
 
 export interface IncentiveView {
   rows: IncentiveRow[];
-  total: { device: number; acc: number; qoala: number; all: number; policies: number };
+  total: { device: number; acc: number; qoala: number; provider: number; all: number; policies: number };
   /**
    * Qoala lines whose policy count could not be inferred from the MR prices: the per-policy
    * price (and so the tier) of these lines may be off.
@@ -63,12 +65,16 @@ export function qoalaFee(price: number, tiers: IncentiveRules["qoalaTiers"]): nu
  * - Android devices: `android.perUnit` per unit, except `android.exclude` (Xiaomi / Motorola watches, Galaxy Fit 3).
  * - Qoala: every policy is priced on its own (line amount ÷ policies on the line), gets its tier
  *   fee, then the fees are added up.
+ * - Providers (Telkomsel, XL, Indosat): their sales value added up per staff; `provider.fee` per full
+ *   `provider.step` of that sum (20rb per 1 jt).
  * - Accessories: taken as-is from the sheet's "LEADERBOARD ACC FOKUS" (its own date, MTD).
  * - Online accounts (`online.accounts`, e.g. Digiplus.co.id, Mapemall): `online.perUnit` per Apple device only.
  * `lines` must already be limited to the period; other online channel lines are ignored.
  */
 export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: AccFocusBoard | null, staff: string[]): IncentiveView {
   const tiers = [...rules.qoalaTiers].sort((a, b) => a.min - b.min);
+  const providers = rules.provider?.providers ?? [];
+  const providerOf = (p: string | null) => (p ? providers.find((x) => x.toUpperCase() === p.toUpperCase()) : undefined);
   const rows = new Map<string, IncentiveRow>();
   const row = (name: string) => {
     const k = nameKey(name);
@@ -79,6 +85,7 @@ export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: Ac
         device: Object.fromEntries(DEVICE_LOBS.map((l) => [l, { qty: 0, fee: 0 }])),
         deviceFee: 0,
         qoala: { policies: 0, fee: 0, tiers: tiers.map((t) => ({ ...t, policies: 0 })), uncertain: 0 },
+        provider: { value: 0, fee: 0, byProvider: Object.fromEntries(providers.map((p) => [p, 0])) },
         acc: null,
         total: 0,
       };
@@ -108,6 +115,13 @@ export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: Ac
       d.fee += l.qty * rate;
       continue;
     }
+    const telco = !isOnline ? providerOf(l.vasProvider) : undefined;
+    if (telco && l.amount) {
+      const r = row(displayName(l.staffName));
+      r.provider.byProvider[telco] = (r.provider.byProvider[telco] ?? 0) + l.amount;
+      r.provider.value += l.amount;
+      continue;
+    }
     if (l.vasProvider === "Qoala" && l.amount) {
       const r = row(displayName(l.staffName));
       const n = Math.max(1, Math.abs(l.qty || 1));
@@ -129,7 +143,10 @@ export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: Ac
 
   const out = [...rows.values()].map((r) => {
     r.deviceFee = Object.values(r.device).reduce((a, d) => a + d.fee, 0);
-    r.total = r.deviceFee + r.qoala.fee + (r.acc?.fee ?? 0);
+    // all providers together: every full step (1 jt) of the combined value earns the fee (20rb); returns lower the sum
+    const step = rules.provider?.step ?? 0;
+    r.provider.fee = step > 0 ? Math.floor(Math.max(0, r.provider.value) / step) * (rules.provider?.fee ?? 0) : 0;
+    r.total = r.deviceFee + r.qoala.fee + r.provider.fee + (r.acc?.fee ?? 0);
     return r;
   });
   out.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
@@ -140,6 +157,7 @@ export function incentiveView(lines: SalesLine[], rules: IncentiveRules, acc: Ac
       device: sum((r) => r.deviceFee),
       acc: sum((r) => r.acc?.fee ?? 0),
       qoala: sum((r) => r.qoala.fee),
+      provider: sum((r) => r.provider.fee),
       all: sum((r) => r.total),
       policies: sum((r) => r.qoala.policies),
     },
