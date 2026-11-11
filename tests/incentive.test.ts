@@ -35,7 +35,7 @@ test("devices: iPhone 15rb, Mac/iPad/Watch 30rb, Android 15rb per unit; AirPods 
   assert.equal(r.deviceFee, 1 * 15_000 + (1 + 1 + 1) * 30_000 + 15_000);
 });
 
-test("Android 15rb except Xiaomi / Motorola watches and Galaxy Fit 3; online accounts get no Android fee", () => {
+test("Android 15rb except Xiaomi / Motorola watches and Galaxy Fit 3; online accounts get 5rb per Android unit", () => {
   const a = (lob: string, description: string, p: Partial<SalesLine> = {}) => line({ group: "Android", lob, brand: lob.toUpperCase(), description, ...p });
   const v = incentiveView(
     [
@@ -58,7 +58,9 @@ test("Android 15rb except Xiaomi / Motorola watches and Galaxy Fit 3; online acc
   // paid: S26, Galaxy Watch 8, Xiaomi 17T, Moto G86, Huawei Watch Fit, minus 1 return
   assert.equal(r.device.Android.qty, 4);
   assert.equal(r.device.Android.fee, 60_000);
-  assert.equal(v.rows.find((x) => x.name === "Digiplus.co.id")?.device.Android?.qty ?? 0, 0);
+  const online = v.rows.find((x) => x.name === "Digiplus.co.id")!;
+  assert.equal(online.device.Android.qty, 1);
+  assert.equal(online.device.Android.fee, 5_000);
 });
 
 test("qoala: each policy priced on its own, then summed; online channel ignored", () => {
@@ -104,7 +106,7 @@ test("parseAccFocus reads the Data - Akeno leaderboard by label; ACC fee joins s
   assert.equal(v.total.acc, 877_500);
 });
 
-test("online accounts (Digiplus.co.id, Mapemall): 5rb per Apple device, no Qoala; other channels still ignored", () => {
+test("online accounts (Digiplus.co.id, Mapemall): 5rb per device (Apple & Android), no Qoala; other channels still ignored", () => {
   const web = (p: Partial<SalesLine>) => line({ nik: null, staffName: "Digiplus.co.id", ...p });
   const mall = (p: Partial<SalesLine>) => line({ nik: null, staffName: "MAPEMALL", isChannel: true, ...p });
   const v = incentiveView(
@@ -112,7 +114,7 @@ test("online accounts (Digiplus.co.id, Mapemall): 5rb per Apple device, no Qoala
     R, null, [],
   );
   const d = v.rows.find((r) => r.name === "Digiplus.co.id")!;
-  assert.equal(d.deviceFee, 4 * 5_000); // 3 iPhone + 1 Mac, Android not paid
+  assert.equal(d.deviceFee, 5 * 5_000); // 3 iPhone + 1 Mac + 1 Android
   assert.equal(d.qoala.fee, 0);
   assert.equal(v.rows.find((r) => r.name === "Mapemall")?.deviceFee, (2 - 1) * 5_000); // return subtracts
   assert.equal(v.rows.some((r) => /TOKOPEDIA/i.test(r.name)), false);
@@ -133,4 +135,26 @@ test("providers: Telkomsel + XL + Indosat value combined per staff, 20rb per ful
   assert.equal(v.rows.find((x) => x.name === "Digiplus.co.id")?.provider.fee ?? 0, 0);
   assert.equal(v.total.provider, 40_000);
   assert.equal(c.total, 40_000);
+});
+
+test("online accounts: 5rb per device (Apple & Android), no Qoala / provider / accessory fee", () => {
+  const W = "DIGIPLUS.CO.ID";
+  const board = { title: "LEADERBOARD", staff: [{ name: W, total: { qty: 1, fee: 40_000 }, bySupplier: {} }, { name: "CHELSY ARRAHMAT", total: { qty: 2, fee: 15_000 }, bySupplier: {} }] } as unknown as Parameters<typeof incentiveView>[2];
+  const v = incentiveView(
+    [
+      line({ staffName: W, qty: 2 }),
+      line({ staffName: W, lob: "Mac" }),
+      line({ staffName: W, group: "Android", lob: "Samsung", brand: "SAMSUNG", description: "GALAXY A57" }),
+      qoala(1_200_000, 1, W),
+      line({ group: "VAS", lob: null, vasProvider: "Telkomsel", type: "ACCESSORIES", brand: "TELKOMSEL", amount: 3_000_000, staffName: W, countsInQty: false }),
+    ],
+    R, board, ["Chelsy Arrahmat"],
+  );
+  const o = v.rows.find((x) => x.name === "Digiplus.co.id")!;
+  assert.equal(o.deviceFee, 4 * 5_000);
+  assert.equal(o.qoala.fee, 0);
+  assert.equal(o.provider.fee, 0);
+  assert.equal(o.acc, null);
+  assert.equal(o.total, 20_000);
+  assert.equal(v.rows.find((x) => x.name === "Chelsy Arrahmat")!.acc?.fee, 15_000);
 });
