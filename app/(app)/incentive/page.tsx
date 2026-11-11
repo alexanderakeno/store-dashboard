@@ -29,6 +29,7 @@ function Cell({ fee, sub }: { fee: number; sub: string | null }) {
 const unit = (q: number) => (q ? `${num(q)} unit` : null);
 const accSub = (r: IncentiveRow) => (r.acc ? `${num(r.acc.qty)} pcs` : null);
 const qoalaSub = (r: IncentiveRow) => (r.qoala.policies ? `${num(r.qoala.policies)} polis` : null);
+const providerSub = (r: IncentiveRow) => (r.provider.value ? rpc(r.provider.value) : null);
 
 /**
  * Breakdown shown under a staff: devices, Qoala, accessories per supplier. Only the admin sees
@@ -37,7 +38,7 @@ const qoalaSub = (r: IncentiveRow) => (r.qoala.policies ? `${num(r.qoala.policie
 function Breakdown({ r, tierLabel, admin }: { r: IncentiveRow; tierLabel: (min: number) => string; admin: boolean }) {
   const sups = Object.entries(r.acc?.bySupplier ?? {}).sort((a, b) => b[1].fee - a[1].fee);
   return (
-    <div className="grid gap-4 text-[13px] sm:grid-cols-3">
+    <div className="grid gap-4 text-[13px] sm:grid-cols-2 xl:grid-cols-4">
       <div>
         <p className="sd-label">Device</p>
         {DEVICE_LOBS.map((l) => (
@@ -53,6 +54,13 @@ function Breakdown({ r, tierLabel, admin }: { r: IncentiveRow; tierLabel: (min: 
         ) : (
           <p className="flex justify-between gap-3"><span className="text-slate-600">{num(r.qoala.policies)} polis</span><span className="tabular-nums">{rp(r.qoala.fee)}</span></p>
         )}
+      </div>
+      <div>
+        <p className="sd-label">Provider (gabungan)</p>
+        {Object.entries(r.provider.byProvider).map(([k, v]) => (
+          <p key={k} className="flex justify-between gap-3"><span className="text-slate-600">{k}</span><span className="tabular-nums">{rp(v)}</span></p>
+        ))}
+        <p className="mt-1 flex justify-between gap-3 border-t border-[var(--block-border)] pt-1 font-semibold"><span>Total {rp(r.provider.value)}</span><span className="tabular-nums">{rp(r.provider.fee)}</span></p>
       </div>
       <div>
         <p className="sd-label">Aksesoris per supplier</p>
@@ -75,13 +83,15 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
   const admin = p.session.role === "admin";
   const { from, to } = clampRange(p.month, p.asOf, p.q.from, p.q.to);
   // rules cached before this feature existed have no `incentive` yet (cache lives a few minutes)
-  const rules = p.snap.rules.incentive ?? DEFAULT_RULES.incentive;
+  const base = p.snap.rules.incentive ?? DEFAULT_RULES.incentive;
+  // rules cached before the provider scheme existed: use the default scheme
+  const rules = { ...base, provider: base.provider ?? DEFAULT_RULES.incentive.provider };
   const board = p.snap.extras.accFocus ?? null;
   const view = incentiveView(linesIn(p.snap, from, to), rules, board, staffNames(p.snap));
   const pick = p.q.staff ? view.rows.find((r) => nameKey(r.name) === nameKey(p.q.staff)) : undefined;
   const rows = pick ? [pick] : view.rows;
   const shown = pick
-    ? { device: pick.deviceFee, acc: pick.acc?.fee ?? 0, qoala: pick.qoala.fee, all: pick.total }
+    ? { device: pick.deviceFee, acc: pick.acc?.fee ?? 0, qoala: pick.qoala.fee, provider: pick.provider.fee, all: pick.total }
     : view.total;
 
   const tiers = [...rules.qoalaTiers].sort((a, b) => a.min - b.min);
@@ -94,7 +104,7 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
 
   return (
     <div className="sd-content">
-      <PageIntro eyebrow={appConfig().storeCode || "STORE"} title="Estimasi Incentive" desc="Device & Qoala dihitung dari data Sales Person; aksesoris dari leaderboard ACC Fokus di sheet." />
+      <PageIntro eyebrow={appConfig().storeCode || "STORE"} title="Estimasi Incentive" desc="Device, Qoala & provider dihitung dari data Sales Person; aksesoris dari leaderboard ACC Fokus di sheet." />
 
       <section className="sd-panel grid gap-3 p-4 sm:grid-cols-3 sm:p-5">
         <ParamDate param="from" label="Dari Tanggal" value={from} min={monthStart(p.month)} max={p.asOf} />
@@ -106,8 +116,8 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
         <p className="text-xs font-black tracking-[.12em] text-white/80 uppercase">Total Est. Incentive{pick ? ` · ${pick.name}` : ""}</p>
         <p className="mt-2 text-3xl font-black tabular-nums">{rp(shown.all)}</p>
         <p className="mt-1 text-sm text-white/80">{dmy(from)} – {dmy(to)}</p>
-        <div className="mt-5 grid max-w-xl grid-cols-3 gap-2 text-[13px] sm:gap-3 sm:text-sm">
-          {[["Device", shown.device], ["Aksesoris", shown.acc], ["Qoala", shown.qoala]].map(([k, v]) => (
+        <div className="mt-5 grid max-w-3xl grid-cols-2 gap-2 text-[13px] sm:grid-cols-4 sm:gap-3 sm:text-sm">
+          {[["Device", shown.device], ["Aksesoris", shown.acc], ["Qoala", shown.qoala], ["Provider", shown.provider]].map(([k, v]) => (
             <div key={k} className="min-w-0 rounded-2xl bg-white/15 px-2.5 py-3 sm:p-3"><p className="text-white/80">{k}</p><p className="font-black tabular-nums"><span className="sm:hidden">{rpc(v as number)}</span><span className="max-sm:hidden">{rp(v as number)}</span></p></div>
           ))}
         </div>
@@ -131,7 +141,7 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
                 <span className="w-5 text-xs font-bold text-slate-400">{i + 1}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-bold">{r.name}</span>
-                  <span className="block text-[11px] text-slate-500">Device {rp(r.deviceFee)} · Aks {rp(r.acc?.fee ?? 0)} · Qoala {rp(r.qoala.fee)}</span>
+                  <span className="block text-[11px] text-slate-500">Device {rp(r.deviceFee)} · Aks {rp(r.acc?.fee ?? 0)} · Qoala {rp(r.qoala.fee)} · Provider {rp(r.provider.fee)}</span>
                 </span>
                 <b className="shrink-0 text-sm tabular-nums">{rp(r.total)}</b>
               </summary>
@@ -144,7 +154,7 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
         <div className="sd-table-wrap max-sm:hidden">
           <table className="sd-table">
             <thead>
-              <tr><th>#</th><th>Nama</th>{DEVICE_LOBS.map((l) => <th key={l} className="n">{LOB_LABEL[l]}</th>)}<th className="n">Aksesoris</th><th className="n">Qoala</th><th className="n">Total</th></tr>
+              <tr><th>#</th><th>Nama</th>{DEVICE_LOBS.map((l) => <th key={l} className="n">{LOB_LABEL[l]}</th>)}<th className="n">Aksesoris</th><th className="n">Qoala</th><th className="n">Provider</th><th className="n">Total</th></tr>
             </thead>
             <tbody>
               {rows.map((r, i) => (
@@ -156,6 +166,7 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
                   {DEVICE_LOBS.map((l) => <td key={l} className="n"><Cell fee={r.device[l]?.fee ?? 0} sub={unit(r.device[l]?.qty ?? 0)} /></td>)}
                   <td className="n"><Cell fee={r.acc?.fee ?? 0} sub={accSub(r)} /></td>
                   <td className="n"><Cell fee={r.qoala.fee} sub={qoalaSub(r)} /></td>
+                  <td className="n"><Cell fee={r.provider.fee} sub={providerSub(r)} /></td>
                   <td className="n font-black tabular-nums">{rp(r.total)}</td>
                 </tr>
               ))}
@@ -167,6 +178,7 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
                   {DEVICE_LOBS.map((l) => <td key={l} className="n">{rp(view.rows.reduce((a, r) => a + (r.device[l]?.fee ?? 0), 0))}</td>)}
                   <td className="n">{rp(view.total.acc)}</td>
                   <td className="n">{rp(view.total.qoala)}</td>
+                  <td className="n">{rp(view.total.provider)}</td>
                   <td className="n">{rp(view.total.all)}</td>
                 </tr>
               </tfoot>
@@ -182,6 +194,7 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
           <li><b>Device:</b> {DEVICE_LOBS.filter((l) => l !== "Android").map((l) => `${LOB_LABEL[l]} ${rp(rules.perUnit[l] ?? 0)}`).join(" · ")} per unit. Retur mengurangi.</li>
           {rules.android && <li><b>Android:</b> {rp(rules.android.perUnit)} per device (semua brand), kecuali {rules.android.exclude.map((x) => `${x.brand} ${x.match.split("|")[0].replace(" ?", " ").toLowerCase()}`).join(", ")}.</li>}
           <li><b>Qoala:</b> dihitung per polis, lalu dijumlahkan — {tiers.map((t) => `${tierLabel(t.min)} ${rp(t.fee)}`).join(" · ")}.</li>
+          {rules.provider && <li><b>Provider:</b> penjualan {rules.provider.providers.join(", ")} digabung per staff; tiap kelipatan {rp(rules.provider.step)} dapat {rp(rules.provider.fee)} (sisa di bawah kelipatan tidak dihitung). Retur mengurangi.</li>}
           <li><b>Aksesoris:</b> dari {board ? <>&quot;{board.title}&quot;</> : "leaderboard ACC Fokus"} (tab Data - Akeno). Angka ini MTD dari sheet, tidak ikut filter tanggal.</li>
           <li><b>Akun online</b> ({(rules.online?.accounts ?? []).map((a) => displayName(a)).join(", ")}): {rp(rules.online?.perUnit ?? 0)} per device (MacBook, iPhone, iPad, Apple Watch); Qoala tidak dihitung.</li>
           <li className="text-xs text-slate-500">Skema bisa diubah admin di Settings → Aturan bisnis (kunci <code>incentive</code>, mis. <code>{'{"incentive":{"online":{"perUnit":5000}}}'}</code>).</li>
