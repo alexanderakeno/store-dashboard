@@ -107,3 +107,9 @@ test("apple: monthly = price / 24 rounded down, matched in the Apple list only",
   assert.equal(matchRow({ key: "11-INCH IPAD WI-FI 128GB", canva: { price: 1 } }, cell, "apple")?.promo, 8699000);
   assert.equal(matchRow({ key: "11-INCH IPAD WI-FI + CELLULAR 128GB", canva: { price: 1 } }, cell, "apple")?.promo, 11699000);
 });
+
+test("apple: MacBook Neo is matched on its price list name (MBN)", () => {
+  const items = [{ ...row("MBN 13/8GB/256GB", 13499000, 12999000), kind: "apple" as const }, { ...row("MBN 13/8GB/512GB", 15749000, 15249000), kind: "apple" as const }];
+  const neo = APPLE_TEMPLATES.find((t) => t.name === "MacBook Neo")!;
+  for (const s of neo.slots) assert.notEqual(resolveSlot(s, items, "apple").status, "missing", s.key);
+});
