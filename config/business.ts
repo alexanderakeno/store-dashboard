@@ -39,6 +39,8 @@ export interface IncentiveRules {
   online: { accounts: string[]; perUnit: number };
   /** Android devices: flat rupiah per unit, except the listed products (brand + description pattern, case-insensitive). */
   android?: { perUnit: number; exclude: Array<{ brand: string; match: string }> };
+  /** Telco providers (Telkomsel, XL, Indosat): their sales value added up per staff, `fee` per full `step` (e.g. 20rb per 1 jt). */
+  provider?: { providers: string[]; step: number; fee: number };
 }
 
 export const DEFAULT_RULES: BusinessRules = {
@@ -86,6 +88,7 @@ export const DEFAULT_RULES: BusinessRules = {
         { brand: "Samsung", match: "FIT ?3" },
       ],
     },
+    provider: { providers: ["Telkomsel", "XL", "Indosat"], step: 1_000_000, fee: 20_000 },
   },
 };
 
