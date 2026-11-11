@@ -3,7 +3,8 @@ import { appConfig } from "@/config/app";
 import { PageIntro } from "@/components/kit";
 import { requireSession } from "@/lib/auth/session";
 import { getPriceList } from "@/lib/pricelist";
-import { resolveSlot } from "@/lib/domain/priceTicket";
+import { accTicketItems, resolveSlot } from "@/lib/domain/priceTicket";
+import { getAccPriceList } from "@/lib/accPrice";
 import { TICKET_TEMPLATES } from "@/lib/priceTicket/templates";
 import { APPLE_TEMPLATES } from "@/lib/priceTicket/apple";
 import { PriceTicketApp, type TicketData } from "@/components/modules/PriceTicketApp";
@@ -17,8 +18,10 @@ export default async function PriceTicketPage() {
     error = e.message;
     return null;
   });
+  // accessories on the Apple tickets (Apple Pencil, Magic Keyboard, …) are priced from the accessories list
+  const acc = await getAccPriceList().catch(() => null);
   // without a readable price list every slot keeps the design's price ("missing")
-  const items = list?.items ?? [];
+  const items = [...(list?.items ?? []), ...accTicketItems(acc?.items ?? [])];
   // Apple after Samsung; the rest as generated
   const all = [...TICKET_TEMPLATES.filter((t) => t.brand === "Xiaomi" || t.brand === "Samsung"), ...APPLE_TEMPLATES, ...TICKET_TEMPLATES.filter((t) => t.brand !== "Xiaomi" && t.brand !== "Samsung")];
   const tickets: TicketData[] = all.map((tpl) => ({ tpl, slots: tpl.slots.map((s) => resolveSlot(s, items, tpl.kind ?? "android")) }));
