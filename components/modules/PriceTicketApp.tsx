@@ -340,8 +340,14 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
           <article key={d.tpl.id} className={`sd-panel flex flex-col gap-3 p-3 sm:p-4 ${picked.has(d.tpl.id) ? "ring-2 ring-blue-500" : ""}`}>
             <div className="relative">
               <Preview d={d} ov={ov} />
-              <label className="absolute left-2 top-2 flex cursor-pointer items-center gap-1.5 rounded-lg bg-white/90 px-2 py-1 text-xs font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 backdrop-blur">
-                <input type="checkbox" className="size-4 accent-blue-600" checked={picked.has(d.tpl.id)} onChange={() => toggle(d.tpl.id)} />
+              <label className="absolute left-1.5 top-1.5 flex cursor-pointer items-center gap-1 rounded-full bg-white/80 py-0.5 pl-0.5 pr-1.5 text-[9px] font-bold leading-none text-slate-500 ring-1 ring-slate-200/80 backdrop-blur" title="Centang untuk digabung jadi A4">
+                <input
+                  type="checkbox"
+                  className="size-3 shrink-0 cursor-pointer appearance-none rounded-full border border-slate-400 bg-white transition checked:border-blue-600 checked:bg-blue-600 checked:shadow-[inset_0_0_0_2px_#fff] focus-visible:outline-2 focus-visible:outline-blue-500"
+                  checked={picked.has(d.tpl.id)}
+                  onChange={() => toggle(d.tpl.id)}
+                  aria-label={`Pilih ${d.tpl.name} untuk A4`}
+                />
                 A4
               </label>
             </div>
