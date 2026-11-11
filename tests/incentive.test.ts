@@ -24,7 +24,7 @@ test("qoalaFee tiers: <1jt 20rb, 1–1,5jt 40rb, 1,5–<2jt 60rb, ≥2jt 80rb (r
   assert.equal(qoalaFee(5_065_000, R.qoalaTiers), 80_000);
 });
 
-test("devices: iPhone 15rb, Mac/iPad/Watch 30rb, Android 15rb per unit; AirPods not paid; returns subtract", () => {
+test("devices: Mac 30rb, iPhone/iPad/Watch 15rb, Android 15rb per unit; AirPods not paid; returns subtract", () => {
   const v = incentiveView(
     [line({ qty: 2 }), line({ lob: "Mac" }), line({ lob: "iPad" }), line({ lob: "Apple Watch" }), line({ lob: "AirPods" }), line({ group: "Android", lob: "Samsung", brand: "SAMSUNG", description: "GALAXY A07 4/64GB" }), line({ qty: -1, amount: -100 })],
     R, null, ["Chelsy Arrahmat"],
@@ -32,7 +32,7 @@ test("devices: iPhone 15rb, Mac/iPad/Watch 30rb, Android 15rb per unit; AirPods 
   const r = v.rows[0];
   assert.equal(r.device.iPhone.qty, 1);
   assert.equal(r.device.Android.qty, 1);
-  assert.equal(r.deviceFee, 1 * 15_000 + (1 + 1 + 1) * 30_000 + 15_000);
+  assert.equal(r.deviceFee, 1 * 15_000 + 30_000 + 15_000 + 15_000 + 15_000); // iPhone (2 − 1 return) · Mac · iPad · Watch · Android
 });
 
 test("Android 15rb except Xiaomi / Motorola watches and Galaxy Fit 3; online accounts get 5rb per Android unit", () => {
