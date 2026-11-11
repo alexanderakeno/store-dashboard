@@ -196,7 +196,7 @@ export default async function IncentivePage({ searchParams }: { searchParams: Se
           <li><b>Qoala:</b> dihitung per polis, lalu dijumlahkan — {tiers.map((t) => `${tierLabel(t.min)} ${rp(t.fee)}`).join(" · ")}.</li>
           {rules.provider && <li><b>Provider:</b> penjualan {rules.provider.providers.join(", ")} digabung per staff; tiap kelipatan {rp(rules.provider.step)} dapat {rp(rules.provider.fee)} (sisa di bawah kelipatan tidak dihitung). Retur mengurangi.</li>}
           <li><b>Aksesoris:</b> dari {board ? <>&quot;{board.title}&quot;</> : "leaderboard ACC Fokus"} (tab Data - Akeno). Angka ini MTD dari sheet, tidak ikut filter tanggal.</li>
-          <li><b>Akun online</b> ({(rules.online?.accounts ?? []).map((a) => displayName(a)).join(", ")}): {rp(rules.online?.perUnit ?? 0)} per device (MacBook, iPhone, iPad, Apple Watch); Qoala tidak dihitung.</li>
+          <li><b>Akun online</b> ({(rules.online?.accounts ?? []).map((a) => displayName(a)).join(", ")}): {rp(rules.online?.perUnit ?? 0)} per unit untuk semua device (MacBook, iPhone, iPad, Apple Watch, Android); Qoala, provider &amp; aksesoris tidak dihitung.</li>
           <li className="text-xs text-slate-500">Skema bisa diubah admin di Settings → Aturan bisnis (kunci <code>incentive</code>, mis. <code>{'{"incentive":{"online":{"perUnit":5000}}}'}</code>).</li>
         </ul>
       </Panel>
