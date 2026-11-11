@@ -46,6 +46,7 @@ export function mergeRules(o: Partial<BusinessRules>): BusinessRules {
       qoalaTiers: inc.qoalaTiers ?? DEFAULT_RULES.incentive.qoalaTiers,
       online: { ...DEFAULT_RULES.incentive.online, ...(inc.online ?? {}) },
       android: { ...DEFAULT_RULES.incentive.android!, ...(inc.android ?? {}) },
+      provider: { ...DEFAULT_RULES.incentive.provider!, ...(inc.provider ?? {}) },
     },
   };
 }
