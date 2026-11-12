@@ -286,7 +286,18 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
   const [detail, setDetail] = useState<string | null>(null);
   /** Tickets ticked for the A4 sheet (ids, any brand). */
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const list = tickets.filter((t) => t.tpl.brand === brand);
+  /** Chosen size per card (group id → template id). */
+  const [sizeSel, setSizeSel] = useState<Record<string, string>>({});
+  // one card per model: size variants (variantOf) join their main template's card
+  const groupsOf = (b: string) => {
+    const m = new Map<string, TicketData[]>();
+    for (const t of tickets) if (t.tpl.brand === b) (m.get(t.tpl.variantOf ?? t.tpl.id) ?? m.set(t.tpl.variantOf ?? t.tpl.id, []).get(t.tpl.variantOf ?? t.tpl.id)!).push(t);
+    return [...m.entries()].map(([key, members]) => ({ key, members }));
+  };
+  const groups = groupsOf(brand);
+  const shownOf = (g: { key: string; members: TicketData[] }) => g.members.find((t) => t.tpl.id === sizeSel[g.key]) ?? g.members[0];
+  /** The ticket each card shows (its chosen size). */
+  const list = groups.map(shownOf);
   const changed = list.filter((t) => t.slots.some((s) => s.status === "updated")).length;
   const missing = list.filter((t) => t.slots.some((s) => s.status === "missing")).length;
   const open = detail ? tickets.find((t) => t.tpl.id === detail) ?? null : null;
@@ -332,7 +343,7 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
         <div className="flex flex-wrap gap-2" role="tablist" aria-label="Brand">
           {brands.map((b) => (
             <button key={b} type="button" role="tab" aria-selected={b === brand} onClick={() => setBrand(b)} className={`rounded-xl px-4 py-2 text-sm font-bold transition ${b === brand ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"}`}>
-              {b} <span className="opacity-70">· {tickets.filter((t) => t.tpl.brand === b).length}</span>
+              {b} <span className="opacity-70">· {groupsOf(b).length}</span>
             </button>
           ))}
         </div>
@@ -364,14 +375,46 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
       </section>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {list.map((d) => (
-          <article key={d.tpl.id} className={`sd-panel relative flex flex-col gap-3 p-3 sm:p-4 ${picked.has(d.tpl.id) ? "ring-2 ring-blue-500" : ""}`}>
+        {groups.map((g) => {
+          const d = shownOf(g);
+          return (
+          <article key={g.key} className={`sd-panel relative flex flex-col gap-3 p-3 sm:p-4 ${picked.has(d.tpl.id) ? "ring-2 ring-blue-500" : ""}`}>
             <Preview d={d} ov={ov} />
             <A4Badge n={order.get(d.tpl.id)} name={d.tpl.name} onToggle={() => toggle(d.tpl.id)} />
             <div className="flex items-start gap-2">
               <h3 className="flex-1 text-base font-black text-slate-950">{d.tpl.name}</h3>
               {d.slots.every((s) => s.status === "same") ? <CheckCircle2 className="size-5 text-emerald-500" aria-label="Sesuai price list" /> : d.slots.some((s) => s.status === "missing") ? <AlertTriangle className="size-5 text-amber-500" aria-label="Ada varian di luar price list" /> : null}
             </div>
+            {g.members.length > 1 && (
+              <div className="-mt-1 flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label={`Ukuran ${d.tpl.name}`}>
+                <span className="text-xs font-bold text-slate-500">Ukuran:</span>
+                {g.members.map((m) => {
+                  const on = m.tpl.id === d.tpl.id;
+                  return (
+                    <button
+                      key={m.tpl.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => {
+                        setSizeSel((s) => ({ ...s, [g.key]: m.tpl.id }));
+                        // the A4 choice follows the size shown
+                        if (picked.has(d.tpl.id) && !on)
+                          setPicked((p) => {
+                            const n = new Set(p);
+                            n.delete(d.tpl.id);
+                            n.add(m.tpl.id);
+                            return n;
+                          });
+                      }}
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-bold transition ${on ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"}`}
+                    >
+                      {sizeText(m.tpl)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <button type="button" className="sd-btn ghost -mt-1 justify-between !px-3 text-sm" onClick={() => setDetail(d.tpl.id)} aria-haspopup="dialog">
               <span className="flex flex-wrap items-center gap-1.5">
                 Detail harga <span className="text-slate-400">· {d.tpl.slots.filter((_, i) => listed(d.tpl, i)).length} varian</span>
@@ -383,7 +426,8 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
               {busy === d.tpl.id ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />} PDF {sizeText(d.tpl)}
             </button>
           </article>
-        ))}
+          );
+        })}
       </div>
       {open && (
         <DetailDialog d={open} ov={ov} setOv={setOv} onClose={() => setDetail(null)}>
