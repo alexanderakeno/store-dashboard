@@ -196,7 +196,13 @@ export interface SlotDraw {
 }
 
 /** Full ticket on a canvas `width` px wide (height from the design's aspect). */
-export function drawTicket(canvas: HTMLCanvasElement, img: HTMLImageElement, tpl: TicketTemplate, width: number, slots: SlotDraw[]) {
+/**
+ * The store's MAP Club sign-up QR (static: the link itself is encoded, nothing to expire), drawn over the left QR of
+ * every Android ticket that has `storeQr`. To change it: replace the PNG (black modules, no quiet zone) and the URL.
+ */
+export const STORE_QR = { src: "/price-ticket/qr/QF10-mapclub.png", url: "https://www.mapclub.com/en/user/signup?store=QF10" };
+
+export function drawTicket(canvas: HTMLCanvasElement, img: HTMLImageElement, tpl: TicketTemplate, width: number, slots: SlotDraw[], qr?: HTMLImageElement | null) {
   const [fw, fh] = tpl.frame;
   const height = Math.round((width * fh) / fw);
   canvas.width = width;
@@ -209,6 +215,15 @@ export function drawTicket(canvas: HTMLCanvasElement, img: HTMLImageElement, tpl
   ctx.drawImage(img, 0, 0, width, height);
   ctx.save();
   ctx.scale(width / fw, height / fh);
+  if (tpl.storeQr && qr) {
+    const [qx, qy, qs] = tpl.storeQr;
+    const pad = qs * 0.04;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(qx - pad, qy - pad, qs + pad * 2, qs + pad * 2);
+    ctx.imageSmoothingEnabled = false; // crisp modules
+    ctx.drawImage(qr, qx, qy, qs, qs);
+    ctx.imageSmoothingEnabled = true;
+  }
   for (const s of slots) if (s.redraw) (isTextSlot(s.slot) ? drawText(ctx, s.slot, s.price) : drawSlot(ctx, s.slot as TicketSlot, tpl.strikeStyle, s.price, s.strike));
   ctx.restore();
 }

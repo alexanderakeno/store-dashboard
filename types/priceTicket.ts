@@ -89,6 +89,11 @@ export interface TicketTemplate {
   size: [number, number];
   /** Design frame in px [w, h] — the coordinate system of the slots (the image may be stored larger). */
   frame: [number, number];
+  /**
+   * Where the design's MAP Club QR sits [x, y, size] in frame px: the store's own static QR is drawn over it
+   * (the design's QR is a short link that can expire).
+   */
+  storeQr?: [number, number, number];
   slots: AnySlot[];
   /** Price list the slots are matched in (default android). */
   kind?: "android" | "apple";

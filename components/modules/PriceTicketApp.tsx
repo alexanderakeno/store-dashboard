@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, Download, FileStack, Loader2, Pencil, RefreshCw, X } from "lucide-react";
-import { drawTicket, loadTicketFonts, type SlotDraw } from "@/lib/priceTicket/draw";
+import { STORE_QR, drawTicket, loadTicketFonts, type SlotDraw } from "@/lib/priceTicket/draw";
 import { buildPdf, type PdfPage } from "@/lib/priceTicket/pdf";
 import { monthly, rupiah } from "@/lib/domain/priceTicket";
 import { isTextSlot, type ResolvedSlot, type TicketTemplate } from "@/types/priceTicket";
@@ -17,6 +17,8 @@ type Overrides = Record<string, { price: number; strike?: number }>;
 const PREVIEW = 720;
 /** Light copy of the design for the on-screen preview (960 px WebP, ~50 KB); the full JPEG is loaded only for a PDF. */
 const previewOf = (src: string) => src.replace(/\.jpg$/, ".preview.webp");
+/** The store's static MAP Club QR, for designs that carry one. */
+const qrOf = (t: TicketTemplate) => (t.storeQr ? loadImg(STORE_QR.src) : Promise.resolve(null));
 /** Fonts are needed only when a text price (Apple) is redrawn. */
 const needsFonts = (list: SlotDraw[]) => list.some((s) => s.redraw && isTextSlot(s.slot));
 const imgs = new Map<string, Promise<HTMLImageElement>>();
@@ -80,9 +82,9 @@ function draws(d: TicketData, ov: Overrides): SlotDraw[] {
 
 /** The ticket at the stored image's full resolution (≈ 300–550 dpi) as JPEG. */
 async function jpegOf(d: TicketData, ov: Overrides): Promise<{ jpeg: Uint8Array; px: number; py: number }> {
-  const [img] = await Promise.all([loadImg(d.tpl.image), loadTicketFonts()]);
+  const [img, , qr] = await Promise.all([loadImg(d.tpl.image), loadTicketFonts(), qrOf(d.tpl)]);
   const c = document.createElement("canvas");
-  drawTicket(c, img, d.tpl, img.naturalWidth, draws(d, ov));
+  drawTicket(c, img, d.tpl, img.naturalWidth, draws(d, ov), qr);
   const px = c.width;
   const py = c.height;
   const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.95));
@@ -175,8 +177,8 @@ function Preview({ d, ov }: { d: TicketData; ov: Overrides }) {
   useEffect(() => {
     if (!seen) return;
     let live = true;
-    Promise.all([loadImg(previewOf(d.tpl.image)).catch(() => loadImg(d.tpl.image)), needsFonts(list) ? loadTicketFonts() : null])
-      .then(([img]) => live && ref.current && drawTicket(ref.current, img, d.tpl, PREVIEW, list))
+    Promise.all([loadImg(previewOf(d.tpl.image)).catch(() => loadImg(d.tpl.image)), needsFonts(list) ? loadTicketFonts() : null, qrOf(d.tpl)])
+      .then(([img, , qr]) => live && ref.current && drawTicket(ref.current, img, d.tpl, PREVIEW, list, qr))
       .catch((e: Error) => live && setErr(e.message));
     return () => {
       live = false;
