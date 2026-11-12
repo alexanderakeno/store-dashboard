@@ -53,7 +53,7 @@ test("splitPrice", () => {
 });
 
 test("templates: slots inside the frame, glyphs for every digit", () => {
-  assert.equal(TICKET_TEMPLATES.filter((t) => t.brand === "Xiaomi").length, 13);
+  assert.equal(TICKET_TEMPLATES.filter((t) => t.brand === "Xiaomi").length, 21);
   assert.equal(new Set(TICKET_TEMPLATES.map((t) => t.id)).size, TICKET_TEMPLATES.length);
   for (const t of [...TICKET_TEMPLATES, ...APPLE_TEMPLATES]) {
     assert.ok(t.slots.length > 0, t.id);
