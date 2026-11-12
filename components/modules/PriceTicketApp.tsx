@@ -119,7 +119,16 @@ async function pdfOf(list: TicketData[], ov: Overrides, layout: "single" | "a4",
   const images = [];
   for (const d of list) images.push(await jpegOf(d, ov));
   const pages: PdfPage[] = [];
-  if (layout === "single") list.forEach((d, i) => pages.push({ w: d.tpl.size[0], h: d.tpl.size[1], items: [{ img: i, x: 0, y: 0, w: d.tpl.size[0], h: d.tpl.size[1] }] }));
+  if (layout === "single")
+    // one ticket per A4 sheet at its real size (top, centred, with a cut line): printing on A4 then gives the true size
+    // even when the printer / phone scales the page to the paper (a 15×12 cm page would be blown up to fill A4)
+    list.forEach((d, i) => {
+      const [w, h] = d.tpl.size;
+      const portrait = w <= 200 && h <= 287;
+      const W = portrait ? 210 : 297;
+      const H = portrait ? 297 : 210;
+      pages.push({ w: W, h: H, items: [{ img: i, x: (W - w) / 2, y: 10, w, h, cut: true }] });
+    });
   else {
     // tickets of the same size share sheets (grouped by size, original order kept within a size)
     const order = list.map((_, i) => i);
@@ -348,7 +357,7 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
             </button>
           )}
         </div>
-        <p className="text-[11px] text-slate-400">Saat print, pilih ukuran asli / skala 100% (jangan &quot;Fit to page&quot;) supaya ukuran ticket tepat {sizes}.</p>
+        <p className="text-[11px] text-slate-400">PDF berukuran kertas A4 dengan ticket ukuran asli ({sizes}) di dalamnya — print di kertas A4, lalu gunting di garis tipis. Pilih skala 100% / &quot;Actual size&quot; bila ada pilihannya.</p>
         {err && <div className="alert error" role="alert">{err}</div>}
       </section>
 

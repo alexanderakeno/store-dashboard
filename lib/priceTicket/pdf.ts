@@ -37,7 +37,8 @@ export function buildPdf(images: PdfImage[], pages: PdfPage[], title = "Price Ti
     push("\nendobj\n");
   };
   push("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
-  obj(1, "<< /Type /Catalog /Pages 2 0 R >>");
+  // ask the print dialog for actual size (no "fit to page") — honoured by Acrobat, Chrome and most phone viewers
+  obj(1, "<< /Type /Catalog /Pages 2 0 R /ViewerPreferences << /PrintScaling /None >> >>");
   obj(2, `<< /Type /Pages /Kids [${pages.map((_, i) => `${pageObj(i)} 0 R`).join(" ")}] /Count ${pages.length} >>`);
   // title as UTF-16BE hex: "Galaxy Tab S12+ (10x16 cm)" keeps its brackets and any non-ASCII letter
   const hex = [...title].map((c) => c.charCodeAt(0).toString(16).padStart(4, "0")).join("");
