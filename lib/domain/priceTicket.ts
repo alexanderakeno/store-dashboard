@@ -37,14 +37,26 @@ export function nameTokens(s: string): string[] {
 
 export const normName = (s: string) => nameTokens(s).join(" ");
 
+/** nameTokens, remembered per name: matching ~150 slots against ~1.600 rows tokenised each row 150× per page. */
+const TOKENS = new Map<string, string[]>();
+function tokensOf(s: string): string[] {
+  let t = TOKENS.get(s);
+  if (!t) {
+    if (TOKENS.size > 20_000) TOKENS.clear();
+    t = nameTokens(s);
+    TOKENS.set(s, t);
+  }
+  return t;
+}
+
 /** Price list row for a slot: the row with every word of the slot and the fewest other (non-model) words. */
 export function matchRow(slot: Pick<AnySlot, "key" | "canva">, items: TicketPriceItem[], kind: TicketKind = "android"): TicketPriceItem | null {
-  const want = nameTokens(slot.key);
+  const want = tokensOf(slot.key);
   let best: { row: TicketPriceItem; extra: number } | null = null;
   const designNormal = slot.canva.strike ?? slot.canva.price;
   for (const row of items) {
     if (row.kind !== kind || !(row.normal > 0)) continue;
-    const have = nameTokens(row.name);
+    const have = tokensOf(row.name);
     if (!want.every((w) => have.includes(w))) continue;
     const extra = have.filter((w) => !want.includes(w));
     // another model (PRO, 5G, …) or another version (a number) is not a free extra word
