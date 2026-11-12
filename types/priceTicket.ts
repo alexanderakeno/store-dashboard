@@ -99,6 +99,8 @@ export interface TicketTemplate {
   kind?: "android" | "apple";
   /** Strike style for prices that had none in the design. */
   strikeStyle: StrikeStyle;
+  /** Same model in another printed size: the id of the main template — shown as one card with a size choice. */
+  variantOf?: string;
   /** Remark about the design itself (e.g. a name that differs from the price list). */
   note?: string;
 }
