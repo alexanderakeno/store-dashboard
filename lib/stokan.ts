@@ -31,7 +31,10 @@ export async function sessionItems(id: string): Promise<StokanItem[]> {
 /** People who can count: the app users (active) + the admin. */
 export async function staffCandidates(): Promise<StokanStaff[]> {
   const cfg = appConfig();
-  const users = await dataSource().listUsers().catch(() => []);
+  // the user list changes rarely: one Sheets read per minute instead of one per page view
+  const users = await cached("stokan:users", 60_000, () => dataSource().listUsers())
+    .then((x) => x.value)
+    .catch(() => []);
   const out: StokanStaff[] = users.filter((u) => u.active).map((u) => ({ nik: u.nik, name: u.name || u.nik }));
   const admin = normalizeNik(cfg.adminNik) ?? cfg.adminNik;
   if (admin && !out.some((s) => s.nik === admin)) out.push({ nik: admin, name: cfg.adminName || "Admin" });
