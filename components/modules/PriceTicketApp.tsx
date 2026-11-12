@@ -15,6 +15,10 @@ export interface TicketData {
 type Overrides = Record<string, { price: number; strike?: number }>;
 
 const PREVIEW = 720;
+/** Light copy of the design for the on-screen preview (960 px WebP, ~50 KB); the full JPEG is loaded only for a PDF. */
+const previewOf = (src: string) => src.replace(/\.jpg$/, ".preview.webp");
+/** Fonts are needed only when a text price (Apple) is redrawn. */
+const needsFonts = (list: SlotDraw[]) => list.some((s) => s.redraw && isTextSlot(s.slot));
 const imgs = new Map<string, Promise<HTMLImageElement>>();
 function loadImg(src: string) {
   let p = imgs.get(src);
@@ -149,15 +153,26 @@ function Preview({ d, ov }: { d: TicketData; ov: Overrides }) {
   const [err, setErr] = useState("");
   const [detail, setDetail] = useState<string | null>(null);
   const list = useMemo(() => draws(d, ov), [d, ov]);
+  // draw only once the card is near the screen: a brand tab no longer loads every design at once
+  const [seen, setSeen] = useState(false);
   useEffect(() => {
+    const el = ref.current;
+    if (!el || seen) return;
+    if (typeof IntersectionObserver === "undefined") return setSeen(true);
+    const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && setSeen(true), { rootMargin: "600px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [seen]);
+  useEffect(() => {
+    if (!seen) return;
     let live = true;
-    Promise.all([loadImg(d.tpl.image), loadTicketFonts()])
+    Promise.all([loadImg(previewOf(d.tpl.image)).catch(() => loadImg(d.tpl.image)), needsFonts(list) ? loadTicketFonts() : null])
       .then(([img]) => live && ref.current && drawTicket(ref.current, img, d.tpl, PREVIEW, list))
       .catch((e: Error) => live && setErr(e.message));
     return () => {
       live = false;
     };
-  }, [d.tpl.image, list]);
+  }, [seen, d.tpl, list]);
   return (
     <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700" style={{ aspectRatio: `${d.tpl.frame[0]} / ${d.tpl.frame[1]}` }}>
       <canvas ref={ref} className="block h-full w-full" aria-label={`Price ticket ${d.tpl.name}`} />
