@@ -82,6 +82,12 @@ export async function getMonths(force = false): Promise<MonthEntry[]> {
   return value;
 }
 
+/**
+ * Enriched snapshot per cached read: while the raw month, the rules and the traffic are the same
+ * objects (memory cache hit), the classification + reconciliation is not redone on every page view.
+ */
+const SNAPS = new WeakMap<object, { rules: BusinessRules; traffic: TrafficEntry[]; snap: MonthSnapshot }>();
+
 /** Load + parse + enrich one month. Cached; `force` re-reads the spreadsheet. */
 export async function getMonthSnapshot(month: MonthKey, force = false): Promise<MonthSnapshot> {
   const entry = (await getMonths(force)).find((m) => m.month === month);
@@ -109,10 +115,12 @@ export async function getMonthSnapshot(month: MonthKey, force = false): Promise<
       force,
     ),
   ]);
+  const memo = SNAPS.get(raw.value);
+  if (memo && memo.rules === rules && memo.traffic === traffic.value && memo.snap.entry === entry) return memo.snap;
   const { control, target, sourceTitle, errors } = raw.value.raw;
   const extras = raw.value.raw.extras ?? EMPTY_EXTRAS;
   const lines = enrichSales(control.sales, control.merch, rules);
-  return {
+  const snap: MonthSnapshot = {
     month,
     entry,
     sourceTitle,
@@ -131,6 +139,8 @@ export async function getMonthSnapshot(month: MonthKey, force = false): Promise<
     // when the spreadsheet was actually read (not when the cache was hit)
     loadedAt: raw.value.readAt,
   };
+  SNAPS.set(raw.value, { rules, traffic: traffic.value, snap });
+  return snap;
 }
 
 /** Default month: today's month if registered, otherwise the latest registered. */
@@ -165,9 +175,17 @@ export function invalidateMonth(month: MonthKey, part: "raw" | "traffic" | "all"
 
 /* ---------------- last-year data imported from a Merchandise Report ---------------- */
 
+/**
+ * Imported last-year months almost never change (only a new MR import, which clears this instance at once and
+ * expires the shared tag): keep them in memory for 10 min, so the YTD / Compare tabs don't re-download ~20 months
+ * from the Data Cache every minute.
+ */
+const HISTORY_MEM_MS = 10 * 60_000;
+const HIST_LINES = new WeakMap<object, { rules: BusinessRules; lines: SalesLine[] }>();
+
 /** Key carries a version: bump it when HistorySummary changes shape, so a cached old shape is never served. */
 export async function getHistoryList(force = false): Promise<HistorySummary[]> {
-  const { value } = await cached("history:list", memTtl(), () => shared(["history-list", "v2"], ["history"], sharedSec(), () => dataSource().listHistory(), force), force);
+  const { value } = await cached("history:list", Math.max(memTtl(), HISTORY_MEM_MS), () => shared(["history-list", "v2"], ["history"], sharedSec(), () => dataSource().listHistory(), force), force);
   return value;
 }
 
@@ -175,8 +193,12 @@ export async function getHistoryList(force = false): Promise<HistorySummary[]> {
 export async function getHistoryLines(month: MonthKey, force = false): Promise<SalesLine[] | null> {
   const [rules, list] = await Promise.all([getRules(force), getHistoryList(force)]);
   if (!list.some((h) => h.month === month)) return null;
-  const { value } = await cached(`history:${month}`, memTtl(), () => shared(["history", month], ["history"], sharedSec(), () => dataSource().getHistory(month), force), force);
-  return historyLines(value, rules);
+  const { value } = await cached(`history:${month}`, Math.max(memTtl(), HISTORY_MEM_MS), () => shared(["history", month], ["history"], sharedSec(), () => dataSource().getHistory(month), force), force);
+  const memo = HIST_LINES.get(value as object);
+  if (memo && memo.rules === rules) return memo.lines;
+  const lines = historyLines(value, rules);
+  HIST_LINES.set(value as object, { rules, lines });
+  return lines;
 }
 
 export function invalidateHistory(): void {

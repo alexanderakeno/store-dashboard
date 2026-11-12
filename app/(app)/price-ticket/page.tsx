@@ -14,12 +14,14 @@ export default async function PriceTicketPage() {
   const session = await requireSession();
   const code = appConfig().storeCode || "STORE";
   let error: string | null = null;
-  const list = await getPriceList().catch((e: Error) => {
-    error = e.message;
-    return null;
-  });
-  // accessories on the Apple tickets (Apple Pencil, Magic Keyboard, …) are priced from the accessories list
-  const acc = await getAccPriceList().catch(() => null);
+  // both lists at once; accessories on the Apple tickets (Apple Pencil, Magic Keyboard, …) are priced from the accessories list
+  const [list, acc] = await Promise.all([
+    getPriceList().catch((e: Error) => {
+      error = e.message;
+      return null;
+    }),
+    getAccPriceList().catch(() => null),
+  ]);
   // without a readable price list every slot keeps the design's price ("missing")
   const items = [...(list?.items ?? []), ...accTicketItems(acc?.items ?? [])];
   // Apple after Samsung; the rest as generated

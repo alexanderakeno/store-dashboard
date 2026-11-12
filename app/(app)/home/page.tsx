@@ -498,8 +498,7 @@ async function Ytd({ snap, months }: { snap: MonthSnapshot; months: MonthEntry[]
   const year = snap.month.slice(0, 4);
   const prevYear = String(Number(year) - 1);
   const mm = snap.month.slice(5);
-  const cur = await loadYear(months, year, snap.month);
-  const prev = await loadYear(months, prevYear, `${prevYear}-${mm}`);
+  const [cur, prev] = await Promise.all([loadYear(months, year, snap.month), loadYear(months, prevYear, `${prevYear}-${mm}`)]);
   // fair YTD: only months that have data in both years, each cut to the same days when one side is
   // incomplete (current month, or an imported file that ends mid-month)
   const both = MONTH_NUMS.filter((n) => n <= mm && cur.has(`${year}-${n}`) && prev.has(`${prevYear}-${n}`));

@@ -11,12 +11,16 @@ export default async function StokanPage() {
   const isAdmin = session.role === "admin";
   const code = appConfig().storeCode || "STORE";
   let error: string | null = null;
-  const sessions = await listSessions().catch((e: Error) => {
-    error = e.message;
-    return [];
-  });
+  // the three reads at once (were one after another)
+  const [sessions, candidates, soh] = await Promise.all([
+    listSessions().catch((e: Error) => {
+      error = e.message;
+      return [];
+    }),
+    isAdmin ? staffCandidates() : [],
+    isAdmin ? getSoh().catch(() => null) : null,
+  ]);
   const active = sessions.find((s) => s.status === "count" || s.status === "recount") ?? null;
-  const [candidates, soh] = isAdmin ? await Promise.all([staffCandidates(), getSoh().catch(() => null)]) : [[], null];
   const today = todayIn(appConfig().timeZone);
   return (
     <div className="sd-content">

@@ -133,8 +133,9 @@ export function drawSlot(ctx: CanvasRenderingContext2D, slot: TicketSlot, style:
 
 /** Fonts of the text slots, the same faces the Apple designs were rendered with: Helvetica → TeX Gyre Heros, Arial → Liberation Sans. */
 const FACES = {
-  heros: { family: "TicketHeros", regular: "/fonts/texgyreheros-regular.otf", bold: "/fonts/texgyreheros-bold.otf" },
-  liberation: { family: "TicketLiberation", regular: "/fonts/LiberationSans-Regular.ttf", bold: "/fonts/LiberationSans-Bold.ttf" },
+  // subset to Latin (digits, "Rp", "/bln", …) as woff2: ~45 KB for all four instead of ~1 MB
+  heros: { family: "TicketHeros", regular: "/fonts/texgyreheros-regular.woff2", bold: "/fonts/texgyreheros-bold.woff2" },
+  liberation: { family: "TicketLiberation", regular: "/fonts/LiberationSans-Regular.woff2", bold: "/fonts/LiberationSans-Bold.woff2" },
 } as const;
 let fonts: Promise<void> | null = null;
 export function loadTicketFonts(): Promise<void> {
