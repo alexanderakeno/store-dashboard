@@ -17,6 +17,38 @@ const MM = 72 / 25.4;
 const enc = new TextEncoder();
 const f = (n: number) => (Math.round(n * 1000) / 1000).toString();
 
+/**
+ * Crop marks: every cut line (ticket edges) continued as a short solid line in the page margin, outside the
+ * tickets, so the line is easy to find and follow with scissors / a cutter even where the dashed edge is faint.
+ */
+function cropMarks(p: PdfPage, H: number): string {
+  const cut = p.items.filter((it) => it.cut);
+  if (!cut.length) return "";
+  const left = Math.min(...cut.map((it) => it.x));
+  const right = Math.max(...cut.map((it) => it.x + it.w));
+  const top = Math.min(...cut.map((it) => it.y));
+  const bottom = Math.max(...cut.map((it) => it.y + it.h));
+  const xs = [...new Set(cut.flatMap((it) => [it.x, it.x + it.w].map((v) => Math.round(v * 100) / 100)))];
+  const ys = [...new Set(cut.flatMap((it) => [it.y, it.y + it.h].map((v) => Math.round(v * 100) / 100)))];
+  const GAP = 1.5; // mm between the ticket and the mark
+  const len = (room: number) => Math.min(8, room - GAP - 1); // mark length (mm), kept on the page
+  const line = (x1: number, y1: number, x2: number, y2: number) => `${f(x1 * MM)} ${f(H - y1 * MM)} m ${f(x2 * MM)} ${f(H - y2 * MM)} l S\n`;
+  let s = "q 0 G 0.4 w\n";
+  const lt = len(top);
+  const lb = len(p.h - bottom);
+  const ll = len(left);
+  const lr = len(p.w - right);
+  for (const x of xs) {
+    if (lt > 1) s += line(x, top - GAP, x, top - GAP - lt);
+    if (lb > 1) s += line(x, bottom + GAP, x, bottom + GAP + lb);
+  }
+  for (const y of ys) {
+    if (ll > 1) s += line(left - GAP, y, left - GAP - ll, y);
+    if (lr > 1) s += line(right + GAP, y, right + GAP + lr, y);
+  }
+  return s + "Q\n";
+}
+
 export function buildPdf(images: PdfImage[], pages: PdfPage[], title = "Price Ticket"): Uint8Array {
   const chunks: Uint8Array[] = [];
   const offsets: number[] = [];
@@ -52,8 +84,10 @@ export function buildPdf(images: PdfImage[], pages: PdfPage[], title = "Price Ti
       const x = it.x * MM;
       const y = H - (it.y + it.h) * MM;
       s += `q ${f(it.w * MM)} 0 0 ${f(it.h * MM)} ${f(x)} ${f(y)} cm /Im${it.img} Do Q\n`;
-      if (it.cut) s += `q 0.75 G 0.3 w ${f(x)} ${f(y)} ${f(it.w * MM)} ${f(it.h * MM)} re S Q\n`;
+      // cutting guide: a thin dashed line on the ticket's edge
+      if (it.cut) s += `q 0.55 G 0.35 w [3 2] 0 d ${f(x)} ${f(y)} ${f(it.w * MM)} ${f(it.h * MM)} re S Q\n`;
     }
+    s += cropMarks(p, H);
     const used = [...new Set(p.items.map((x) => x.img))];
     obj(pageObj(i), `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f(W)} ${f(H)}] /Resources << /XObject << ${used.map((k) => `/Im${k} ${imgObj(k)} 0 R`).join(" ")} >> >> /Contents ${pageObj(i) + 1} 0 R >>`);
     const body = enc.encode(s);
