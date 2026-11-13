@@ -14,6 +14,8 @@ import { getSoh } from "@/lib/soh";
 import { getSamsungPromo } from "@/lib/samsungPromo";
 import { etpPromos, exclusions, variantPromo, type VariantPromo } from "@/lib/domain/samsungPromo";
 import { todayIn } from "@/lib/domain/period";
+import { getPwpPromo } from "@/lib/pwpPromo";
+import { pwpPrices, variantPwp, type PwpBrief } from "@/lib/domain/pwpPromo";
 import type { SearchParams } from "@/lib/page";
 import type { PriceKind, PriceList } from "@/types/pricelist";
 import type { SohSnapshot } from "@/types/soh";
@@ -84,6 +86,18 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
           }
     }
   }
+  // PWP promos (all brands) per price-list row, by its SAP articles — optional as well
+  const pwp: Record<string, PwpBrief[]> = {};
+  const pwpPromo = await getPwpPromo().catch(() => null);
+  if (pwpPromo && list) {
+    const acc = await getAccPriceList().catch(() => null);
+    const prices = pwpPrices(list.items, acc?.items ?? []);
+    for (const m of models)
+      for (const v of m.variants) {
+        const b = variantPwp(v.articles ?? [], pwpPromo, today, prices);
+        if (b.length) pwp[v.id] = b;
+      }
+  }
   const date = list?.dates[kind];
   const updated = list?.updatedAt[kind];
   const label = kind === "apple" ? "Apple" : "Android";
@@ -108,7 +122,7 @@ export default async function PriceListPage({ searchParams }: { searchParams: Se
         </p>
       )}
       {models.length ? (
-        <PriceBoard key={kind} models={models} qoala={list?.qoala ?? []} hasSoh={!!soh} promos={promos} today={today} initialBrand={typeof q.b === "string" ? q.b : ""} initialModel={typeof q.t === "string" ? q.t : ""} />
+        <PriceBoard key={kind} models={models} qoala={list?.qoala ?? []} hasSoh={!!soh} promos={promos} pwp={pwp} today={today} initialBrand={typeof q.b === "string" ? q.b : ""} initialModel={typeof q.t === "string" ? q.t : ""} />
       ) : (
         <Panel>
           <EmptyBlock title={`Price list ${label}`}>
