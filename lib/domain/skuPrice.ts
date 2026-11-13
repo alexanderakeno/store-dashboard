@@ -1,5 +1,6 @@
 import { priceModels } from "./pricelist";
 import type { VariantPromo } from "./samsungPromo";
+import type { PwpBrief } from "./pwpPromo";
 import type { PriceKind, PriceList } from "@/types/pricelist";
 import type { SohItem } from "@/types/soh";
 
@@ -10,7 +11,7 @@ export interface SkuModel {
   model: string;
   /** Price List page key (`?t=`). */
   key: string;
-  variants: Array<{ label: string; name: string; normal: number; promo: number; credit?: number; status: string; note?: string; articles?: string[]; samsung?: VariantPromo }>;
+  variants: Array<{ label: string; name: string; normal: number; promo: number; credit?: number; status: string; note?: string; articles?: string[]; samsung?: VariantPromo; pwp?: PwpBrief[] }>;
 }
 
 export interface SkuPrices {

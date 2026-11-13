@@ -11,6 +11,7 @@ import { parseAccFocus, parsePromo, parseTracker } from "@/lib/parsers/extras";
 import { generateExtras, generateMonth } from "./generate";
 import type { SohSnapshot } from "@/types/soh";
 import type { SamsungPromo } from "@/types/samsungPromo";
+import type { PwpPromo } from "@/types/pwpPromo";
 import type { PriceList } from "@/types/pricelist";
 import type { PriceListInput } from "../types";
 import type { AccPriceList } from "@/types/accPrice";
@@ -39,6 +40,7 @@ interface Store {
   stokanItems: Record<string, StokanItem[]>;
   stokanLog: Record<string, StokanEvent[]>;
   samsungPromo: SamsungPromo | null;
+  pwpPromo?: PwpPromo | null;
 }
 
 const g = globalThis as unknown as { __fixtureStore?: Store };
@@ -140,6 +142,14 @@ export class FixtureSource implements DataSource {
   async saveSamsungPromo(promo: Omit<SamsungPromo, "updatedAt" | "updatedBy">, by: string) {
     store().samsungPromo = { ...promo, updatedAt: new Date().toISOString(), updatedBy: by };
   }
+  async getPwpPromo() {
+    return store().pwpPromo ?? null;
+  }
+
+  async savePwpPromo(promo: Omit<PwpPromo, "updatedAt" | "updatedBy">, by: string) {
+    store().pwpPromo = { ...promo, updatedAt: new Date().toISOString(), updatedBy: by };
+  }
+
   async listStokan() {
     return [...store().stokan].sort((a, b) => b.id.localeCompare(a.id));
   }

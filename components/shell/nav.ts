@@ -41,6 +41,7 @@ export const NAV: NavEntry[] = [
       { href: "/pricelist", label: "Price List", icon: "tag", color: "text-pink-400" },
       { href: "/price-ticket", label: "Price Ticket", icon: "tag", color: "text-rose-400" },
       { href: "/promo-samsung", label: "Promo Samsung", icon: "tag", color: "text-sky-400" },
+      { href: "/promo-pwp", label: "Promo PWP", icon: "tag", color: "text-emerald-400" },
     ],
   },
   {
