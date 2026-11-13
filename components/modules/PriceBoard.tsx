@@ -3,7 +3,7 @@ import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import Link from "next/link";
 import { displayName, qoalaFor, type PriceModel } from "@/lib/domain/pricelist";
-import type { PwpBrief } from "@/lib/domain/pwpPromo";
+import { pwpShortTitle, type PwpBrief } from "@/lib/domain/pwpPromo";
 import type { VariantPromo } from "@/lib/domain/samsungPromo";
 import type { QoalaTier } from "@/types/pricelist";
 
@@ -268,30 +268,37 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel, 
   );
 }
 
-/** PWP promos of the selected variant (Promo PWP workbook): what can be paired and the best price. */
+/** PWP promos of the selected variant (Promo PWP workbook): each accessory, its cashback and the total to pay. */
 export function PwpBox({ list, price, model }: { list: PwpBrief[]; price: number; model: string }) {
+  const MAX = 6;
   return (
     <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/60 p-3 dark:border-violet-900 dark:bg-violet-950/20">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-black tracking-[.12em] text-violet-800 uppercase dark:text-violet-300">Promo PWP</p>
-        <Link href={`/promo-pwp?s=${encodeURIComponent(model)}`} prefetch={false} className="text-xs font-semibold text-blue-600 hover:underline">Detail ›</Link>
+        <Link href={`/promo-pwp?b=${encodeURIComponent(list[0]?.brand ?? "")}&s=${encodeURIComponent(model)}`} prefetch={false} className="text-xs font-semibold text-blue-600 hover:underline">Detail ›</Link>
       </div>
-      <ul className="mt-1.5 space-y-1.5">
-        {list.map((p) => (
-          <li key={p.id} className={`text-[13px] ${p.state === "aktif" ? "" : "opacity-60"}`}>
-            <p className="font-bold">{p.title.replace(/^Promo PWP\s*/i, "PWP ")}</p>
-            <p className="text-[12px] text-slate-600 dark:text-slate-300">
-              {p.count} pilihan · cashback s/d <b className="text-emerald-700 dark:text-emerald-400">{rp(p.maxCashback)}</b>
-              {p.state === "akan" ? " · belum mulai" : p.end ? ` · s/d ${short(p.end)}${p.daysLeft != null && p.daysLeft <= 7 ? ` (${p.daysLeft} hari lagi)` : ""}` : ""}
-            </p>
-            {p.best && (
-              <p className="text-[12px] text-slate-600 dark:text-slate-300">
-                Termurah: {p.best.description.toLowerCase()} {p.best.nett <= 0 ? <b>gratis</b> : <>+<b>{rp(p.best.nett)}</b></>} → bayar <b>{rp(price + Math.max(0, p.best.nett))}</b>
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
+      {list.map((p) => (
+        <div key={p.id} className={`mt-1.5 ${p.state === "aktif" ? "" : "opacity-60"}`}>
+          <p className="text-[12px] font-bold text-slate-700 dark:text-slate-200">
+            {pwpShortTitle(p.title, p.brand)}
+            <span className="font-semibold text-slate-500">{p.state === "akan" ? " · belum mulai" : p.end ? ` · s/d ${short(p.end)}${p.daysLeft != null && p.daysLeft <= 7 ? ` (${p.daysLeft} hari lagi)` : ""}` : ""}</span>
+            {p.offers.some((o) => o.codes.length) && <code className="ml-1 text-[11px] text-slate-500">{[...new Set(p.offers.flatMap((o) => o.codes))].join(", ")}</code>}
+          </p>
+          <ul className="mt-1 space-y-1">
+            {p.offers.slice(0, MAX).map((o) => (
+              <li key={`${o.description}-${o.price}-${o.cashback}`} className="flex items-baseline justify-between gap-2 text-[12.5px]">
+                <span className="min-w-0">
+                  {displayName(o.description)}
+                  <span className="text-[11px] text-slate-500"> · {rp(o.price)} {o.price - o.cashback <= 0 ? <b className="text-emerald-700 dark:text-emerald-400">gratis</b> : <span className="text-emerald-700 dark:text-emerald-400">−{rp(o.cashback)}</span>}</span>
+                </span>
+                <b className="shrink-0 tabular-nums">{rp(price + Math.max(0, o.price - o.cashback))}</b>
+              </li>
+            ))}
+          </ul>
+          {p.offers.length > MAX && <p className="mt-0.5 text-[11px] text-slate-500">+{p.offers.length - MAX} pilihan lain — lihat Detail.</p>}
+        </div>
+      ))}
+      <p className="mt-1.5 text-[11px] text-slate-500">Angka kanan = bayar total HP + aksesoris setelah cashback.</p>
     </div>
   );
 }
