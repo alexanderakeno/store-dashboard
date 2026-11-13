@@ -102,6 +102,21 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
   return (
     <div className="sd-content">
       <PageIntro title="Data Upload" desc={`Status sumber data ${monthLabel(p.month)} · file: ${s.sourceTitle} · dibaca ${timeAgo(s.loadedAt)}.`} actions={isAdmin ? <Link href="/settings" prefetch={false} className="sd-btn primary">Kelola di Settings</Link> : undefined} />
+      <nav className="sd-panel flex flex-wrap gap-1.5 p-2.5 sm:gap-2 sm:p-3" aria-label="Lompat ke import">
+        {[
+          ["#import", "Data Penjualan"],
+          ["#soh", "SOH"],
+          ["#pricelist-android", "Price List Android"],
+          ["#pricelist-apple", "Price List Apple"],
+          ["#pricelist-acc", "Price List Aksesoris"],
+          ["#promo-samsung", "Promo Samsung"],
+          ["#promo-pwp", "Promo PWP"],
+        ].map(([href, label]) => (
+          <a key={href} href={href} className={`rounded-xl px-2.5 py-1.5 text-xs font-bold sm:px-3.5 sm:py-2 sm:text-sm ${href === "#promo-pwp" ? "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300"}`}>
+            {label}
+          </a>
+        ))}
+      </nav>
       <div id="import" className="scroll-mt-20">
         <Panel title="Import Data Penjualan" desc="Satu tempat untuk semua file Merchandise Report & Sales Person, bulan apa saja. Bulan & tanggal dibaca otomatis dari isi file.">
           {isAdmin ? (
