@@ -9,6 +9,7 @@ import type { StokanEvent, StokanItem, StokanSession } from "@/types/stokan";
 import type { AccessEntry } from "@/types/access";
 import type { PriceChange } from "@/lib/domain/priceHistory";
 import type { SamsungPromo } from "@/types/samsungPromo";
+import type { PwpPromo } from "@/types/pwpPromo";
 
 /** A monthly spreadsheet registered in the app (master sheet `APP_Months`). */
 export interface MonthEntry {
@@ -147,6 +148,11 @@ export interface DataSource {
   getSamsungPromo(): Promise<SamsungPromo | null>;
   /** Replaces the stored Samsung promo. */
   saveSamsungPromo(promo: Omit<SamsungPromo, "updatedAt" | "updatedBy">, by: string): Promise<void>;
+
+  /** Latest imported PWP promo workbook, all brands (null = never imported). */
+  getPwpPromo(): Promise<PwpPromo | null>;
+  /** Replaces the stored PWP promo. */
+  savePwpPromo(promo: Omit<PwpPromo, "updatedAt" | "updatedBy">, by: string): Promise<void>;
 }
 
 export interface HistoryInput {
