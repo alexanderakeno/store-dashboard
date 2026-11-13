@@ -15,7 +15,6 @@ import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
 import { Mtm } from "./Mtm";
 import { ProductDrill } from "@/components/modules/ProductDrill";
-import { PwpEndingAlert } from "@/components/modules/PwpEndingAlert";
 import { getMonthLines, type MonthSnapshot } from "@/lib/services/dashboard";
 import type { MonthEntry } from "@/lib/repositories";
 import type { SalesLine } from "@/types/domain";
@@ -151,8 +150,6 @@ const cards = [total, grpCard("apple", "Apple", grp.Apple), grpCard("android", "
           </div>
         </div>
       </section>
-
-      <PwpEndingAlert />
 
       <div className="space-y-4">
         <SectionHead title="Store Performance" desc="Actual vs target bulan terpilih." />
