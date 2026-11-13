@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { EmptyBlock, PageIntro, Panel } from "@/components/kit";
 import { RetryButton } from "@/components/kit/RetryButton";
 import { PwpPromoForm } from "@/components/modules/PwpPromoForm";
@@ -62,15 +61,8 @@ export default async function PromoPwpPage({ searchParams }: { searchParams: Sea
     <div className="sd-content">
       <PageIntro
         title="Promo PWP"
-        desc={`${promo.title || promo.source}${promo.updatedAt ? ` · diimport ${timeAgo(Date.parse(promo.updatedAt))}` : ""} · harga mengikuti Price List terbaru.`}
-        actions={isAdmin ? <Link href="/upload#promo-pwp" prefetch={false} className="sd-btn">Data Upload</Link> : undefined}
+        desc={`Pilih brand untuk melihat promo${promo.updatedAt ? ` · diimport ${timeAgo(Date.parse(promo.updatedAt))}` : ""} · harga ikut Price List.`}
       />
-      {isAdmin && promo.warnings.length > 0 && (
-        <details className="alert warn">
-          <summary className="cursor-pointer font-semibold">{promo.warnings.length} catatan dari file PWP</summary>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{promo.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
-        </details>
-      )}
       <PwpPromoView cards={cards} isAdmin={isAdmin} current={promo.source || promo.title} initialSearch={typeof q.s === "string" ? q.s : ""} initialBrand={brand} />
     </div>
   );
