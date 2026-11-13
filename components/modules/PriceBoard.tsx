@@ -3,6 +3,7 @@ import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import Link from "next/link";
 import { displayName, qoalaFor, type PriceModel } from "@/lib/domain/pricelist";
+import type { PwpBrief } from "@/lib/domain/pwpPromo";
 import type { VariantPromo } from "@/lib/domain/samsungPromo";
 import type { QoalaTier } from "@/types/pricelist";
 
@@ -31,7 +32,7 @@ function Chip({ active, onClick, children, sub, tone = "dark" }: { active: boole
   );
 }
 
-export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel, promos = {}, today = "" }: { models: PriceModel[]; qoala: QoalaTier[]; hasSoh: boolean; initialBrand: string; initialModel: string; promos?: Record<string, VariantPromo>; today?: string }) {
+export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel, promos = {}, pwp = {}, today = "" }: { models: PriceModel[]; qoala: QoalaTier[]; hasSoh: boolean; initialBrand: string; initialModel: string; promos?: Record<string, VariantPromo>; pwp?: Record<string, PwpBrief[]>; today?: string }) {
   const brands = useMemo(() => [...new Set(models.map((m) => m.brand))], [models]);
   const [brand, setBrand] = useState(brands.includes(initialBrand) ? initialBrand : brands[0]);
   const [modelKey, setModelKey] = useState(models.some((m) => m.key === initialModel) ? initialModel : "");
@@ -193,6 +194,7 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel, 
               )}
             </div>
             {promos[variant.id] && <PromoBox vp={promos[variant.id]} price={variant.promo} today={today} model={model.model} />}
+            {pwp[variant.id]?.length ? <PwpBox list={pwp[variant.id]} price={variant.promo} model={model.model} /> : null}
           <div className="mt-4 grid grid-cols-2 gap-3 border-t border-dashed border-slate-300 pt-3 dark:border-slate-600">
               {[12, 24].map((n) => (
                 <div key={n}>
@@ -233,6 +235,7 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel, 
                           {v.name}
                           {isEol(v.status) && <span className="ml-1.5 text-[10px] font-extrabold text-slate-400">EOL</span>}
                           {(promos[v.id]?.items.some((x) => x.state === "aktif") || promos[v.id]?.etp.some((x) => x.state === "aktif")) && <span className="ml-1.5 rounded bg-emerald-50 px-1 text-[10px] font-extrabold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">PROMO</span>}
+                          {pwp[v.id]?.some((x) => x.state === "aktif") && <span className="ml-1.5 rounded bg-violet-50 px-1 text-[10px] font-extrabold text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">PWP</span>}
                         </button>
                         <span className="shrink-0 text-right tabular-nums">
                           <b className="block text-sm text-slate-950">{rp(v.promo)}</b>
@@ -262,6 +265,34 @@ export function PriceBoard({ models, qoala, hasSoh, initialBrand, initialModel, 
         </section>
       )}
     </>
+  );
+}
+
+/** PWP promos of the selected variant (Promo PWP workbook): what can be paired and the best price. */
+export function PwpBox({ list, price, model }: { list: PwpBrief[]; price: number; model: string }) {
+  return (
+    <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/60 p-3 dark:border-violet-900 dark:bg-violet-950/20">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-black tracking-[.12em] text-violet-800 uppercase dark:text-violet-300">Promo PWP</p>
+        <Link href={`/promo-pwp?s=${encodeURIComponent(model)}`} prefetch={false} className="text-xs font-semibold text-blue-600 hover:underline">Detail ›</Link>
+      </div>
+      <ul className="mt-1.5 space-y-1.5">
+        {list.map((p) => (
+          <li key={p.id} className={`text-[13px] ${p.state === "aktif" ? "" : "opacity-60"}`}>
+            <p className="font-bold">{p.title.replace(/^Promo PWP\s*/i, "PWP ")}</p>
+            <p className="text-[12px] text-slate-600 dark:text-slate-300">
+              {p.count} pilihan · cashback s/d <b className="text-emerald-700 dark:text-emerald-400">{rp(p.maxCashback)}</b>
+              {p.state === "akan" ? " · belum mulai" : p.end ? ` · s/d ${short(p.end)}${p.daysLeft != null && p.daysLeft <= 7 ? ` (${p.daysLeft} hari lagi)` : ""}` : ""}
+            </p>
+            {p.best && (
+              <p className="text-[12px] text-slate-600 dark:text-slate-300">
+                Termurah: {p.best.description.toLowerCase()} {p.best.nett <= 0 ? <b>gratis</b> : <>+<b>{rp(p.best.nett)}</b></>} → bayar <b>{rp(price + Math.max(0, p.best.nett))}</b>
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

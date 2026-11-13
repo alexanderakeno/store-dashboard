@@ -6,7 +6,7 @@ import { EmptyBlock, Panel } from "@/components/kit";
 import { LOW_DAYS, SLOW_DAYS, unpackSohRows, type PackedSohRow, type SohRow } from "@/lib/domain/soh";
 import type { SkuPrices } from "@/lib/domain/skuPrice";
 import type { AccPriceCell, AccPriceMap } from "@/lib/domain/accPrice";
-import { PromoBox } from "./PriceBoard";
+import { PromoBox, PwpBox } from "./PriceBoard";
 import { DEVICE_TYPES, SAMSUNG_SERIES, deviceType, isSamsung, samsungSeries, splitsByType, type DeviceType } from "@/lib/domain/sohGroups";
 
 const TYPE_LABEL: Record<DeviceType, string> = { Phone: "Phone", Tablet: "Tablet", Watch: "Watch & Wearable", Lainnya: "Lainnya" };
@@ -69,7 +69,7 @@ function SkuPricePopup({ prices, row, onClose, today }: { prices: SkuPrices; row
                   >
                     {x.label}
                     {i === hit![1] && <span className={`ml-1 text-[10px] ${i === vi ? "text-blue-100" : "text-blue-600"}`}>• SKU ini</span>}
-                    <span className={`block text-[11px] font-semibold ${i === vi ? "text-blue-100" : "text-slate-500"}`}>{rp(x.promo)}{isEol(x.status) ? " · EOL" : ""}{(x.samsung?.items.some((p) => p.state === "aktif") || x.samsung?.etp.some((p) => p.state === "aktif")) && <span className={`ml-1 rounded px-1 text-[9px] font-extrabold ${i === vi ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"}`}>PROMO</span>}</span>
+                    <span className={`block text-[11px] font-semibold ${i === vi ? "text-blue-100" : "text-slate-500"}`}>{rp(x.promo)}{isEol(x.status) ? " · EOL" : ""}{(x.samsung?.items.some((p) => p.state === "aktif") || x.samsung?.etp.some((p) => p.state === "aktif")) && <span className={`ml-1 rounded px-1 text-[9px] font-extrabold ${i === vi ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700"}`}>PROMO</span>}{x.pwp?.some((p) => p.state === "aktif") && <span className={`ml-1 rounded px-1 text-[9px] font-extrabold ${i === vi ? "bg-white/20 text-white" : "bg-violet-50 text-violet-700"}`}>PWP</span>}</span>
                   </button>
                 ))}
               </div>
@@ -99,6 +99,7 @@ function SkuPricePopup({ prices, row, onClose, today }: { prices: SkuPrices; row
             <p className="mt-2 text-[11px] text-slate-400">Estimasi cicilan 0% dari {v.credit != null ? "harga promo cicilan" : "harga aktif"}.</p>
           </div>
           {v.samsung && <PromoBox vp={v.samsung} price={v.promo} today={today} model={m.model} />}
+          {v.pwp?.length ? <PwpBox list={v.pwp} price={v.promo} model={m.model} /> : null}
 
           <Link
             href={`/pricelist?${new URLSearchParams({ ...(m.kind === "apple" ? { k: "apple" } : {}), b: m.brand, t: m.key, semua: "1" })}`}
