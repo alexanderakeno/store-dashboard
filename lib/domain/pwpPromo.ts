@@ -161,6 +161,20 @@ export function variantPwp(articles: string[], promo: PwpPromo | null, today: IS
   return out;
 }
 
+/**
+ * "Promo PWP Huawei Pura 90s series dengan Huawei Free Clip 2 series" → "Huawei Pura 90s series + Free Clip 2 series"
+ * (the brand once); with `dropBrand` also without the leading brand (shown next to a brand label).
+ */
+export function pwpShortTitle(title: string, brand = "", dropBrand = false): string {
+  let t = title.replace(/^\s*promo\s+pwp\s*/i, "").replace(/\s+dengan\s+/i, " + ").replace(/\bMotorla\b/i, "Motorola");
+  if (brand) {
+    let seen = false;
+    t = t.replace(new RegExp(`\\b${brand}\\s+`, "gi"), (m) => (seen ? "" : ((seen = true), m)));
+    if (dropBrand) t = t.replace(new RegExp(`^${brand}\\s+`, "i"), "");
+  }
+  return t.replace(/\s+/g, " ").trim() || title;
+}
+
 /** Running programs that end within `days` days (open-ended ones never do), soonest first. */
 export function endingSoon(promo: PwpPromo | null, today: ISODate, days = 21): Array<{ id: string; title: string; brand: string; end: ISODate; daysLeft: number }> {
   if (!promo) return [];
