@@ -18,6 +18,8 @@ import { getSoh, stockKosong } from "@/lib/soh";
 import type { SohSnapshot } from "@/types/soh";
 import { getAccPriceList } from "@/lib/accPrice";
 import { accPriceMap } from "@/lib/domain/accPrice";
+import { getPwpPromo } from "@/lib/pwpPromo";
+import { pwpPrices, variantPwp } from "@/lib/domain/pwpPromo";
 
 /**
  * Price list per SOH article (+ Samsung PWP / trade in / EIP / ETP per variant), memoised per
@@ -30,12 +32,13 @@ async function sohPrices(soh: SohSnapshot, today: string): Promise<SkuPrices> {
   const list = await getPriceList().catch(() => null);
   const hasSamsung = !!list?.items.some((x) => x.kind === "android" && /samsung/i.test(x.brand));
   const promo = hasSamsung ? await getSamsungPromo().catch(() => null) : null;
+  const pwp = list ? await getPwpPromo().catch(() => null) : null;
   const k1 = list ?? NO_PROMO;
   let a = priceMemo.get(k1);
   if (!a) priceMemo.set(k1, (a = new WeakMap()));
   let b = a.get(soh);
   if (!b) a.set(soh, (b = new Map()));
-  const k3 = `${today}|${promo ? (promo as { updatedAt?: string }).updatedAt ?? "p" : "-"}`;
+  const k3 = `${today}|${promo ? (promo as { updatedAt?: string }).updatedAt ?? "p" : "-"}|${pwp?.updatedAt ?? "-"}`;
   const hit = b.get(k3);
   if (hit) return hit;
   const prices = skuPrices(list, soh.items);
@@ -48,6 +51,15 @@ async function sohPrices(soh: SohSnapshot, today: string): Promise<SkuPrices> {
           const etp = etpPromos(v.name, promo.programs, today, appConfig().storeCode);
           if (vp || etp.length) v.samsung = { ...(vp ?? { items: [], cash: { total: 0, kinds: [] }, pwp: 0, info: [] }), etp };
         }
+  }
+  if (pwp && list) {
+    const acc = await getAccPriceList().catch(() => null);
+    const pp = pwpPrices(list.items, acc?.items ?? []);
+    for (const m of prices.models)
+      for (const v of m.variants) {
+        const b = variantPwp(v.articles ?? [], pwp, today, pp);
+        if (b.length) v.pwp = b;
+      }
   }
   // the client only needs the prices, not the article lists
   for (const m of prices.models) for (const v of m.variants) delete v.articles;
