@@ -131,6 +131,9 @@ export interface PwpBrief {
   maxCashback: number;
   /** Cheapest pair: its name and price after cashback. */
   best: { description: string; nett: number } | null;
+  brand: string;
+  /** Every pair (cheapest first): accessory price today, cashback, MOP codes. */
+  offers: Array<{ description: string; price: number; cashback: number; codes: string[] }>;
 }
 
 export function variantPwp(articles: string[], promo: PwpPromo | null, today: ISODate, prices?: PwpPrices): PwpBrief[] {
@@ -145,7 +148,12 @@ export function variantPwp(articles: string[], promo: PwpPromo | null, today: IS
     const offers = p.offers.filter((o) => o.devices.some((d) => devs.has(d)));
     if (!offers.length) continue;
     const accPrice = (it: PwpProgram["offers"][number]["items"][number]) => it.articles.map((a) => prices?.acc.get(a)).find((x) => x != null) ?? it.price;
-    const nett = offers.map((o) => ({ description: o.items.map((it) => it.description).join(" + "), nett: o.items.reduce((a, it) => a + accPrice(it), 0) - o.cashback }));
+    const priced = offers.map((o) => ({ description: o.items.map((it) => it.description).join(" + "), price: o.items.reduce((a, it) => a + accPrice(it), 0), cashback: o.cashback, codes: o.codes }));
+    const seen = new Set<string>();
+    const list = priced
+      .sort((a, b) => a.price - a.cashback - (b.price - b.cashback) || a.description.localeCompare(b.description))
+      .filter((x) => !seen.has(`${x.description}|${x.price}|${x.cashback}`) && !!seen.add(`${x.description}|${x.price}|${x.cashback}`));
+    const nett = list.map((x) => ({ description: x.description, nett: x.price - x.cashback }));
     const end = pwpEnd(p, today);
     out.push({
       id: p.id,
@@ -155,7 +163,9 @@ export function variantPwp(articles: string[], promo: PwpPromo | null, today: IS
       daysLeft: daysLeft(end, today),
       count: offers.length,
       maxCashback: Math.max(...offers.map((o) => o.cashback)),
-      best: nett.sort((a, b) => a.nett - b.nett)[0] ?? null,
+      best: nett[0] ?? null,
+      brand: p.brand,
+      offers: list,
     });
   }
   return out;
