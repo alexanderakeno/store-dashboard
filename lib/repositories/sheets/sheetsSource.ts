@@ -15,6 +15,7 @@ import type { PriceListInput } from "../types";
 import type { AccPriceItem, AccPriceList } from "@/types/accPrice";
 import type { StokanEvent, StokanItem, StokanSession } from "@/types/stokan";
 import type { SamsungPromo } from "@/types/samsungPromo";
+import type { PwpPromo } from "@/types/pwpPromo";
 import type { AccessEntry, AccessEvent } from "@/types/access";
 import type { PriceChange, PriceChangeType } from "@/lib/domain/priceHistory";
 import { ACCESS_EVENTS } from "@/types/access";
@@ -41,6 +42,7 @@ export const MASTER_TABS = {
   stokanItem: { name: "APP_StokanItem", header: ["session", "article", "description", "brand", "category", "expected", "price", "assignee", "recount", "barcodes", "reason", "final"] },
   stokanLog: { name: "APP_StokanLog", header: ["session", "id", "ts", "nik", "name", "article", "code", "kind", "value", "phase"] },
   samsungPromo: { name: "APP_SamsungPromo", header: ["kind", "data", "source", "updatedAt", "updatedBy"] },
+  pwpPromo: { name: "APP_PwpPromo", header: ["kind", "data", "source", "updatedAt", "updatedBy"] },
 } as const;
 
 type TabKey = keyof typeof MASTER_TABS;
@@ -480,6 +482,37 @@ export class SheetsSource implements DataSource {
       ...p.sheets.map((x) => row("sheet", x)),
     ]);
   }
+  /** One row per program (the program as JSON in `data`) plus a meta row. */
+  async getPwpPromo(): Promise<PwpPromo | null> {
+    const rows = await this.rows("pwpPromo");
+    const out: PwpPromo = { title: "", source: "", programs: [], warnings: [], updatedAt: "", updatedBy: "" };
+    for (const r of rows) {
+      let d: unknown;
+      try {
+        d = JSON.parse(String(r.data || "null"));
+      } catch {
+        continue;
+      }
+      if (d == null) continue;
+      const kind = normalizeText(r.kind);
+      if (kind === "meta") {
+        const m = d as { title?: string; warnings?: string[] };
+        out.title = String(m.title ?? "");
+        out.warnings = Array.isArray(m.warnings) ? m.warnings.map(String) : [];
+        out.source = normalizeText(r.source);
+        out.updatedAt = normalizeText(r.updatedAt);
+        out.updatedBy = normalizeText(r.updatedBy);
+      } else if (kind === "program") out.programs.push(d as PwpPromo["programs"][number]);
+    }
+    return out.programs.length ? out : null;
+  }
+
+  async savePwpPromo(p: Omit<PwpPromo, "updatedAt" | "updatedBy">, by: string): Promise<void> {
+    const now = new Date().toISOString();
+    const row = (kind: string, data: unknown) => [kind, JSON.stringify(data), p.source, now, by];
+    await this.rewrite("pwpPromo", [row("meta", { title: p.title, warnings: p.warnings }), ...p.programs.map((x) => row("program", x))]);
+  }
+
 
   async audit(entry: Omit<AuditEntry, "ts">): Promise<void> {
     await this.ensureTabs();
