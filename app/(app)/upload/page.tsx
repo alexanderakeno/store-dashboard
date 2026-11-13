@@ -9,6 +9,8 @@ import { getSoh } from "@/lib/soh";
 import { getPriceList } from "@/lib/pricelist";
 import { getSamsungPromo } from "@/lib/samsungPromo";
 import { SamsungPromoForm } from "@/components/modules/SamsungPromoForm";
+import { PwpPromoForm } from "@/components/modules/PwpPromoForm";
+import { getPwpPromo } from "@/lib/pwpPromo";
 import { PriceListImportForm } from "@/components/modules/PriceListImportForm";
 import { appConfig } from "@/config/app";
 import { ApplePriceListImportForm } from "@/components/modules/ApplePriceListImportForm";
@@ -32,6 +34,7 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
     sohError = (e as Error).message;
   }
   const promo = await getSamsungPromo().catch(() => null);
+  const pwp = await getPwpPromo().catch(() => null);
   let price: Awaited<ReturnType<typeof getPriceList>> = null;
   let priceError: string | null = null;
   try {
@@ -154,6 +157,11 @@ export default async function UploadPage({ searchParams }: { searchParams: Searc
       <div id="promo-samsung" className="scroll-mt-20">
         <Panel title="Import Promo Samsung" desc="Upload file Excel List Promo Aktif Samsung → menu Promo Samsung & kartu Price List Samsung." right={promo ? <Link href="/promo-samsung" prefetch={false} className="sd-btn">Lihat Promo</Link> : undefined}>
           {isAdmin ? <SamsungPromoForm current={promo ? promo.source || promo.title : null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
+        </Panel>
+      </div>
+      <div id="promo-pwp" className="scroll-mt-20">
+        <Panel title="Import Promo PWP" desc="Upload file Excel Price List Promo PWP Digiplus (semua brand) → menu Promo PWP & kartu Price List / SOH." right={pwp ? <Link href="/promo-pwp" prefetch={false} className="sd-btn">Lihat PWP</Link> : undefined}>
+          {isAdmin ? <PwpPromoForm current={pwp ? pwp.source || pwp.title : null} /> : <p className="text-sm text-slate-500">Hanya admin yang bisa import data.</p>}
         </Panel>
       </div>
       <div id="pricelist-apple" className="scroll-mt-20">
