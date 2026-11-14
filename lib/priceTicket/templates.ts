@@ -126,8 +126,8 @@ const DESIGNS: TicketTemplate[] = [
 const PAPER_85x60: [number, number] = [86, 61];
 /** Oppo 8,5×6 cm designs also come as a 9,5 cm wide × 8,5 cm tall ticket (same design, white above and below). */
 const PAPER_OPPO_TALL: [number, number] = [95, 85];
-/** Motorola 15×9,5 cm designs print on 15×11,5 cm (same width, 1 cm white above and below). */
-const PAPER_150x95: [number, number] = [150, 115];
+/** Motorola 15×9,5 cm designs print on 15×11 cm (same width, 0,75 cm white above and below). */
+const PAPER_150x95: [number, number] = [150, 110];
 const is85x60 = (t: TicketTemplate) => t.size[0] === 85 && t.size[1] === 60;
 const is150x95 = (t: TicketTemplate) => t.size[0] === 150 && t.size[1] === 95;
 
