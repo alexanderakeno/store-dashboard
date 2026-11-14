@@ -126,8 +126,8 @@ test("paper: 8,5×6 designs print on 8,6×6,1; Oppo also as 9,5×8,5", () => {
   }
 });
 
-test("paper: Motorola 15×9,5 designs print on 15×11,5", () => {
+test("paper: Motorola 15×9,5 designs print on 15×11", () => {
   const m = TICKET_TEMPLATES.filter((t) => t.size[0] === 150 && t.size[1] === 95);
   assert.ok(m.length > 0);
-  assert.ok(m.every((t) => t.paper?.join("x") === "150x115"));
+  assert.ok(m.every((t) => t.paper?.join("x") === "150x110"));
 });
