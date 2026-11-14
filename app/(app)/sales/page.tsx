@@ -6,7 +6,7 @@ import { MobileGrid } from "@/components/kit/MobileGrid";
 import { CopyButton, ParamDate, WhatsAppButton } from "@/components/kit/controls";
 import { PageStatus } from "@/components/layout/PageStatus";
 import { APPLE_LOBS, VAS_PROVIDERS, linesByStaff, vasSplit } from "@/lib/domain/extra";
-import { CategoryDaily, Stats, Tiles, sumQV, type Split } from "@/components/modules/SalesDaily";
+import { CategoryDaily, Stats, Tiles, linesByKey, sumQV, type Split } from "@/components/modules/SalesDaily";
 import { byStaff, totals } from "@/lib/domain/kpi";
 import { displayName } from "@/lib/domain/normalize";
 import { daysInMonth, monthEnd, monthStart } from "@/lib/domain/period";
@@ -174,24 +174,30 @@ export default async function DailySalesPage({ searchParams }: { searchParams: S
   const androidAll = androidSplit(dayLines);
   const androidKeys = Object.keys(androidAll).sort((a, b) => androidAll[b].qty - androidAll[a].qty || androidAll[b].value - androidAll[a].value);
   const groupQV = (g: "Apple" | "Android" | "ACC" | "VAS") => ({ qty: g === "VAS" ? sumQV(vasAll).qty : t.qtyByGroup[g], value: t.byGroup[g] });
+  // the lines behind every tile, so each tile opens a pop-up of what was sold
+  const groupLines = (g: "Apple" | "Android" | "ACC" | "VAS") => dayLines.filter((l) => l.group === g);
+  const appleLines = linesByKey(appleSplit, dayLines);
+  const androidLines = linesByKey(androidSplit, dayLines);
+  const vasLines = linesByKey(vasQV, dayLines);
+  const accLines = linesByKey(accSplit, dayLines);
 
   const cards = [
     {
       label: "Target vs Achievement", kind: "sales", title: `Achievement · ${dayDate}`, actual: t.sales, target: dailyTarget, color: "#3b82f6", tone: "blue", icon: TrendingUp, ic: "bg-blue-50 text-blue-600 dark:bg-blue-500/10",
       summary: (
         <div className="space-y-3">
-          <Tiles items={(["Apple", "Android", "ACC", "VAS"] as const).map((g) => ({ key: g, label: g, v: groupQV(g), target: groupTarget(g) }))} total={{ label: "Total", v: { qty: t.qty, value: t.sales } }} cols="grid-cols-2 sm:grid-cols-5" />
-          <Tiles items={[...APPLE_LOBS.map((k) => ({ key: k, label: LOB_LABEL[k], v: appleAll[k] ?? { qty: 0, value: 0 } })), ...androidKeys.map((k) => ({ key: k, label: k, v: androidAll[k] }))]} cols="grid-cols-3 sm:grid-cols-4" />
+          <Tiles scope="ach-group" items={(["Apple", "Android", "ACC", "VAS"] as const).map((g) => ({ key: g, label: g, v: groupQV(g), target: groupTarget(g), lines: groupLines(g) }))} total={{ label: "Total", v: { qty: t.qty, value: t.sales }, lines: dayLines }} cols="grid-cols-2 sm:grid-cols-5" />
+          <Tiles scope="ach-lob" items={[...APPLE_LOBS.map((k) => ({ key: k, label: LOB_LABEL[k], v: appleAll[k] ?? { qty: 0, value: 0 }, lines: appleLines[k] })), ...androidKeys.map((k) => ({ key: k, label: k, v: androidAll[k], lines: androidLines[k] }))]} cols="grid-cols-3 sm:grid-cols-4" />
         </div>
       ),
     },
     {
       label: "VAS vs Achievement", kind: "VAS", title: `VAS · ${dayDate}`, actual: t.byGroup.VAS, target: dailyVas, color: "#10b981", tone: "green", icon: Activity, ic: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10",
-      summary: <Tiles items={VAS_PROVIDERS.map((k) => ({ key: k, label: k, v: vasAll[k], unit: "polis" }))} total={{ label: "Total VAS", v: sumQV(vasAll), unit: "polis" }} cols="grid-cols-2 sm:grid-cols-5" />,
+      summary: <Tiles scope="vas" items={VAS_PROVIDERS.map((k) => ({ key: k, label: k, v: vasAll[k], unit: "polis", lines: vasLines[k] }))} total={{ label: "Total VAS", v: sumQV(vasAll), unit: "polis", lines: Object.values(vasLines).flat() }} cols="grid-cols-2 sm:grid-cols-5" />,
     },
     {
       label: "ACC vs Achievement", kind: "ACC", title: `ACC · ${dayDate}`, actual: t.byGroup.ACC, target: dailyAcc, color: "#8b5cf6", tone: "violet", icon: ShoppingBag, ic: "bg-violet-50 text-violet-600 dark:bg-violet-500/10",
-      summary: accKeys.length ? <Tiles items={accKeys.map((k) => ({ key: k, label: k, v: accAll[k] }))} total={{ label: "Total ACC", v: sumQV(accAll) }} cols="grid-cols-2 sm:grid-cols-4" /> : undefined,
+      summary: accKeys.length ? <Tiles scope="acc" items={accKeys.map((k) => ({ key: k, label: k, v: accAll[k], lines: accLines[k] }))} total={{ label: "Total ACC", v: sumQV(accAll), lines: Object.values(accLines).flat() }} cols="grid-cols-2 sm:grid-cols-4" /> : undefined,
     },
   ] as const;
   // per-salesperson rows behind the cards (target per card = that group's daily target)
