@@ -399,6 +399,11 @@ input[type="text"], input[type="password"], input[type="number"], input[type="mo
 html.dark input, html.dark select, html.dark textarea { background: var(--dark-input); border-color: #2a3038; color: #f4f5f7; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: #4c8dff; box-shadow: 0 0 0 3px #4c8dff1f; }
 textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+/* Phones: iOS Safari zooms the page in when a field under 16px gets focus (the login NIK field is focused on
+   load) and keeps that zoom after signing in — 16px fields on touch / small screens stop it. Pinch-zoom stays on. */
+@media (max-width: 767px), (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea, .sd-input, .sd-select { font-size: 16px !important; }
+}
 label.field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 700; color: var(--block-text-secondary); }
 .alert { border-radius: 14px; padding: 10px 12px; font-size: 13px; border: 1px solid var(--block-border); background: var(--block-surface-soft); }
 .alert.error { border-color: #fecdd3; background: #fff1f2; color: #9f1239; }
