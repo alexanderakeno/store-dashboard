@@ -202,16 +202,31 @@ export interface SlotDraw {
  */
 export const STORE_QR = { src: "/price-ticket/qr/QF10-mapclub.png", url: "https://www.mapclub.com/en/user/signup?store=QF10" };
 
+/** Paper a ticket prints on (mm): its own `paper`, else the design size. */
+export const paperOf = (tpl: Pick<TicketTemplate, "size" | "paper">): [number, number] => tpl.paper ?? tpl.size;
+
+/** The design on the paper (mm): enlarged to fit without distortion, centred. */
+export function designOnPaper(tpl: Pick<TicketTemplate, "size" | "paper">) {
+  const [pw, ph] = paperOf(tpl);
+  const [sw, sh] = tpl.size;
+  const k = Math.min(pw / sw, ph / sh);
+  return { x: (pw - sw * k) / 2, y: (ph - sh * k) / 2, w: sw * k, h: sh * k, pw, ph };
+}
+
+/** Full ticket on its paper: the design is `width` px wide (the canvas is wider/taller when the paper is larger). */
 export function drawTicket(canvas: HTMLCanvasElement, img: HTMLImageElement, tpl: TicketTemplate, width: number, slots: SlotDraw[], qr?: HTMLImageElement | null) {
   const [fw, fh] = tpl.frame;
   const height = Math.round((width * fh) / fw);
-  canvas.width = width;
-  canvas.height = height;
+  const p = designOnPaper(tpl);
+  const pxPerMm = width / p.w;
+  canvas.width = Math.round(p.pw * pxPerMm);
+  canvas.height = Math.round(p.ph * pxPerMm);
   const ctx = canvas.getContext("2d")!;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.translate(Math.round(p.x * pxPerMm), Math.round(p.y * pxPerMm));
   ctx.drawImage(img, 0, 0, width, height);
   ctx.save();
   ctx.scale(width / fw, height / fh);
