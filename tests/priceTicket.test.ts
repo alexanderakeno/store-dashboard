@@ -113,3 +113,15 @@ test("apple: MacBook Neo is matched on its price list name (MBN)", () => {
   const neo = APPLE_TEMPLATES.find((t) => t.name === "MacBook Neo")!;
   for (const s of neo.slots) assert.notEqual(resolveSlot(s, items, "apple").status, "missing", s.key);
 });
+
+test("paper: 8,5×6 designs print on 9×6,5; Oppo also as 9,5×8,5", () => {
+  const small = TICKET_TEMPLATES.filter((t) => t.size[0] === 85 && t.size[1] === 60);
+  assert.ok(small.length > 0);
+  assert.ok(small.filter((t) => !t.id.endsWith("-95x85")).every((t) => t.paper?.join("x") === "90x65"));
+  const tall = TICKET_TEMPLATES.filter((t) => t.id.endsWith("-95x85"));
+  assert.equal(tall.length, small.filter((t) => t.brand === "Oppo" && !t.id.endsWith("-95x85")).length);
+  for (const t of tall) {
+    assert.deepEqual([t.brand, t.paper], ["Oppo", [95, 85]]);
+    assert.ok(t.variantOf && TICKET_TEMPLATES.some((x) => x.id === t.variantOf && !x.variantOf), t.id);
+  }
+});
