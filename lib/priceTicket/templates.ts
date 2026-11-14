@@ -131,9 +131,17 @@ const PAPER_150x95: [number, number] = [150, 110];
 const is85x60 = (t: TicketTemplate) => t.size[0] === 85 && t.size[1] === 60;
 const is150x95 = (t: TicketTemplate) => t.size[0] === 150 && t.size[1] === 95;
 
+/** Extra printed sizes of a design that has no own design in that size: the design is shrunk/enlarged to fit, centred. */
+const EXTRA_PAPERS: Record<string, Array<[number, number]>> = {
+  // Infinix Hot 70 (15×12 design) also as 10,5×6,5 cm like the other Infinix tickets
+  "infinix-04": [[105, 65]],
+};
+const extras = (t: TicketTemplate): TicketTemplate[] =>
+  (EXTRA_PAPERS[t.id] ?? []).map((paper) => ({ ...t, id: `${t.id}-${paper[0]}x${paper[1]}`, paper, variantOf: t.variantOf ?? t.id }));
+
 export const TICKET_TEMPLATES: TicketTemplate[] = DESIGNS.flatMap((t) => {
-  if (is150x95(t)) return [{ ...t, paper: PAPER_150x95 }];
-  if (!is85x60(t)) return [t];
+  if (is150x95(t)) return [{ ...t, paper: PAPER_150x95 }, ...extras(t)];
+  if (!is85x60(t)) return [t, ...extras(t)];
   const main = { ...t, paper: PAPER_85x60 };
   if (t.brand !== "Oppo") return [main];
   return [main, { ...t, id: `${t.id}-95x85`, paper: PAPER_OPPO_TALL, variantOf: t.variantOf ?? t.id }];

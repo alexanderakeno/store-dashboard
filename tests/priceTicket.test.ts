@@ -131,3 +131,8 @@ test("paper: Motorola 15×9,5 designs print on 15×11", () => {
   assert.ok(m.length > 0);
   assert.ok(m.every((t) => t.paper?.join("x") === "150x110"));
 });
+
+test("paper: Infinix Hot 70 also as 10,5×6,5 (its 15×12 design shrunk)", () => {
+  const v = TICKET_TEMPLATES.find((t) => t.id === "infinix-04-105x65")!;
+  assert.deepEqual([v.name, v.paper, v.variantOf, v.size], ["Hot 70", [105, 65], "infinix-04", [150, 120]]);
+});
