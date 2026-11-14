@@ -122,8 +122,8 @@ const DESIGNS: TicketTemplate[] = [
 {"id":"infinix-07","brand":"Infinix","name":"Note Edge 5G","image":"/price-ticket/infinix/07.jpg","size":[150,120],"frame":[1180,940],"storeQr":[359.2,736.5,135.0],"variantOf":"infinix-03","slots":[{"key":"INFINIX NOTE EDGE 5G 8/256GB","label":"8/256GB","canva":{"price":3999000,"strike":4399000},"x":232.0,"top":444.0,"H":60.0,"track":0.09425,"sup":{"gap":15.0,"dy":-3.0,"h":35.0,"track":0.1116,"wt":0.207},"erase":[[230.0,442.0,45.0,64.0],[303.0,442.0,47.0,63.0],[352.0,442.0,47.0,63.0],[401.0,442.0,47.0,63.0],[281.0,486.0,18.0,19.0],[459.0,465.0,12.0,13.0],[472.0,439.0,30.0,39.0],[501.0,439.0,30.0,39.0],[531.0,439.0,30.0,39.0],[299.0,531.0,273.0,48.0],[310.0,535.0,18.0,25.0],[493.0,551.0,9.0,10.0],[346.0,553.0,7.0,7.0],[390.0,565.0,14.0,13.0]],"strike":{"dy":0.287,"h":0.617,"align":"right","dx":-0.05,"line":[-0.297,0.82,0.351,-0.157,0.054],"rpGap":0.21,"rpH":1.021,"rpWt":-0.207,"wt":-0.263},"maxRight":676.0,"wt":-0.244,"strikeRoom":true}],"strikeStyle":{"dy":0.287,"h":0.563,"align":"right","dx":-0.003,"line":[-0.364,0.986,0.731,0.289,0.127],"rpGap":0.21,"rpH":1.021,"rpWt":-0.207,"wt":-0.263}}
 ];
 
-/** 8,5×6 cm designs print 0,5 cm larger each way: 9×6,5 cm (the design enlarged to 9 cm wide). */
-const PAPER_85x60: [number, number] = [90, 65];
+/** 8,5×6 cm designs print 0,1 cm larger each way: 8,6×6,1 cm (the design enlarged to 8,6 cm wide). */
+const PAPER_85x60: [number, number] = [86, 61];
 /** Oppo 8,5×6 cm designs also come as a 9,5 cm wide × 8,5 cm tall ticket (same design, white above and below). */
 const PAPER_OPPO_TALL: [number, number] = [95, 85];
 const is85x60 = (t: TicketTemplate) => t.size[0] === 85 && t.size[1] === 60;
