@@ -85,8 +85,13 @@ export interface TicketTemplate {
   brand: string;
   name: string;
   image: string;
-  /** Printed size in mm [w, h]. */
+  /** Size of the design in mm [w, h]. */
   size: [number, number];
+  /**
+   * Paper the ticket is printed on in mm [w, h], when larger than the design: the design is enlarged to fit (no
+   * distortion) and centred, the rest stays white. Default: `size`.
+   */
+  paper?: [number, number];
   /** Design frame in px [w, h] — the coordinate system of the slots (the image may be stored larger). */
   frame: [number, number];
   /**
