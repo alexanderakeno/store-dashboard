@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, Download, FileStack, Loader2, Pencil, RefreshCw, X } from "lucide-react";
-import { STORE_QR, drawTicket, loadTicketFonts, type SlotDraw } from "@/lib/priceTicket/draw";
+import { STORE_QR, drawTicket, loadTicketFonts, paperOf, type SlotDraw } from "@/lib/priceTicket/draw";
 import { buildPdf, type PdfPage } from "@/lib/priceTicket/pdf";
 import { monthly, rupiah } from "@/lib/domain/priceTicket";
 import { isTextSlot, type ResolvedSlot, type TicketTemplate } from "@/types/priceTicket";
@@ -125,7 +125,7 @@ async function pdfOf(list: TicketData[], ov: Overrides, layout: "single" | "a4",
     // one ticket per A4 sheet at its real size (top, centred, with a cut line): printing on A4 then gives the true size
     // even when the printer / phone scales the page to the paper (a 15×12 cm page would be blown up to fill A4)
     list.forEach((d, i) => {
-      const [w, h] = d.tpl.size;
+      const [w, h] = paperOf(d.tpl);
       const portrait = w <= 200 && h <= 287;
       const W = portrait ? 210 : 297;
       const H = portrait ? 297 : 210;
@@ -134,18 +134,18 @@ async function pdfOf(list: TicketData[], ov: Overrides, layout: "single" | "a4",
   else {
     // tickets of the same size share sheets (grouped by size, original order kept within a size)
     const order = list.map((_, i) => i);
-    const sizeKey = (d: TicketData) => d.tpl.size.join("x");
+    const sizeKey = (d: TicketData) => paperOf(d.tpl).join("x");
     const first = new Map<string, number>();
     list.forEach((d, i) => first.has(sizeKey(d)) || first.set(sizeKey(d), i));
     order.sort((a, b) => first.get(sizeKey(list[a]))! - first.get(sizeKey(list[b]))! || a - b);
     const at = (k: number) => list[order[k]];
     let i = 0;
     while (i < list.length) {
-      const [w, h] = at(i).tpl.size;
+      const [w, h] = paperOf(at(i).tpl);
       const g = a4Grid(w, h);
       const per = g.cols * g.rows;
       const batch: number[] = [];
-      while (i < list.length && batch.length < per && at(i).tpl.size[0] === w && at(i).tpl.size[1] === h) batch.push(order[i++]);
+      while (i < list.length && batch.length < per && paperOf(at(i).tpl)[0] === w && paperOf(at(i).tpl)[1] === h) batch.push(order[i++]);
       const mx = (g.W - g.cols * w) / 2;
       const my = (g.H - g.rows * h) / 2;
       pages.push({ w: g.W, h: g.H, items: batch.map((img, k) => ({ img, x: mx + (k % g.cols) * w, y: my + Math.floor(k / g.cols) * h, w, h, cut: true })) });
@@ -155,9 +155,9 @@ async function pdfOf(list: TicketData[], ov: Overrides, layout: "single" | "a4",
 }
 
 const cm = (mm: number) => String(mm / 10).replace(".", ",");
-const sizeText = (t: TicketTemplate) => `${cm(t.size[0])}×${cm(t.size[1])} cm`;
+const sizeText = (t: TicketTemplate) => `${cm(paperOf(t)[0])}×${cm(paperOf(t)[1])} cm`;
 /** Size as written in a file name ("10x16 cm") — plain x travels better in shared file names. */
-const sizeFile = (t: TicketTemplate) => `${cm(t.size[0])}x${cm(t.size[1])} cm`;
+const sizeFile = (t: TicketTemplate) => `${cm(paperOf(t)[0])}x${cm(paperOf(t)[1])} cm`;
 
 function Preview({ d, ov }: { d: TicketData; ov: Overrides }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -185,7 +185,7 @@ function Preview({ d, ov }: { d: TicketData; ov: Overrides }) {
     };
   }, [seen, d.tpl, list]);
   return (
-    <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700" style={{ aspectRatio: `${d.tpl.frame[0]} / ${d.tpl.frame[1]}` }}>
+    <div className="relative w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700" style={{ aspectRatio: d.tpl.paper ? `${d.tpl.paper[0]} / ${d.tpl.paper[1]}` : `${d.tpl.frame[0]} / ${d.tpl.frame[1]}` }}>
       <canvas ref={ref} className="block h-full w-full" aria-label={`Price ticket ${d.tpl.name}`} />
       {err && <p className="absolute inset-0 grid place-items-center p-4 text-center text-sm font-semibold text-rose-600">{err}</p>}
     </div>
