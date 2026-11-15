@@ -212,3 +212,29 @@ test("PPT tables fit the slide: rows never forced taller than the space, font fi
   assert.ok(fs < 11 && fs >= 7);
   assert.equal(fitFont([[{ text: "Adi" }]], [1.6], 14, 0.09), 14);
 });
+
+test("PPT: many staff → readable fonts on extra slides, nothing past the bottom margin", async () => {
+  const names = ["Adi", "Elvina", "Chelsy", "Flora", "Imam", "Sulaiman", "Sarah", "Rizki", "Dewi", "Bima"];
+  const t = { ...target, staff: names.map((name) => ({ ...target.staff[0], name, sharePct: 0.1 })) };
+  const d = buildReport(input({ target: t }));
+  const m = defaultManual(d, "Tester");
+  m.skip = [];
+  const deck = buildDeck(PptxGenJS as unknown as new () => PptxGenJS, d, m, null);
+  const buf = (await deck.write({ outputType: "nodebuffer" })) as Buffer;
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(buf);
+  const slides = Object.keys(zip.files).filter((f) => /^ppt\/slides\/slide\d+\.xml$/.test(f));
+  let cont = 0;
+  for (const f of slides) {
+    const x = await zip.file(f)!.async("string");
+    if (x.includes("(lanjutan)")) cont++;
+    for (const g of x.matchAll(/<p:graphicFrame>([\s\S]*?)<\/p:graphicFrame>/g)) {
+      const y = Number(/<a:off x="-?\d+" y="(\d+)"/.exec(g[1])![1]);
+      const h = [...g[1].matchAll(/<a:tr h="(\d+)"/g)].reduce((a, r) => a + Number(r[1]), 0);
+      assert.ok((y + h) / 914400 <= 6.96, `${f} table ends at ${((y + h) / 914400).toFixed(2)}"`);
+      const sizes = [...g[1].matchAll(/sz="(\d+)"/g)].map((r) => Number(r[1]) / 100);
+      assert.ok(Math.min(...sizes) >= 11, `${f} font ${Math.min(...sizes)}pt ${[...g[1].matchAll(/<a:t>(.*?)<\/a:t>/g)].map((r) => r[1]).slice(0, 40).join("|")}`);
+    }
+  }
+  assert.ok(cont >= 1, "continuation slides");
+});
