@@ -18,55 +18,62 @@ const inRow = (key: string) => (l: SalesLine) => {
   return key === "g" || k === key || (key === "ta" && k.startsWith("a-")) || (key === "tn" && k.startsWith("b-"));
 };
 
-/** Pop-up of one row: every item sold in either period, qty and value side by side, and who sold it. */
-function RowDetail({ id, label, wb, wa, lb, la }: { id: string; label: string; wb: string; wa: string; lb: SalesLine[]; la: SalesLine[] | null }) {
-  type It = { d: string; qb: number; vb: number; qa: number; va: number; staff: Set<string> };
-  const m = new Map<string, It>();
-  const put = (l: SalesLine, cur: boolean) => {
+/** Items of one period: description, qty, value and who sold it, biggest first. */
+function itemsOf(lines: SalesLine[]) {
+  const m = new Map<string, { d: string; q: number; v: number; staff: Set<string> }>();
+  for (const l of lines) {
     const k = l.description || l.article;
-    const x = m.get(k) ?? { d: k, qb: 0, vb: 0, qa: 0, va: 0, staff: new Set<string>() };
-    if (cur) {
-      x.qb += l.qty;
-      x.vb += l.amount;
-      if (l.staffName) x.staff.add(displayName(l.staffName));
-    } else {
-      x.qa += l.qty;
-      x.va += l.amount;
-    }
+    const x = m.get(k) ?? { d: k, q: 0, v: 0, staff: new Set<string>() };
+    x.q += l.qty;
+    x.v += l.amount;
+    if (l.staffName) x.staff.add(displayName(l.staffName));
     m.set(k, x);
-  };
-  for (const l of lb) put(l, true);
-  for (const l of la ?? []) put(l, false);
-  const items = [...m.values()].sort((x, y) => y.vb - x.vb || y.va - x.va);
-  const tb = lb.reduce((t, l) => t + l.amount, 0);
-  const ta = (la ?? []).reduce((t, l) => t + l.amount, 0);
-  const cell = (q: number, v: number) => (q || v ? <><b className="block">{rpc(v)}</b><span className="text-[11px] text-slate-500">{num(q)} unit</span></> : <span className="text-slate-300 dark:text-slate-600">–</span>);
+  }
+  return [...m.values()].sort((x, y) => y.v - x.v);
+}
+
+/** One period's list in the pop-up. */
+function PeriodList({ title, lines }: { title: string; lines: SalesLine[] | null }) {
+  const items = lines ? itemsOf(lines) : [];
+  const qty = items.reduce((t, x) => t + x.q, 0);
+  const value = items.reduce((t, x) => t + x.v, 0);
   return (
-    <div id={id} popover="auto" className="m-auto max-h-[85dvh] w-[min(94vw,560px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-4 text-left text-slate-900 shadow-2xl backdrop:bg-slate-900/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <p className="text-base font-black">{label} <span className="block text-xs font-semibold text-slate-500">{wb} {rpc(tb)} · {wa} {la ? rpc(ta) : "–"}</span></p>
-        <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>
-      </div>
+    <section className="min-w-0">
+      <p className="mb-1.5 flex items-baseline justify-between gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-[13px] font-black dark:bg-slate-800">
+        <span>{title}</span>
+        <span className="text-xs font-bold text-slate-600 tabular-nums dark:text-slate-300">{lines ? `${rpc(value)} · ${num(qty)} unit` : "–"}</span>
+      </p>
       {items.length ? (
-        <div className="overflow-hidden rounded-xl border border-slate-200 text-[13px] dark:border-slate-700">
-          <div className="grid grid-cols-[minmax(0,1fr)_5.2rem_5.2rem] gap-x-2 bg-slate-50 px-3 py-2 text-[11px] font-black tracking-wide text-slate-500 uppercase dark:bg-slate-800/60">
-            <span>Barang</span><span className="text-right">{wb}</span><span className="text-right">{wa}</span>
-          </div>
+        <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 text-[13px] dark:divide-slate-800 dark:border-slate-700">
           {items.map((x) => (
-            <div key={x.d} className="grid grid-cols-[minmax(0,1fr)_5.2rem_5.2rem] items-start gap-x-2 border-t border-slate-100 px-3 py-2 tabular-nums dark:border-slate-800">
+            <li key={x.d} className="flex items-start justify-between gap-3 px-3 py-2">
               <span className="min-w-0">
-                <span className="block leading-snug font-semibold break-words">{x.d}</span>
+                <span className="block leading-snug font-semibold break-words">{x.d} <span className="font-normal text-slate-400">× {num(x.q)}</span></span>
                 {x.staff.size > 0 && <span className="block text-[11px] text-slate-500">{[...x.staff].join(", ")}</span>}
               </span>
-              <span className="text-right leading-tight">{cell(x.qb, x.vb)}</span>
-              <span className="text-right leading-tight">{la ? cell(x.qa, x.va) : "–"}</span>
-            </div>
+              <b className="shrink-0 tabular-nums">{rpc(x.v)}</b>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : (
-        <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-500 dark:bg-slate-800/40">Tidak ada penjualan di kedua periode.</p>
+        <p className="rounded-xl bg-slate-50 p-3 text-center text-xs text-slate-500 dark:bg-slate-800/40">{lines ? "Tidak ada penjualan." : "Belum ada week sebelumnya."}</p>
       )}
-      <p className="mt-2 text-[11px] text-slate-500">Nama di bawah barang = yang menjual di {wb}.</p>
+    </section>
+  );
+}
+
+/** Pop-up of one row: the items of this period and of the previous one, each in its own list. */
+function RowDetail({ id, label, wb, wa, lb, la }: { id: string; label: string; wb: string; wa: string; lb: SalesLine[]; la: SalesLine[] | null }) {
+  return (
+    <div id={id} popover="auto" className="m-auto max-h-[85dvh] w-[min(94vw,820px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-4 text-left text-slate-900 shadow-2xl backdrop:bg-slate-900/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <p className="text-base font-black">{label}</p>
+        <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <PeriodList title={wb} lines={lb} />
+        <PeriodList title={wa} lines={la} />
+      </div>
     </div>
   );
 }
