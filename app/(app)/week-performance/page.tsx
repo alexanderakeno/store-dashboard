@@ -50,7 +50,8 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
   const fullPrev = p.q.lw === "full" || !running;
   const cmpEnd = prev ? (fullPrev ? prev.end : prevCut!) : "";
   const lobB = lobBreakdown(B);
-  const lobA = prev && cmpEnd >= prev.start ? lobBreakdown(linesOf({ start: prev.start, end: cmpEnd })) : null;
+  const linesA = prev && cmpEnd >= prev.start ? linesOf({ start: prev.start, end: cmpEnd }) : null;
+  const lobA = linesA ? lobBreakdown(linesA) : null;
   const elapsed = eachDay(cur.start, upTo(cur.end)).length;
   const tg = (elapsed / days.length) * 100;
   const target = tgtOf(cur);
@@ -226,7 +227,7 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
           </div>
         ) : undefined}
       >
-        <LobCompare b={lobB} a={lobA} wb={`W${cur.index}`} wa={prev ? `W${prev.index}` : "Lalu"} />
+        <LobCompare b={lobB} a={lobA} wb={`W${cur.index}`} wa={prev ? `W${prev.index}` : "Lalu"} linesB={B} linesA={linesA} scope="wlob" />
       </Panel>
 
       <div className="grid gap-5 lg:grid-cols-2">
