@@ -106,12 +106,22 @@ const BODY_FONT = "Calibri";
 const X = 0.6;
 const CW = W - 2 * X;
 const TOP = 2.05;
-const BOTTOM = 7.2;
+/** Bottom margin ≈ the side margins (0,55"), so no table runs to the slide's edge. */
+const BOTTOM = 6.95;
+/** Space between two tables on one slide. */
+const GAP = 0.38;
+/** Smallest table font that still reads on a projector; below it a two-table slide becomes two slides. */
+const MIN_FS = 11;
 
 const nf = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 const n0 = (n: number | null | undefined) => (n == null ? "-" : Math.round(n) === 0 ? "-" : nf.format(Math.round(n)));
 const nz = (n: number | null | undefined) => (n == null ? "-" : nf.format(Math.round(n)));
 const neg = (n: number | null | undefined) => (n == null ? "-" : Math.round(n) === 0 ? "-" : n < 0 ? `(${nf.format(Math.round(-n))})` : nf.format(Math.round(n)));
+/** Amounts in juta with one decimal ("1.140,5"), for tables too narrow for full rupiah. */
+const nf1 = new Intl.NumberFormat("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const mz = (n: number | null | undefined) => (n == null ? "-" : nf1.format(n / 1e6));
+const m0 = (n: number | null | undefined) => (n == null || Math.round(n / 1e5) === 0 ? "-" : mz(n));
+const mneg = (n: number | null | undefined) => (n == null || Math.round(n / 1e5) === 0 ? "-" : n < 0 ? `(${mz(-n)})` : mz(n));
 const pc = (n: number | null | undefined) => (n == null || !Number.isFinite(n) ? "-" : `${Math.round(n)}%`);
 const pc1 = (n: number | null | undefined) => (n == null || !Number.isFinite(n) ? "-" : `${n.toFixed(1).replace(".", ",")}%`);
 const dec = (n: number | null | undefined, d = 1) => (n == null || !Number.isFinite(n) ? "-" : n.toFixed(d));
@@ -179,6 +189,8 @@ export function fitFont(rows: Cell[][], colW: number[], fontSize: number, padX: 
 
 function table(s: Slide, rows: Cell[][], o: PptxGenJS.TableProps) {
   const margin = (o.margin as [number, number, number, number] | undefined) ?? [0.02, 0.09, 0.02, 0.09];
+  // never past the bottom margin: a fixed row height shrinks when the rows would not fit
+  if (typeof o.rowH === "number" && typeof o.y === "number" && o.y + o.rowH * rows.length > BOTTOM) o = { ...o, rowH: Math.max(0.17, (BOTTOM - o.y) / rows.length) };
   let fontSize = (o.fontSize as number | undefined) ?? 14;
   const colW = Array.isArray(o.colW) ? (o.colW as number[]) : null;
   if (colW) fontSize = fitFont(rows, colW, fontSize, margin[1]);
@@ -203,7 +215,7 @@ export function buildDeck(Ctor: new () => Pptx, d: ReportData, m: ReportManual, 
   p.title = `${d.storeCode} ${d.title}`;
   const objects: NonNullable<PptxGenJS.SlideMasterProps["objects"]> = [
     { rect: { x: 0, y: 1.2, w: W, h: 6.3, fill: { color: C.sky } } },
-    { text: { text: "›››››", options: { x: 10.55, y: 1.22, w: 1.45, h: 0.55, fontSize: 34, color: C.blue, bold: true, fontFace: "Arial" } } },
+    { text: { text: "›››››", options: { x: 10.55, y: 1.12, w: 1.6, h: 0.8, fontSize: 34, color: C.blue, bold: true, fontFace: "Arial", margin: 0, valign: "middle" } } },
   ];
   if (logo) objects.push({ image: { x: 9.75, y: 0.12, w: 3.2, h: 0.67, data: logo } });
   p.defineSlideMaster({ title: "CONTENT", background: { color: "FFFFFF" }, objects });
@@ -214,17 +226,18 @@ export function buildDeck(Ctor: new () => Pptx, d: ReportData, m: ReportManual, 
     const s = p.addSlide({ masterName: "CONTENT" });
     s.addShape("ellipse", { x: 11.9, y: 0.75, w: 0.7, h: 0.7, fill: { color: C.sky }, line: { color: C.ring, width: 9 } });
     s.addText(l1, { x: X, y: 0.45, w: 9.1, h: 0.7, fontFace: TITLE_FONT, fontSize: 28, color: C.navy, bold: true, margin: 0, valign: "bottom", fit: "shrink" });
-    if (l2) s.addText(l2, { x: X, y: 1.2, w: 9.8, h: 0.68, fontFace: TITLE_FONT, fontSize: 28, color: C.navy, bold: true, margin: 0, valign: "middle", fit: "shrink" });
+    if (l2) s.addText(l2, { x: X, y: 1.25, w: 9.8, h: 0.6, fontFace: TITLE_FONT, fontSize: 18, color: C.navy, bold: true, margin: 0, valign: "middle", fit: "shrink" });
     return s;
   };
 
   if (on("cover")) cover(p, d, m, logo);
   if (on("target")) slideTarget(add(`Target & Achievement${d.hasPrev ? " MTM" : ""}${d.hasLy ? `${d.hasPrev ? " -" : ""} LFL` : ""}`, vs), d);
-  if (on("staff")) slideStaff(add("Target & Achievement per Staff", vs), d);
-  if (on("balance")) slideBalance(add("Breakdown Staff Brand Balanced &", `Contribution ${d.curLabel}`), d);
-  if (on("android")) slideSplit(add("Breakdown Staff Perfomance", `Android ${d.curLabel}`), d, "android");
-  if (on("apple")) slideSplit(add("Breakdown Staff Perfomance", `Apple ${d.curLabel}`), d, "apple");
-  if (on("accvas")) slideAccVas(add("Breakdown Acc & VAS", vs), d);
+  const more = (l1: string, l2?: string) => () => add(l1, l2 ? `${l2} (lanjutan)` : "(lanjutan)");
+  if (on("staff")) slideStaff(add("Target & Achievement per Staff", vs), d, more("Target & Achievement per Staff", vs));
+  if (on("balance")) slideBalance(add("Brand Balance & Contribution", d.curLabel), d, more("Brand Balance & Contribution", d.curLabel));
+  if (on("android")) slideSplit(add("Breakdown Staff Performance", `Android ${d.curLabel}`), d, "android", more("Breakdown Staff Performance", `Android ${d.curLabel}`));
+  if (on("apple")) slideSplit(add("Breakdown Staff Performance", `Apple ${d.curLabel}`), d, "apple", more("Breakdown Staff Performance", `Apple ${d.curLabel}`));
+  if (on("accvas")) slideAccVas(add("Breakdown Acc & VAS", vs), d, more("Breakdown Acc & VAS", vs));
   if (on("productivity")) slideProductivity(add("Compare Productivity", vs), d, m);
   if (on("weekly")) slideWeekly(add("Weekly Performance", `${d.monthName} ${d.year} (W1${d.weeks.length > 1 ? ` - W${d.weeks.length}` : ""})`), d);
   if (on("npi")) slideNpi(add(m.npi.title1 || "NPI", m.npi.title2 || undefined), m);
@@ -250,7 +263,7 @@ function cover(p: Pptx, d: ReportData, m: ReportManual, logo: string | null) {
   s.addText([code, ...wrap(name, 16)].filter(Boolean).join("\n"), { x: 1.1, y: 1.0, w: 8.4, h: 3.1, fontFace: TITLE_FONT, fontSize: 48, color: C.navy, bold: true, margin: 0, lineSpacingMultiple: 0.9, valign: "middle", fit: "shrink" });
   s.addText(d.title.toUpperCase(), { x: 1.2, y: 4.45, w: 9, h: 0.65, fontFace: TITLE_FONT, fontSize: 28, color: C.navy, margin: 0, fit: "shrink" });
   if (m.author) s.addText(m.author, { x: 1.15, y: 5.25, w: 9, h: 0.4, fontFace: "Arial", fontSize: 18, bold: true, color: "111111", margin: 0 });
-  s.addText("›››››", { x: 1.7, y: 6.15, w: 1.5, h: 0.5, fontSize: 34, color: C.blue, bold: true });
+  s.addText("›››››", { x: 1.7, y: 6.0, w: 1.7, h: 0.8, fontSize: 34, color: C.blue, bold: true, margin: 0, valign: "middle" });
 }
 
 /** Breaks "DIGIPLUS KOTA KASABLANKA" into lines of about `n` characters. */
@@ -287,14 +300,16 @@ function slideTarget(s: Slide, d: ReportData) {
 
 const staffOnly = (d: ReportData) => d.staff.filter((r) => r.kind === "staff");
 
-function slideStaff(s: Slide, d: ReportData) {
+function slideStaff(s: Slide, d: ReportData, more: () => Slide) {
   const st = staffOnly(d);
   const extra = d.staff.filter((r) => r.kind !== "staff");
   const tRows = st.length + 3;
   const aRows = st.length + extra.length + 3;
-  const gap = 0.18;
-  const { rowH, fontSize } = rowsIn(tRows + aRows, BOTTOM - TOP - gap, 0.36);
-  const fs = Math.min(fontSize, 12);
+  const one = rowsIn(tRows + aRows, BOTTOM - TOP - GAP, 0.36);
+  // too many staff for both tables at a readable size: Achievement goes on its own slide
+  const split = one.fontSize < MIN_FS;
+  const { rowH, fontSize } = split ? rowsIn(Math.max(tRows, aRows), BOTTOM - TOP, 0.42) : one;
+  const fs = Math.min(fontSize, split ? 14 : 12);
   const sum = (k: "Apple" | "Android" | "ACC" | "VAS") => st.reduce((a, r) => a + r.target[k], 0);
   const tTot = st.reduce((a, r) => a + r.targetTotal, 0);
   const tw = 8.6;
@@ -308,22 +323,28 @@ function slideStaff(s: Slide, d: ReportData) {
     ],
     { x: X + (CW - tw) / 2, y: TOP, w: tw, rowH, fontSize: fs, colW: cols(6, tw, 1.5) },
   );
-  const yA = TOP + rowH * tRows + gap;
-  const v = (r: StaffRowData, g: "Apple" | "Android" | "ACC" | "VAS") => (r.kind === "staff" ? upDown(r.actual[g] - r.target[g], neg(r.actual[g] - r.target[g])) : N("-"));
+  const s2 = split ? more() : s;
+  const yA = split ? TOP : TOP + rowH * tRows + GAP;
   const tb = d.storeTotals;
-  table(
-    s,
-    [
-      [H(""), H("Achievement", { colspan: 10 })],
+  const aColW = [1.45, ...Array(9).fill((CW - 2.15) / 9), 0.7];
+  const aMargin: [number, number, number, number] = [0.02, 0.05, 0.02, 0.05];
+  const aFs = split ? fs : Math.min(fs, 12);
+  const achRows = (f0: typeof n0, fz: typeof nz, fneg: typeof neg, head: string): Cell[][] => {
+    const v = (r: StaffRowData, g: "Apple" | "Android" | "ACC" | "VAS") => (r.kind === "staff" ? upDown(r.actual[g] - r.target[g], fneg(r.actual[g] - r.target[g])) : N("-"));
+    return [
+      [H(""), H(head, { colspan: 10 })],
       [G(""), G("Apple"), G("Var"), G("Android"), G("Var"), G("Accesories"), G("Var"), G("VAS"), G("Var"), G("Total"), G("%")],
-      ...[...st, ...extra].map((r) => [L(r.name), N(n0(r.actual.Apple)), v(r, "Apple"), N(n0(r.actual.Android)), v(r, "Android"), N(n0(r.actual.ACC)), v(r, "ACC"), N(n0(r.actual.VAS)), v(r, "VAS"), N(n0(r.total), { bold: true }), N(r.kind === "staff" ? pc(r.achPct) : "-", { bold: true })]),
-      [TL("Total"), T(nz(tb.actual.Apple)), T(neg(tb.actual.Apple - tb.targetByGroup.Apple)), T(nz(tb.actual.Android)), T(neg(tb.actual.Android - tb.targetByGroup.Android)), T(nz(tb.actual.ACC)), T(neg(tb.actual.ACC - tb.targetByGroup.ACC)), T(nz(tb.actual.VAS)), T(neg(tb.actual.VAS - tb.targetByGroup.VAS)), T(nz(tb.total)), T(pc(share(tb.total, tb.target)))],
-    ],
-    { x: X, y: yA, w: CW, rowH, fontSize: Math.min(fs, 11), margin: [0.02, 0.05, 0.02, 0.05], colW: [1.0, ...Array(9).fill((CW - 1.6) / 9), 0.6] },
-  );
+      ...[...st, ...extra].map((r) => [L(r.name), N(f0(r.actual.Apple)), v(r, "Apple"), N(f0(r.actual.Android)), v(r, "Android"), N(f0(r.actual.ACC)), v(r, "ACC"), N(f0(r.actual.VAS)), v(r, "VAS"), N(f0(r.total), { bold: true }), N(r.kind === "staff" ? pc(r.achPct) : "-", { bold: true })]),
+      [TL("Total"), T(fz(tb.actual.Apple)), T(fneg(tb.actual.Apple - tb.targetByGroup.Apple)), T(fz(tb.actual.Android)), T(fneg(tb.actual.Android - tb.targetByGroup.Android)), T(fz(tb.actual.ACC)), T(fneg(tb.actual.ACC - tb.targetByGroup.ACC)), T(fz(tb.actual.VAS)), T(fneg(tb.actual.VAS - tb.targetByGroup.VAS)), T(fz(tb.total)), T(pc(share(tb.total, tb.target)))],
+    ];
+  };
+  // 11 columns of full rupiah (e.g. "(2.863.582.357)") only fit at ~8pt: then the table shows juta (1 decimal) instead
+  const full = achRows(n0, nz, neg, "Achievement");
+  const rows = fitFont(full, aColW, aFs, aMargin[1]) >= MIN_FS ? full : achRows(m0, mz, mneg, "Achievement (juta Rp)");
+  table(s2, rows, { x: X, y: yA, w: CW, rowH, fontSize: aFs, margin: aMargin, colW: aColW });
 }
 
-function slideBalance(s: Slide, d: ReportData) {
+function slideBalance(s: Slide, d: ReportData, more: () => Slide) {
   const b = d.balance;
   const bw = 7.2;
   table(
@@ -336,11 +357,14 @@ function slideBalance(s: Slide, d: ReportData) {
     { x: X + (CW - bw) / 2, y: TOP, w: bw, rowH: 0.42, fontSize: 15 },
   );
   const rows = d.staff;
-  const y = TOP + 0.42 * 3 + 0.35;
+  const y0 = TOP + 0.42 * 3 + GAP;
+  const fits = rowsIn(rows.length + 2, BOTTOM - y0, 0.42).fontSize >= MIN_FS;
+  // many staff: the contribution table gets its own slide
+  const y = fits ? y0 : TOP;
   const { rowH, fontSize } = rowsIn(rows.length + 2, BOTTOM - y, 0.42);
   const t = d.storeTotals;
   table(
-    s,
+    fits ? s : more(),
     [
       [H("Contribution", { align: "left" }), H("Achievement"), H("Contribution"), H("Invoice"), H("ATV"), H("UPT")],
       ...rows.map((r) => [L(r.name), N(nz(r.total)), N(pc(share(r.total, t.total))), N(nz(r.invoices)), N(nz(r.atv)), N(dec(r.upt))]),
@@ -350,7 +374,7 @@ function slideBalance(s: Slide, d: ReportData) {
   );
 }
 
-function slideSplit(s: Slide, d: ReportData, kind: "android" | "apple") {
+function slideSplit(s: Slide, d: ReportData, kind: "android" | "apple", more: () => Slide) {
   const keys = kind === "android" ? d.androidBrands : d.appleLobs;
   const label = (c: string) => (kind === "apple" ? ({ "Apple Watch": "Apple watch", Mac: "Macbook" } as Record<string, string>)[c] ?? c : c);
   const rows = d.staff;
@@ -360,8 +384,10 @@ function slideSplit(s: Slide, d: ReportData, kind: "android" | "apple") {
   const tq = keys.reduce((a, c) => a + sumQ(c), 0);
   const tv = keys.reduce((a, c) => a + sumV(c), 0);
   const nRows = rows.length + 3;
-  const gap = 0.22;
-  const { rowH, fontSize } = rowsIn(nRows * 2, BOTTOM - TOP - gap, 0.36);
+  const one = rowsIn(nRows * 2, BOTTOM - TOP - GAP, 0.36);
+  // too many staff for qty + value at a readable size: value goes on its own slide
+  const split = one.fontSize < MIN_FS;
+  const { rowH, fontSize } = split ? rowsIn(nRows, BOTTOM - TOP, 0.48) : one;
   const colW = cols(keys.length + 2, CW, 1.6, 1.7);
   const cont = (vals: Array<number | null>) => [G("Contribution", { align: "left" }), ...vals.map((v) => G(pc(v), { bold: false })), G("")];
   const head = [H("Detail", { align: "left" }), ...keys.map((c) => H(label(c))), H("Total")];
@@ -376,22 +402,23 @@ function slideSplit(s: Slide, d: ReportData, kind: "android" | "apple") {
     { x: X, y: TOP, w: CW, rowH, fontSize, colW },
   );
   table(
-    s,
+    split ? more() : s,
     [
       cont(keys.map((c) => share(sumV(c), tv))),
       head,
       ...rows.map((r) => [L(r.name), ...keys.map((c) => N(n0(get(r, c).value))), N(n0(keys.reduce((a, c) => a + get(r, c).value, 0)), { bold: true })]),
       [TL("Total"), ...keys.map((c) => T(nz(sumV(c)))), T(nz(tv))],
     ],
-    { x: X, y: TOP + rowH * nRows + gap, w: CW, rowH, fontSize, colW },
+    { x: X, y: split ? TOP : TOP + rowH * nRows + GAP, w: CW, rowH, fontSize, colW },
   );
 }
 
-function slideAccVas(s: Slide, d: ReportData) {
+function slideAccVas(s: Slide, d: ReportData, more: () => Slide) {
   const rows = d.accVas;
   const vRows = rows.filter((r) => r.name !== "Lainnya*" || r.vasTotal || r.qoalaPrev);
-  const gap = 0.22;
-  const { rowH, fontSize } = rowsIn(rows.length + vRows.length + 4, BOTTOM - TOP - gap, 0.4);
+  const one = rowsIn(rows.length + vRows.length + 4, BOTTOM - TOP - GAP, 0.4);
+  const split = one.fontSize < MIN_FS;
+  const { rowH, fontSize } = split ? rowsIn(Math.max(rows.length, vRows.length) + 2, BOTTOM - TOP, 0.42) : one;
   const tot = rows.reduce(
     (a, r) => {
       for (const k of Object.keys(a) as Array<keyof AccVasRow>) if (k !== "name") (a as unknown as Record<string, number>)[k] += r[k] as number;
@@ -410,13 +437,13 @@ function slideAccVas(s: Slide, d: ReportData) {
     { x: X, y: TOP, w: CW, rowH, fontSize, colW: cols(7, CW, 1.6) },
   );
   table(
-    s,
+    split ? more() : s,
     [
       [H("VAS", { align: "left" }), H("Qoala"), H("MTM"), H("Difference"), H("%"), H("Telkomsel"), H("XL"), H("Indosat"), H("Total")],
       ...vRows.map((r) => [L(r.name), N(n0(r.qoala)), N(n0(r.qoalaPrev)), diff(r.qoala, r.qoalaPrev), d.hasPrev ? upDown(r.qoala - r.qoalaPrev, pc(growth(r.qoala, r.qoalaPrev)), { bold: true }) : N("-"), N(n0(r.telkomsel)), N(n0(r.xl)), N(n0(r.indosat)), N(n0(r.vasTotal), { bold: true })]),
       [TL("Total"), T(n0(tot.qoala)), T(n0(tot.qoalaPrev)), T(neg(tot.qoala - tot.qoalaPrev)), T(pc(growth(tot.qoala, tot.qoalaPrev))), T(n0(tot.telkomsel)), T(n0(tot.xl)), T(n0(tot.indosat)), T(n0(tot.vasTotal))],
     ],
-    { x: X, y: TOP + rowH * (rows.length + 2) + gap, w: CW, rowH, fontSize, colW: [1.6, 1.4, 1.4, 1.4, 0.85, 1.4, 1.25, 1.25, 1.58] },
+    { x: X, y: split ? TOP : TOP + rowH * (rows.length + 2) + GAP, w: CW, rowH, fontSize, colW: [1.6, 1.4, 1.4, 1.4, 0.85, 1.4, 1.25, 1.25, 1.58] },
   );
 }
 
@@ -543,7 +570,7 @@ function slideBnpl(s: Slide, d: ReportData, m: ReportManual) {
   if (withModels) parts.push(`Total ${ta + tb} unit ${[m.bnpl.colA, m.bnpl.colB].filter(Boolean).join(" & ")} via BNPL.`);
   // summary sits under the table (same as the store's deck)
   const yText = TOP + 0.1 + 0.52 * (rows.length + 2) + 0.45;
-  if (b.value) s.addText(parts.join(" "), { x: X + (CW - w) / 2, y: Math.min(yText, 6.3), w, h: 0.9, fontSize: 15, bold: true, color: C.navy, fontFace: BODY_FONT, margin: 0, valign: "top", fit: "shrink" });
+  if (b.value) s.addText(parts.join(" "), { x: X + (CW - w) / 2, y: Math.min(yText, BOTTOM - 0.8), w, h: 0.8, fontSize: 15, bold: true, color: C.navy, fontFace: BODY_FONT, margin: 0, valign: "top", fit: "shrink" });
 }
 
 function slideYtd(s: Slide, d: ReportData) {
@@ -628,8 +655,8 @@ function thanks(p: Pptx) {
   s.background = { color: "FFFFFF" };
   s.addShape("roundRect", { x: 2.5, y: -0.4, w: 8.33, h: 1.7, fill: { color: C.sky }, rectRadius: 0.3 });
   s.addText("THANK\nYOU!", { x: 3, y: 2.0, w: 7.33, h: 3.0, fontFace: TITLE_FONT, fontSize: 80, color: C.navy, bold: true, align: "center", margin: 0, lineSpacingMultiple: 0.85 });
-  s.addText("›››››", { x: 2.4, y: 3.15, w: 1.5, h: 0.6, fontSize: 40, color: "8DB3E2", bold: true });
-  s.addText("‹‹‹‹‹", { x: 9.45, y: 3.15, w: 1.5, h: 0.6, fontSize: 40, color: "8DB3E2", bold: true, align: "right" });
+  s.addText("›››››", { x: 2.2, y: 3.0, w: 1.8, h: 0.9, fontSize: 40, color: "8DB3E2", bold: true, margin: 0, valign: "middle" });
+  s.addText("‹‹‹‹‹", { x: 9.35, y: 3.0, w: 1.8, h: 0.9, fontSize: 40, color: "8DB3E2", bold: true, align: "right", margin: 0, valign: "middle" });
   s.addShape("roundRect", { x: 5.28, y: 5.55, w: 2.77, h: 0.48, fill: { color: "5389CA" }, rectRadius: 0.24 });
   s.addShape("rect", { x: 0, y: 6.55, w: W, h: 0.95, fill: { color: C.navy } });
 }
