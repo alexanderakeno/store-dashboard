@@ -1,12 +1,78 @@
 import { Grid } from "@/components/kit/FitGrid";
 import type { LobBreakdown, QV } from "@/lib/domain/extra";
+import { displayName } from "@/lib/domain/normalize";
 import { num, pct, rpc, rpf } from "@/lib/format";
+import type { SalesLine } from "@/types/domain";
 
 const APPLE_ROWS: Array<[string, string]> = [["iPhone", "iPhone"], ["iPad", "iPad"], ["Mac", "MacBook"], ["Apple Watch", "Apple Watch"], ["AirPods", "AirPods"]];
 const ANDROID_ORDER = ["Samsung", "Oppo", "Xiaomi", "Infinix", "Motorola", "Amazfit", "Huawei", "Vivo", "Realme", "Tecno", "Honor"];
 
+/** Row of the table a line belongs to (same split as lobBreakdown): a-<Apple LOB>, b-<Android brand>, acc, vas. */
+function rowOf(l: SalesLine): string {
+  if (l.lob === "AirPods" || l.group === "Apple") return `a-${l.lob || "Apple lainnya"}`;
+  if (l.group === "Android") return `b-${l.lob || l.brand || "Lainnya"}`;
+  return l.group === "ACC" ? "acc" : "vas";
+}
+const inRow = (key: string) => (l: SalesLine) => {
+  const k = rowOf(l);
+  return key === "g" || k === key || (key === "ta" && k.startsWith("a-")) || (key === "tn" && k.startsWith("b-"));
+};
+
+/** Pop-up of one row: every item sold in either period, qty and value side by side, and who sold it. */
+function RowDetail({ id, label, wb, wa, lb, la }: { id: string; label: string; wb: string; wa: string; lb: SalesLine[]; la: SalesLine[] | null }) {
+  type It = { d: string; qb: number; vb: number; qa: number; va: number; staff: Set<string> };
+  const m = new Map<string, It>();
+  const put = (l: SalesLine, cur: boolean) => {
+    const k = l.description || l.article;
+    const x = m.get(k) ?? { d: k, qb: 0, vb: 0, qa: 0, va: 0, staff: new Set<string>() };
+    if (cur) {
+      x.qb += l.qty;
+      x.vb += l.amount;
+      if (l.staffName) x.staff.add(displayName(l.staffName));
+    } else {
+      x.qa += l.qty;
+      x.va += l.amount;
+    }
+    m.set(k, x);
+  };
+  for (const l of lb) put(l, true);
+  for (const l of la ?? []) put(l, false);
+  const items = [...m.values()].sort((x, y) => y.vb - x.vb || y.va - x.va);
+  const tb = lb.reduce((t, l) => t + l.amount, 0);
+  const ta = (la ?? []).reduce((t, l) => t + l.amount, 0);
+  const cell = (q: number, v: number) => (q || v ? <><b className="block">{rpc(v)}</b><span className="text-[11px] text-slate-500">{num(q)} unit</span></> : <span className="text-slate-300 dark:text-slate-600">–</span>);
+  return (
+    <div id={id} popover="auto" className="m-auto max-h-[85dvh] w-[min(94vw,560px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-4 text-left text-slate-900 shadow-2xl backdrop:bg-slate-900/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <p className="text-base font-black">{label} <span className="block text-xs font-semibold text-slate-500">{wb} {rpc(tb)} · {wa} {la ? rpc(ta) : "–"}</span></p>
+        <button type="button" popoverTarget={id} popoverTargetAction="hide" className="sd-btn" aria-label="Tutup">✕</button>
+      </div>
+      {items.length ? (
+        <div className="overflow-hidden rounded-xl border border-slate-200 text-[13px] dark:border-slate-700">
+          <div className="grid grid-cols-[minmax(0,1fr)_5.2rem_5.2rem] gap-x-2 bg-slate-50 px-3 py-2 text-[11px] font-black tracking-wide text-slate-500 uppercase dark:bg-slate-800/60">
+            <span>Barang</span><span className="text-right">{wb}</span><span className="text-right">{wa}</span>
+          </div>
+          {items.map((x) => (
+            <div key={x.d} className="grid grid-cols-[minmax(0,1fr)_5.2rem_5.2rem] items-start gap-x-2 border-t border-slate-100 px-3 py-2 tabular-nums dark:border-slate-800">
+              <span className="min-w-0">
+                <span className="block leading-snug font-semibold break-words">{x.d}</span>
+                {x.staff.size > 0 && <span className="block text-[11px] text-slate-500">{[...x.staff].join(", ")}</span>}
+              </span>
+              <span className="text-right leading-tight">{cell(x.qb, x.vb)}</span>
+              <span className="text-right leading-tight">{la ? cell(x.qa, x.va) : "–"}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-500 dark:bg-slate-800/40">Tidak ada penjualan di kedua periode.</p>
+      )}
+      <p className="mt-2 text-[11px] text-slate-500">Nama di bawah barang = yang menjual di {wb}.</p>
+    </div>
+  );
+}
+
 /** "Weekly Dashboard" table: qty and value of period B vs period A (week to week, month to month), difference and % — Apple per LOB, Android per brand, ACC, VAS. */
-export function LobCompare({ b, a, wb, wa }: { b: LobBreakdown; a: LobBreakdown | null; wb: string; wa: string }) {
+export function LobCompare({ b, a, wb, wa, linesB, linesA, scope = "lob" }: { b: LobBreakdown; a: LobBreakdown | null; wb: string; wa: string; linesB?: SalesLine[]; linesA?: SalesLine[] | null; scope?: string }) {
   const z: QV = { qty: 0, value: 0 };
   const sum = (xs: QV[]): QV => xs.reduce((t, x) => ({ qty: t.qty + x.qty, value: t.value + x.value }), { qty: 0, value: 0 });
   const appleKeys = [...APPLE_ROWS.map(([k]) => k), ...new Set([...Object.keys(b.apple), ...Object.keys(a?.apple ?? {})].filter((k) => !APPLE_ROWS.some(([x]) => x === k)))];
@@ -35,6 +101,7 @@ export function LobCompare({ b, a, wb, wa }: { b: LobBreakdown; a: LobBreakdown 
   const diff = (v: number | null, isMoney: boolean) => (v == null ? "–" : <span className={v < 0 ? "text-rose-600" : v > 0 ? "text-emerald-600" : "text-slate-400"}>{isMoney ? money(v, true) : `${v > 0 ? "+" : ""}${num(v)}`}</span>);
   // money: compact on phones / tablets, full rupiah on wide screens (like the sheet)
   const money = (n: number, sign = false) => <><span className="xl:hidden">{sign && n > 0 ? "+" : ""}{rpc(n)}</span><span className="max-xl:hidden">{sign && n > 0 ? "+" : ""}{rpf(n)}</span></>;
+  const popId = (key: string) => `${scope}-${key.replace(/[^a-zA-Z0-9_-]+/g, "-")}`;
   const dash = (n: number, isMoney: boolean) => (n ? (isMoney ? money(n) : num(n)) : <span className="text-slate-400">–</span>);
 
   return (
@@ -57,9 +124,10 @@ export function LobCompare({ b, a, wb, wa }: { b: LobBreakdown; a: LobBreakdown 
         ]}
         rows={rows.map((r) => ({
           key: r.key,
+          ...(linesB ? { pop: popId(r.key), label: `Barang terjual · ${r.label}` } : {}),
           className: r.tone === "grand" ? "bg-slate-100 font-black dark:bg-slate-800" : r.tone === "total" ? "bg-slate-50 font-bold dark:bg-slate-800/60" : "",
           cells: [
-            <span key="n" className={r.tone ? "" : "font-semibold"}>{r.label}</span>,
+            <span key="n" className={r.tone ? "" : "font-semibold"}>{r.label}{linesB && <span className="ml-1 text-blue-500">›</span>}</span>,
             dash(r.cur.qty, false),
             r.last ? dash(r.last.qty, false) : "–",
             diff(r.last ? r.cur.qty - r.last.qty : null, false),
@@ -73,7 +141,8 @@ export function LobCompare({ b, a, wb, wa }: { b: LobBreakdown; a: LobBreakdown 
         }))}
       />
       </div></div>
-      <p className="mt-2 text-xs text-slate-500">Δ dan % = {wb} dibanding {wa}. Grand Total = Apple + Android + ACC + VAS (sama dengan total sales).</p>
+      {linesB && rows.map((r) => <RowDetail key={r.key} id={popId(r.key)} label={r.label} wb={wb} wa={wa} lb={linesB.filter(inRow(r.key))} la={linesA ? linesA.filter(inRow(r.key)) : null} />)}
+      <p className="mt-2 text-xs text-slate-500">{linesB ? "Ketuk nama LOB / brand untuk melihat barang yang terjual. " : ""}Δ dan % = {wb} dibanding {wa}. Grand Total = Apple + Android + ACC + VAS (sama dengan total sales).</p>
     </>
   );
 }
