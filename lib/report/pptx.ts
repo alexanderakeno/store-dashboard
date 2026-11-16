@@ -11,7 +11,22 @@ type Slide = PptxGenJS.Slide;
 type Cell = PptxGenJS.TableCell;
 type CellOpts = PptxGenJS.TableCellProps;
 
+/** Filter of the "Stock kosong" slide, chosen in the pop-up every time. */
+export interface StockFilter {
+  /** Unsold for at least this many days before the SOH date. */
+  minDays: number;
+  /** Sold at least this many units in the 30-day window. */
+  minSold: number;
+  /** Best sellers per brand (0 = all). */
+  perBrand: number;
+  /** Brands left out. */
+  hide: string[];
+}
+
+export const STOCK_FILTER: StockFilter = { minDays: 7, minSold: 1, perBrand: 0, hide: [] };
+
 export interface ReportManual {
+  stock: StockFilter;
   author: string;
   skip: SlideId[];
   traffic: { cur: number | null; prev: number | null };
@@ -41,6 +56,7 @@ export function defaultManual(d: ReportData, author: string): ReportManual {
   if (!d.ytd.some((r) => r.prev && r.cur)) skip.push("ytd");
   if (!d.stockOut) skip.push("stock");
   return {
+    stock: { ...STOCK_FILTER },
     author,
     skip,
     traffic: { cur: null, prev: null },
@@ -74,6 +90,7 @@ export function mergeManual(base: ReportManual, saved: Partial<ReportManual> | n
     ...saved,
     traffic: { ...base.traffic, ...(saved.traffic ?? {}) },
     npi: { ...base.npi, ...(saved.npi ?? {}) },
+    stock: { ...base.stock, ...(saved.stock ?? {}), hide: Array.isArray(saved.stock?.hide) ? saved.stock.hide : base.stock.hide },
     bnpl: { ...base.bnpl, ...(saved.bnpl ?? {}), per: { ...(saved.bnpl?.per ?? {}) } },
     issues: [0, 1, 2].map((i) => saved.issues?.[i] ?? ""),
     feedback: [0, 1, 2].map((i) => saved.feedback?.[i] ?? ""),
@@ -247,9 +264,11 @@ export function buildDeck(Ctor: new () => Pptx, d: ReportData, m: ReportManual, 
   if (on("lob")) slideLob(add("Breakdown LOB Per Brand", vs), d);
   if (on("stock") && d.stockOut) {
     const so = d.stockOut;
+    const f = m.stock ?? STOCK_FILTER;
     const dm = (x: string) => `${x.slice(8, 10)}/${x.slice(5, 7)}`;
-    const l2 = `SOH ${dm(so.sohDate)} · laku ${dm(so.from)}–${dm(so.to)}, tidak terjual ≥ 7 hari`;
-    slideStock(add("Stock Kosong ≥ 1 Minggu", l2), d.stockOut, more("Stock Kosong ≥ 1 Minggu", l2));
+    const t1 = f.minDays === 7 ? "Stock Kosong ≥ 1 Minggu" : f.minDays % 7 === 0 ? `Stock Kosong ≥ ${f.minDays / 7} Minggu` : `Stock Kosong ≥ ${f.minDays} Hari`;
+    const l2 = `SOH ${dm(so.sohDate)} · laku ${dm(so.from)}–${dm(so.to)}${f.minSold > 1 ? ` (min. ${f.minSold} unit)` : ""}, tidak terjual ≥ ${f.minDays} hari`;
+    slideStock(add(t1, l2), stockRows(d, f), f, more(t1, l2));
   }
   if (on("issue")) slideIssue(add(`Issue & Feedback ${d.mode === "closing" ? d.monthName : `W${d.weekIndex} ${d.monthName}`}`), d, m);
   if (on("thanks")) thanks(p);
@@ -623,18 +642,41 @@ function slideLob(s: Slide, d: ReportData) {
   );
 }
 
+/** Stock-kosong groups after the pop-up filter; `total` = articles before the per-brand cut. */
+export function stockRows(d: ReportData, f: StockFilter) {
+  const hide = new Set(f.hide);
+  return (d.stockOut?.groups ?? [])
+    .filter((g) => !hide.has(g.category))
+    .map((g) => {
+      const all = g.items.filter((it) => it.days >= f.minDays && it.sold >= f.minSold);
+      return { category: g.category, total: all.length, items: f.perBrand > 0 ? all.slice(0, f.perBrand) : all };
+    })
+    .filter((g) => g.items.length);
+}
+
+/** Number of slides the stock table takes (about: same rows per slide as the slide). */
+export function stockSlides(groups: ReturnType<typeof stockRows>): number {
+  const n = groups.reduce((a, g) => a + g.items.length + 1, 0);
+  return n ? Math.ceil(n / STOCK_ROWS) : 1;
+}
+
 /** Body rows per stock slide (brand rows included): keeps the font ≥ 12pt. */
 const STOCK_ROWS = 15;
 
-function slideStock(s: Slide, so: NonNullable<ReportData["stockOut"]>, more: () => Slide) {
+function slideStock(s: Slide, groups: ReturnType<typeof stockRows>, f: StockFilter, more: () => Slide) {
+  const so = { groups };
   const total = so.groups.reduce((a, g) => a + g.items.length, 0);
   if (!total) {
-    s.addText("Tidak ada device yang stoknya kosong ≥ 7 hari dari yang laku 30 hari terakhir.", { x: X, y: TOP + 0.6, w: CW, h: 1, fontFace: BODY_FONT, fontSize: 20, color: C.navy, bold: true, align: "center", valign: "middle", margin: 0 });
+    s.addText(`Tidak ada device yang stoknya kosong ≥ ${f.minDays} hari dari yang laku 30 hari terakhir.`, { x: X, y: TOP + 0.6, w: CW, h: 1, fontFace: BODY_FONT, fontSize: 20, color: C.navy, bold: true, align: "center", valign: "middle", margin: 0 });
     return;
   }
   const dm = (x: string) => `${x.slice(8, 10)}/${x.slice(5, 7)}`;
   const colW = [4.85, 1.4, 1.0, 1.25, 1.0, CW - 9.5];
-  const brand = (c: string, n: number, cont = false): Cell[] => [G(`${c}${cont ? " (lanjutan)" : ""}`, { align: "left" }), G(`${n} artikel`, { colspan: 5, align: "left", bold: false })];
+  const totalOf = new Map(groups.map((g) => [g.category, g.total]));
+  const brand = (c: string, n: number, cont = false): Cell[] => {
+    const t = totalOf.get(c) ?? n;
+    return [G(`${c}${cont ? " (lanjutan)" : ""}`, { align: "left" }), G(t > n ? `top ${n} dari ${t} artikel` : `${n} artikel`, { colspan: 5, align: "left", bold: false })];
+  };
   // as many colours as fit the column, then "+n"
   const alt = (a: Array<{ color: string; qty: number }>) => {
     if (!a.length) return "-";
