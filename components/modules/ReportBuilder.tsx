@@ -67,7 +67,7 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
   const d = state && "data" in state ? state.data : null;
   const count = useMemo(() => (m ? SLIDES.filter((s) => !m.skip.includes(s.id)).length : 0), [m]);
 
-  async function download() {
+  async function download(kind: "pptx" | "pdf" = "pptx") {
     if (!d || !m) return;
     setBusy("Menyimpan isian…");
     setMsg(null);
@@ -78,18 +78,31 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
     } catch {
       saved = false;
     }
+    const what = kind === "pdf" ? "PDF" : "PPT";
     try {
-      setBusy("Membuat PPT…");
-      const [{ default: PptxGenJS }, { buildDeck, deckFileName }] = await Promise.all([import("pptxgenjs"), import("@/lib/report/pptx")]);
+      setBusy(`Membuat ${what}…`);
       const logo = await fetch("/report-logo.png")
         .then((r) => (r.ok ? r.blob() : null))
         .then((b) => (b ? new Promise<string>((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.readAsDataURL(b); }) : null))
         .catch(() => null);
-      const deck = buildDeck(PptxGenJS, d, m, logo);
-      await deck.writeFile({ fileName: deckFileName(d) });
-      setMsg({ ok: true, text: `PPT terunduh (${count} slide).${saved ? "" : " Isian manual belum tersimpan — coba lagi nanti."}` });
+      if (kind === "pdf") {
+        const [{ deckPdf }, { deckFileName }] = await Promise.all([import("@/lib/report/pdfDeck"), import("@/lib/report/pptx")]);
+        const bytes = await deckPdf(d, m, logo);
+        const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = deckFileName(d).replace(/\.pptx$/, ".pdf");
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      } else {
+        const [{ default: PptxGenJS }, { buildDeck, deckFileName }] = await Promise.all([import("pptxgenjs"), import("@/lib/report/pptx")]);
+        await buildDeck(PptxGenJS, d, m, logo).writeFile({ fileName: deckFileName(d) });
+      }
+      setMsg({ ok: true, text: `${what} terunduh.${saved ? "" : " Isian manual belum tersimpan — coba lagi nanti."}` });
     } catch (e) {
-      setMsg({ ok: false, text: `Gagal membuat PPT: ${(e as Error).message}` });
+      setMsg({ ok: false, text: `Gagal membuat ${what}: ${(e as Error).message}` });
     }
     setBusy(null);
   }
@@ -258,11 +271,14 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 dark:border-slate-700 dark:bg-slate-800/60">
           <span className={`text-[12px] ${msg ? (msg.ok ? "font-semibold text-emerald-700" : "font-semibold text-rose-600") : "text-slate-500"}`}>{busy ?? msg?.text ?? "Isian manual tersimpan otomatis untuk bulan ini."}</span>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button type="button" className="sd-btn" onClick={onClose}>
               Tutup
             </button>
-            <button type="button" className="sd-btn dark" disabled={!d || !m || !!busy || !count} onClick={download}>
+            <button type="button" className="sd-btn" disabled={!d || !m || !!busy || !count} onClick={() => void download("pdf")}>
+              <FileDown size={16} aria-hidden /> Download PDF
+            </button>
+            <button type="button" className="sd-btn dark" disabled={!d || !m || !!busy || !count} onClick={() => void download("pptx")}>
               <FileDown size={16} aria-hidden /> {busy ? "Memproses…" : "Download PPT"}
             </button>
           </div>
