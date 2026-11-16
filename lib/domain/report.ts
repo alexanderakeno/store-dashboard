@@ -14,7 +14,7 @@ import { daysInMonth, eachDay, monthEnd, monthStart, prevMonth, sameMonthLastYea
 import { conversion } from "./views";
 
 export type ReportMode = "closing" | "weekly";
-export type SlideId = "cover" | "target" | "staff" | "balance" | "android" | "apple" | "accvas" | "productivity" | "weekly" | "npi" | "bnpl" | "ytd" | "lob" | "issue" | "thanks";
+export type SlideId = "cover" | "target" | "staff" | "balance" | "android" | "apple" | "accvas" | "productivity" | "weekly" | "npi" | "bnpl" | "ytd" | "lob" | "stock" | "issue" | "thanks";
 export const SLIDES: Array<{ id: SlideId; label: string; manual?: boolean }> = [
   { id: "cover", label: "Cover" },
   { id: "target", label: "Target & Achievement MTM – LFL" },
@@ -29,6 +29,7 @@ export const SLIDES: Array<{ id: SlideId; label: string; manual?: boolean }> = [
   { id: "bnpl", label: "Kontribusi BNPL" },
   { id: "ytd", label: "YTD Performance" },
   { id: "lob", label: "Breakdown LOB per Brand" },
+  { id: "stock", label: "Stock kosong ≥ 1 minggu" },
   { id: "issue", label: "Issue & Feedback" },
   { id: "thanks", label: "Thank You" },
 ];
@@ -173,6 +174,16 @@ export interface ReportData {
   ytdYears: [string, string];
   lob: LobRow[];
   issues: string[];
+  /** Devices sold in the last 30 days, empty in the latest SOH and unsold for ≥ 7 days (filled by the API; null = no SOH). */
+  stockOut?: StockOut | null;
+}
+
+export interface StockOut {
+  sohDate: ISODate;
+  /** Sales window looked at. */
+  from: ISODate;
+  to: ISODate;
+  groups: Array<{ category: string; items: Array<{ article: string; description: string; sold: number; lastSold: ISODate; days: number; alt: Array<{ color: string; qty: number }> }> }>;
 }
 
 export interface ReportInput {
