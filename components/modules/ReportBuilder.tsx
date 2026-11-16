@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FileDown, X } from "lucide-react";
 import { SLIDES, type ReportData, type SlideId } from "@/lib/domain/report";
-import { defaultManual, mergeManual, type ReportManual } from "@/lib/report/pptx";
+import { STOCK_FILTER, defaultManual, mergeManual, stockRows, stockSlides, type ReportManual, type StockFilter } from "@/lib/report/pptx";
 
 type Loaded = { data: ReportData; manual: ReportManual };
 
@@ -253,6 +253,8 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
                 </Sec>
               )}
 
+              {isOn("stock") && d.stockOut && <StockSec d={d} f={m.stock} onChange={(f) => set((x) => ({ ...x, stock: f }))} />}
+
               {isOn("issue") && (
                 <Sec title="Issue & Feedback" badge={<><Auto text="ISSUE OTOMATIS" /> <Manual text="FEEDBACK DIKETIK" /></>} note="1 baris = 1 bullet">
                   <div className="space-y-2">
@@ -285,6 +287,62 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Filter of the "Stock kosong" slide: days empty, minimum sold, best N per brand, brands. */
+function StockSec({ d, f, onChange }: { d: ReportData; f: StockFilter; onChange: (f: StockFilter) => void }) {
+  const groups = stockRows(d, f);
+  const items = groups.reduce((a, g) => a + g.items.length, 0);
+  // per-brand count with the day / sold filter but ignoring the brand toggles
+  const all = stockRows(d, { ...f, hide: [], perBrand: 0 });
+  const countOf = new Map(all.map((g) => [g.category, g.items.length]));
+  const brands = (d.stockOut?.groups ?? []).map((g) => g.category);
+  const put = (patch: Partial<StockFilter>) => onChange({ ...f, ...patch });
+  const Chips = ({ label, value, options, unit, onPick }: { label: string; value: number; options: number[]; unit: (n: number) => string; onPick: (n: number) => void }) => (
+    <div>
+      <span className="sd-label">{label}</span>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((n) => (
+          <button key={n} type="button" aria-pressed={value === n} onClick={() => onPick(n)} className={`rounded-lg border px-2.5 py-1 text-[12px] font-bold ${value === n ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300"}`}>
+            {unit(n)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+  const dm = (x: string) => `${x.slice(8, 10)}/${x.slice(5, 7)}`;
+  const so = d.stockOut!;
+  return (
+    <Sec title="Stock kosong per brand" badge={<><Auto /> <Manual text="FILTER" /></>} note={`SOH ${dm(so.sohDate)} · laku ${dm(so.from)}–${dm(so.to)}`}>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Chips label="Kosong minimal" value={f.minDays} options={[3, 7, 14, 21, 30]} unit={(n) => (n % 7 === 0 ? `${n / 7} minggu` : `${n} hari`)} onPick={(n) => put({ minDays: n })} />
+        <Chips label="Terjual 30 hari minimal" value={f.minSold} options={[1, 2, 3, 5]} unit={(n) => `${n} unit`} onPick={(n) => put({ minSold: n })} />
+        <Chips label="Per brand" value={f.perBrand} options={[0, 3, 5, 10]} unit={(n) => (n ? `top ${n}` : "semua")} onPick={(n) => put({ perBrand: n })} />
+      </div>
+      <div className="mt-3">
+        <span className="sd-label">Brand (klik untuk sembunyikan)</span>
+        <div className="flex flex-wrap gap-1.5">
+          {brands.map((b) => {
+            const on = !f.hide.includes(b);
+            const n = countOf.get(b) ?? 0;
+            return (
+              <button key={b} type="button" aria-pressed={on} disabled={!n} onClick={() => put({ hide: on ? [...f.hide, b] : f.hide.filter((x) => x !== b) })} className={`rounded-lg border px-2.5 py-1 text-[12px] font-bold disabled:opacity-40 ${on && n ? "border-slate-500 bg-slate-500 text-white" : "border-slate-200 text-slate-400 line-through"}`}>
+                {b} <span className="opacity-75">{n}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
+        <span className="rounded-lg bg-slate-100 px-2 py-1 font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+          {items} artikel · {groups.length} brand · ±{stockSlides(groups)} slide
+        </span>
+        <button type="button" className="font-semibold text-blue-600 hover:underline" onClick={() => onChange({ ...STOCK_FILTER })}>
+          Reset filter
+        </button>
+      </div>
+    </Sec>
   );
 }
 
