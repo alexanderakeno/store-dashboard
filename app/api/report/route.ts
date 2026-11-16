@@ -59,12 +59,12 @@ export async function GET(req: Request) {
       bnpl: bnpl.map((r) => ({ key: r.key, data: r.data })),
       channelNames: snap.rules.channelNames,
     });
-    // stock kosong ≥ 1 minggu (latest SOH); a missing / unreadable SOH just leaves the slide out
+    // stock kosong (latest SOH, every article unsold ≥ 1 day; the pop-up filters further); a missing / unreadable SOH just leaves the slide out
     const soh = await getSoh().catch(() => null);
     if (soh?.items.length) {
       const k = await stockKosong(soh, snap).catch(() => null);
       const ref = soh.date ?? asOf;
-      if (k) data.stockOut = { sohDate: ref, from: k.from, to: k.to, groups: staleEmpty(k.groups, ref) };
+      if (k) data.stockOut = { sohDate: ref, from: k.from, to: k.to, groups: staleEmpty(k.groups, ref, 1) };
     }
     let manual: unknown = null;
     const rec = saved.find((r) => r.key === "manual");
