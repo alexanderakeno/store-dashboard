@@ -238,3 +238,17 @@ test("PPT: many staff → readable fonts on extra slides, nothing past the botto
   }
   assert.ok(cont >= 1, "continuation slides");
 });
+
+test("stock kosong filter: days, sold, top per brand, hidden brands", async () => {
+  const { stockRows, stockSlides, STOCK_FILTER } = await import("../lib/report/pptx");
+  const it = (a: string, sold: number, days: number) => ({ article: a, description: a, sold, lastSold: "2026-11-01", days, alt: [] });
+  const d = { stockOut: { sohDate: "2026-11-15", from: "2026-10-17", to: "2026-11-15", groups: [
+    { category: "iPhone", items: [it("A", 5, 20), it("B", 3, 8), it("C", 1, 3), it("D", 2, 15)] },
+    { category: "Oppo", items: [it("E", 1, 9)] },
+  ] } } as unknown as Parameters<typeof stockRows>[0];
+  assert.deepEqual(stockRows(d, STOCK_FILTER).map((g) => [g.category, g.items.map((i) => i.article)]), [["iPhone", ["A", "B", "D"]], ["Oppo", ["E"]]]);
+  assert.deepEqual(stockRows(d, { ...STOCK_FILTER, minDays: 14, minSold: 2 }).map((g) => g.items.map((i) => i.article)), [["A", "D"]]);
+  const top = stockRows(d, { ...STOCK_FILTER, perBrand: 1, hide: ["Oppo"] });
+  assert.deepEqual(top.map((g) => [g.category, g.total, g.items.length]), [["iPhone", 3, 1]]);
+  assert.equal(stockSlides(top), 1);
+});
