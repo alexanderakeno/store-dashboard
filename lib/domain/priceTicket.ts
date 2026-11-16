@@ -79,6 +79,10 @@ export function resolveSlot(slot: AnySlot, items: TicketPriceItem[], kind: Ticke
     const value = slot.field === "monthly" ? monthly(promo) : promo;
     return { ...base, price: value, full: promo, status: value === slot.canva.price ? "same" : "updated", match: row.name };
   }
+  if (slot.per) {
+    const value = Math.floor(promo / slot.per);
+    return { ...base, price: value, full: promo, status: value === slot.canva.price ? "same" : "updated", match: row.name };
+  }
   let strike = promo < row.normal ? row.normal : undefined;
   let strikeDropped: number | undefined;
   if (strike && !slot.strikeRoom) {
