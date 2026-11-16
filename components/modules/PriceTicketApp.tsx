@@ -44,12 +44,14 @@ const slotKey = (t: TicketTemplate, i: number) => `${t.id}|${i}`;
 /** Monthly slots follow the price slot of the same variant (its manual price too); they are not listed on their own. */
 const linkedTo = (t: TicketTemplate, i: number) => {
   const s = t.slots[i];
+  // digit cicilan ("Rp1.333.250 /12 bulan"): the full price slot of the same row
+  if (!isTextSlot(s) && s.per) return t.slots.findIndex((x) => !isTextSlot(x) && !x.per && x.key === s.key);
   if (!isTextSlot(s) || s.field !== "monthly") return -1;
   return t.slots.findIndex((x) => isTextSlot(x) && x.field === "price" && x.key === s.key);
 };
 const listed = (t: TicketTemplate, i: number) => {
   const s = t.slots[i];
-  if (isTextSlot(s) && s.field === "monthly" && linkedTo(t, i) >= 0) return false;
+  if (((isTextSlot(s) && s.field === "monthly") || (!isTextSlot(s) && s.per)) && linkedTo(t, i) >= 0) return false;
   // the same variant printed twice (header + table): list it once
   return t.slots.findIndex((x) => x.key === s.key && (!isTextSlot(x) || !isTextSlot(s) || x.field === s.field)) === i;
 };
@@ -58,7 +60,7 @@ function overrideOf(t: TicketTemplate, ov: Overrides, i: number) {
   const own = ov[slotKey(t, i)];
   if (own) return own;
   const s = t.slots[i];
-  const j = t.slots.findIndex((x, k) => listed(t, k) && x.key === s.key && (!isTextSlot(x) || x.field === "price"));
+  const j = t.slots.findIndex((x, k) => listed(t, k) && x.key === s.key && (isTextSlot(x) ? x.field === "price" : !x.per));
   return j >= 0 && j !== i ? ov[slotKey(t, j)] : undefined;
 }
 
@@ -72,6 +74,13 @@ function draws(d: TicketData, ov: Overrides): SlotDraw[] {
       const j = linkedTo(d.tpl, i);
       const full = o?.price ?? (j >= 0 ? d.slots[j].price : (r.full ?? r.price * 24));
       const value = j >= 0 || o ? monthly(full) : r.price;
+      return { slot, price: value, redraw: value !== slot.canva.price };
+    }
+    if (!isTextSlot(slot) && slot.per) {
+      // selling price / months, from the linked price slot (or its manual price)
+      const j = linkedTo(d.tpl, i);
+      const full = o?.price ?? (j >= 0 ? d.slots[j].price : (r.full ?? r.price * slot.per));
+      const value = Math.floor(full / slot.per);
       return { slot, price: value, redraw: value !== slot.canva.price };
     }
     if (o && isTextSlot(slot)) return { slot, price: o.price, redraw: true };
