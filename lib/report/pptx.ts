@@ -39,6 +39,7 @@ export function defaultManual(d: ReportData, author: string): ReportManual {
   const skip: SlideId[] = ["npi"];
   if (!d.bnpl.value) skip.push("bnpl");
   if (!d.ytd.some((r) => r.prev && r.cur)) skip.push("ytd");
+  if (!d.stockOut) skip.push("stock");
   return {
     author,
     skip,
@@ -244,6 +245,12 @@ export function buildDeck(Ctor: new () => Pptx, d: ReportData, m: ReportManual, 
   if (on("bnpl")) slideBnpl(add("Kontribusi BNPL", `(Buy Now Pay Later) ${d.monthName} ${d.year}`), d, m);
   if (on("ytd")) slideYtd(add("YTD Performance", `Jan - ${d.ytd[d.ytd.length - 1]?.label ?? ""} ${d.ytdYears[1]} VS ${d.ytdYears[0]}`), d);
   if (on("lob")) slideLob(add("Breakdown LOB Per Brand", vs), d);
+  if (on("stock") && d.stockOut) {
+    const so = d.stockOut;
+    const dm = (x: string) => `${x.slice(8, 10)}/${x.slice(5, 7)}`;
+    const l2 = `SOH ${dm(so.sohDate)} · laku ${dm(so.from)}–${dm(so.to)}, tidak terjual ≥ 7 hari`;
+    slideStock(add("Stock Kosong ≥ 1 Minggu", l2), d.stockOut, more("Stock Kosong ≥ 1 Minggu", l2));
+  }
   if (on("issue")) slideIssue(add(`Issue & Feedback ${d.mode === "closing" ? d.monthName : `W${d.weekIndex} ${d.monthName}`}`), d, m);
   if (on("thanks")) thanks(p);
   return p;
@@ -614,6 +621,69 @@ function slideLob(s: Slide, d: ReportData) {
     ],
     { x: X, y: TOP - 0.05, w: CW, rowH, fontSize: Math.min(fontSize, 15), colW: [1.7, 0.9, 0.9, 1.25, 0.85, 1.7, 1.7, 1.75, 1.38] },
   );
+}
+
+/** Body rows per stock slide (brand rows included): keeps the font ≥ 12pt. */
+const STOCK_ROWS = 15;
+
+function slideStock(s: Slide, so: NonNullable<ReportData["stockOut"]>, more: () => Slide) {
+  const total = so.groups.reduce((a, g) => a + g.items.length, 0);
+  if (!total) {
+    s.addText("Tidak ada device yang stoknya kosong ≥ 7 hari dari yang laku 30 hari terakhir.", { x: X, y: TOP + 0.6, w: CW, h: 1, fontFace: BODY_FONT, fontSize: 20, color: C.navy, bold: true, align: "center", valign: "middle", margin: 0 });
+    return;
+  }
+  const dm = (x: string) => `${x.slice(8, 10)}/${x.slice(5, 7)}`;
+  const colW = [4.85, 1.4, 1.0, 1.25, 1.0, CW - 9.5];
+  const brand = (c: string, n: number, cont = false): Cell[] => [G(`${c}${cont ? " (lanjutan)" : ""}`, { align: "left" }), G(`${n} artikel`, { colspan: 5, align: "left", bold: false })];
+  // as many colours as fit the column, then "+n"
+  const alt = (a: Array<{ color: string; qty: number }>) => {
+    if (!a.length) return "-";
+    for (let k = a.length; k > 1; k--) {
+      const t = a.slice(0, k).map((x) => `${x.color} (${x.qty})`).join(", ") + (k < a.length ? ` +${a.length - k}` : "");
+      if (textW(t, 13) <= colW[5] - 0.2) return t;
+    }
+    return `${a[0].color} (${a[0].qty})${a.length > 1 ? ` +${a.length - 1}` : ""}`;
+  };
+  // flat body rows, then cut into slides; a slide starting mid-brand repeats the brand row
+  const body: Array<{ brand: string; n: number; row?: Cell[] }> = [];
+  for (const g of so.groups) {
+    body.push({ brand: g.category, n: g.items.length });
+    for (const it of g.items)
+      body.push({
+        brand: g.category,
+        n: g.items.length,
+        row: [L(it.description || it.article, { bold: false }), N(it.article, { align: "center" }), N(nz(it.sold), { align: "center" }), N(dm(it.lastSold), { align: "center" }), N(`${it.days} hari`, { align: "center", ...(it.days >= 14 ? down : { color: C.redText }), bold: true }), N(alt(it.alt), { align: "left", color: it.alt.length ? C.greenText : C.text })],
+      });
+  }
+  // even pages (no single-row tail slide); a slide never ends on a bare brand row
+  const per = Math.ceil(body.length / Math.ceil(body.length / STOCK_ROWS));
+  const pages: Cell[][][] = [];
+  let cur: Cell[][] = [];
+  for (const b of body) {
+    if (cur.length >= per || (!b.row && cur.length >= per - 1)) {
+      pages.push(cur);
+      cur = [];
+    }
+    if (!cur.length && b.row) cur.push(brand(b.brand, b.n, true));
+    cur.push(b.row ?? brand(b.brand, b.n));
+  }
+  if (cur.length) pages.push(cur);
+  const head = [H("Device", { align: "left" }), H("Artikel"), H("Sold 30 hr"), H("Terakhir laku"), H("Kosong"), H("Warna lain ready", { align: "left" })];
+  const most = Math.max(...pages.map((p) => p.length));
+  const { rowH, fontSize } = rowsIn(most + 1, BOTTOM - TOP, 0.4);
+  // long names are cut (…) rather than shrinking the whole table
+  const fs = Math.max(MIN_FS + 1, Math.min(fontSize, 13));
+  for (const rows of pages)
+    for (const r of rows)
+      if (r.length === 6)
+        [0, 5].forEach((ci) => {
+          const w = colW[ci] - 0.2;
+          let t = String(r[ci].text);
+          if (textW(t, fs, !!r[ci].options?.bold) <= w) return;
+          while (t.length > 1 && textW(t + "…", fs, !!r[ci].options?.bold) > w) t = t.slice(0, -1);
+          r[ci] = { ...r[ci], text: t.trimEnd() + "…" };
+        });
+  pages.forEach((rows, i) => table(i ? more() : s, [head, ...rows], { x: X, y: TOP, w: CW, rowH, fontSize: fs, colW }));
 }
 
 function slideIssue(s: Slide, d: ReportData, m: ReportManual) {

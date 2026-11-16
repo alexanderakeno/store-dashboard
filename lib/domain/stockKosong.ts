@@ -94,3 +94,27 @@ export function fulfillmentText(groups: EmptyGroup[], meta: { store: string; fro
   }
   return out.join("\n");
 }
+
+/** Whole days from `a` to `b` (ISO dates). */
+const daysBetween = (a: ISODate, b: ISODate) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10))) / 864e5);
+
+export interface StaleItem extends EmptyItem {
+  /** Days since the last sale up to the SOH date — how long the article has (at least) been unsellable. */
+  days: number;
+}
+
+/**
+ * Empty articles that have not sold for at least `minDays` days before `ref` (the SOH date):
+ * stock out for about a week or more while it sold in the window. Per brand, longest-empty first.
+ */
+export function staleEmpty(groups: EmptyGroup[], ref: ISODate, minDays = 7): Array<{ category: string; items: StaleItem[] }> {
+  return groups
+    .map((g) => ({
+      category: g.category,
+      items: g.items
+        .map((it) => ({ ...it, days: daysBetween(it.lastSold, ref) }))
+        .filter((it) => it.days >= minDays)
+        .sort((a, b) => b.sold - a.sold || b.days - a.days || a.description.localeCompare(b.description)),
+    }))
+    .filter((g) => g.items.length);
+}

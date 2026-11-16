@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { emptyStock, fulfillmentText } from "@/lib/domain/stockKosong";
+import { emptyStock, fulfillmentText, staleEmpty } from "@/lib/domain/stockKosong";
 import type { SalesLine } from "@/types/domain";
 import type { SohItem } from "@/types/soh";
 
@@ -36,4 +36,14 @@ test("emptyStock: sold in window and missing / zero in SOH, grouped per category
   assert.equal(g[0].items[0].lastSold, "2026-10-20");
   const txt = fulfillmentText(g, { store: "QF10", from: "2026-09-23", to: "2026-10-22", sohDate: "2026-10-23" });
   assert.match(txt, /\*iPhone\*\n- IPHONE 17 256GB BLUE \(IP-BLU\) · sold 2 · terakhir terjual 20\/10/);
+});
+
+test("stale empty: only articles unsold for at least a week before the SOH date", () => {
+  const g = [{ category: "iPhone", inSoh: true, sold: 5, items: [
+    { article: "A", description: "IPHONE A", sold: 3, lastSold: "2026-11-14", alt: [] },
+    { article: "B", description: "IPHONE B", sold: 2, lastSold: "2026-11-08", alt: [] },
+    { article: "C", description: "IPHONE C", sold: 4, lastSold: "2026-10-20", alt: [] },
+  ] }, { category: "Oppo", inSoh: true, sold: 1, items: [{ article: "D", description: "OPPO D", sold: 1, lastSold: "2026-11-13", alt: [] }] }];
+  const r = staleEmpty(g, "2026-11-15");
+  assert.deepEqual(r.map((x) => [x.category, x.items.map((i) => [i.article, i.days])]), [["iPhone", [["C", 26], ["B", 7]]]]);
 });
