@@ -136,3 +136,16 @@ test("paper: Infinix Hot 70 also as 10,5×6,5 (its 15×12 design shrunk)", () =>
   const v = TICKET_TEMPLATES.find((t) => t.id === "infinix-04-105x65")!;
   assert.deepEqual([v.name, v.paper, v.variantOf, v.size], ["Hot 70", [105, 65], "infinix-04", [150, 120]]);
 });
+
+test("cicilan slot (per 12): selling price / 12, never struck", () => {
+  const s = { ...slot("HUAWEI PURA 90S PRO 12/512GB", 1333250), per: 12 };
+  const rows = [row("HUAWEI PURA 90S PRO 12/512GB", 16999000, 15499000)];
+  assert.deepEqual([resolveSlot(s, rows).price, resolveSlot(s, rows).strike, resolveSlot(s, rows).status], [1291583, undefined, "updated"]);
+  assert.equal(resolveSlot(s, [row("HUAWEI PURA 90S PRO 12/512GB", 15999000)]).status, "same");
+  // the new designs find their rows: FreeClip (listed as a gift row), Amazfit, Buds Core
+  const tpl = (id: string) => TICKET_TEMPLATES.find((t) => t.id === id)!;
+  assert.equal(matchRow(tpl("huawei-17").slots[0], [row("GIFT HUAWEI FREECLIP 2", 2599000)])?.name, "GIFT HUAWEI FREECLIP 2");
+  assert.equal(matchRow(tpl("amazfit-02").slots[0], [row("AMAZFIT ACTIVE MAX", 2899000, 2799000), row("AMAZFIT ACTIVE", 1499000)])?.name, "AMAZFIT ACTIVE MAX");
+  assert.equal(matchRow(tpl("amazfit-01").slots[0], [row("AMAZFIT BIP 6", 1399000), row("AMAZFIT BIP MAX", 1799000)])?.name, "AMAZFIT BIP MAX");
+  assert.equal(matchRow(tpl("samsung-18").slots[0], [row("GALAXY BUDS CORE", 799000), row("GALAXY BUDS 4", 2999000)])?.name, "GALAXY BUDS CORE");
+});
