@@ -24,8 +24,10 @@ export interface TicketSlot {
   key: string;
   /** Variant shown in the app ("6/128GB"); empty for a single-price ticket. */
   label: string;
-  /** Price printed in the Canva design. */
+  /** Price printed in the Canva design (the monthly amount for a `per` slot). */
   canva: { price: number; strike?: number };
+  /** Cicilan slot: the selling price divided over this many months ("Rp1.333.250 /12 bulan"), never struck through. */
+  per?: number;
   /** Main digits: left edge, top, height; letter spacing in digit heights. */
   x: number;
   top: number;
