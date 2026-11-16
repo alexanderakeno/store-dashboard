@@ -29,7 +29,7 @@ export const SLIDES: Array<{ id: SlideId; label: string; manual?: boolean }> = [
   { id: "bnpl", label: "Kontribusi BNPL" },
   { id: "ytd", label: "YTD Performance" },
   { id: "lob", label: "Breakdown LOB per Brand" },
-  { id: "stock", label: "Stock kosong ≥ 1 minggu" },
+  { id: "stock", label: "Stock kosong per brand" },
   { id: "issue", label: "Issue & Feedback" },
   { id: "thanks", label: "Thank You" },
 ];
