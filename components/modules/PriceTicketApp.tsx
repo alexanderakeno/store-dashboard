@@ -426,7 +426,7 @@ export function PriceTicketApp({ tickets, listDate }: { tickets: TicketData[]; l
             )}
             <button type="button" className="sd-btn ghost -mt-1 justify-between !px-3 text-sm" onClick={() => setDetail(d.tpl.id)} aria-haspopup="dialog">
               <span className="flex flex-wrap items-center gap-1.5">
-                Detail harga <span className="text-slate-400">· {d.tpl.slots.filter((_, i) => listed(d.tpl, i)).length} varian</span>
+                Detail harga <span className="text-slate-400">· {d.tpl.slots.length ? `${d.tpl.slots.filter((_, i) => listed(d.tpl, i)).length} varian` : "tanpa harga"}</span>
                 <Summary d={d} ov={ov} />
               </span>
               <ChevronRight className="size-4 shrink-0 text-slate-400" />
