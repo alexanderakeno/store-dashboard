@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FileDown, X } from "lucide-react";
-import { SLIDES, type ReportData, type SlideId } from "@/lib/domain/report";
-import { STOCK_FILTER, defaultManual, mergeManual, stockRows, stockSlides, type ReportManual, type StockFilter } from "@/lib/report/pptx";
+import { SLIDES, WSLIDES, type ReportData, type SlideId, type WSlideId } from "@/lib/domain/report";
+import { STOCK_FILTER, deckFileName as fileNameOf, deckWeek, weeklyTitle, defaultManual, mergeManual, stockRows, stockSlides, type ReportManual, type StockFilter } from "@/lib/report/pptx";
 
 type Loaded = { data: ReportData; manual: ReportManual };
 
@@ -65,7 +65,9 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
   }, [onClose]);
 
   const d = state && "data" in state ? state.data : null;
-  const count = useMemo(() => (m ? SLIDES.filter((s) => !m.skip.includes(s.id)).length : 0), [m]);
+  const weekly = m?.template === "weekly";
+  const wk = d && m ? deckWeek(d, m) : null;
+  const count = useMemo(() => (m ? (m.template === "weekly" ? WSLIDES.filter((s) => !m.wskip.includes(s.id)).length : SLIDES.filter((s) => !m.skip.includes(s.id)).length) : 0), [m]);
 
   async function download(kind: "pptx" | "pdf" = "pptx") {
     if (!d || !m) return;
@@ -86,19 +88,19 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
         .then((b) => (b ? new Promise<string>((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.readAsDataURL(b); }) : null))
         .catch(() => null);
       if (kind === "pdf") {
-        const [{ deckPdf }, { deckFileName }] = await Promise.all([import("@/lib/report/pdfDeck"), import("@/lib/report/pptx")]);
+        const { deckPdf } = await import("@/lib/report/pdfDeck");
         const bytes = await deckPdf(d, m, logo);
         const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
         const a = document.createElement("a");
         a.href = url;
-        a.download = deckFileName(d).replace(/\.pptx$/, ".pdf");
+        a.download = fileNameOf(d, m).replace(/\.pptx$/, ".pdf");
         document.body.appendChild(a);
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 30_000);
       } else {
         const [{ default: PptxGenJS }, { buildDeck, deckFileName }] = await Promise.all([import("pptxgenjs"), import("@/lib/report/pptx")]);
-        await buildDeck(PptxGenJS, d, m, logo).writeFile({ fileName: deckFileName(d) });
+        await buildDeck(PptxGenJS, d, m, logo).writeFile({ fileName: deckFileName(d, m) });
       }
       setMsg({ ok: true, text: `${what} terunduh.${saved ? "" : " Isian manual belum tersimpan — coba lagi nanti."}` });
     } catch (e) {
@@ -110,6 +112,10 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
   const set = (f: (x: ReportManual) => ReportManual) => setM((x) => (x ? f(structuredClone(x)) : x));
   const toggle = (id: SlideId, on: boolean) => set((x) => ({ ...x, skip: on ? x.skip.filter((k) => k !== id) : [...new Set([...x.skip, id])] }));
   const isOn = (id: SlideId) => !!m && !m.skip.includes(id);
+  const wToggle = (id: WSlideId, on: boolean) => set((x) => ({ ...x, wskip: on ? x.wskip.filter((k) => k !== id) : [...new Set([...x.wskip, id])] }));
+  const wOn = (id: WSlideId) => !!m && !m.wskip.includes(id);
+  /** A section shows when its slide is on in the chosen template. */
+  const show = (id: SlideId & WSlideId) => (weekly ? wOn(id) : isOn(id));
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/55 sm:items-center sm:p-6" onClick={onClose} role="presentation">
@@ -117,14 +123,14 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
           <div className="min-w-0">
             <h2 className="text-lg font-black text-slate-950 dark:text-white">
-              Buat PPT{d ? ` — ${d.title}` : ""}
-              {d && <span className={`ml-2 inline-block rounded-full px-2 py-0.5 align-middle text-[11px] font-extrabold ${d.mode === "closing" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"}`}>{d.mode === "closing" ? "Bulan selesai → Closing" : "Bulan berjalan → Weekly"}</span>}
+              Buat PPT{d ? ` — ${weekly && wk ? weeklyTitle(d, wk) : d.title}` : ""}
+              {d && <span className={`ml-2 inline-block rounded-full px-2 py-0.5 align-middle text-[11px] font-extrabold ${d.mode === "closing" ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"}`}>{weekly ? "Week vs Week" : d.mode === "closing" ? "Bulan selesai → Closing" : "Bulan berjalan → MTD"}</span>}
             </h2>
             {d && (
               <p className="mt-0.5 text-[13px] text-slate-500">
                 Data dashboard s/d {Number(d.asOf.slice(8))} {d.monthName} {d.year}
-                {d.hasPrev ? ` · dibanding ${d.prevLabel}` : " · bulan lalu belum ada datanya"}
-                {d.hasLy ? ` · LFL ${d.lyShort}` : ""}
+                {weekly && wk ? ` · ${wk.label} (${wk.period}) dibanding ${wk.prevLabel}${wk.prevPeriod ? ` (${wk.prevPeriod})` : ""}` : d.hasPrev ? ` · dibanding ${d.prevLabel}` : " · bulan lalu belum ada datanya"}
+                {!weekly && d.hasLy ? ` · LFL ${d.lyShort}` : ""}
               </p>
             )}
           </div>
@@ -138,6 +144,43 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
           {state && "error" in state && <p className="rounded-xl bg-rose-50 p-4 text-sm text-rose-700">{state.error}</p>}
           {d && m && (
             <>
+              <Sec title="Template" note={weekly ? "week dibanding week sebelumnya" : "month to date vs bulan lalu (MTM) & tahun lalu (LFL)"}>
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Template PPT">
+                  {([["mtd", "MTD (tanggal berjalan)"], ["weekly", "Weekly (Week vs Week)"]] as const).map(([k, label]) => (
+                    <button key={k} type="button" role="radio" aria-checked={m.template === k} disabled={k === "weekly" && !d.wow?.length} onClick={() => set((x) => ({ ...x, template: k }))} className={`rounded-xl border px-3.5 py-2 text-[13px] font-bold disabled:opacity-40 ${m.template === k ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {weekly && wk && (
+                  <div className="mt-3">
+                    <span className="sd-label">Week</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {d.wow.map((w) => (
+                        <button key={w.index} type="button" aria-pressed={w.index === wk.index} onClick={() => set((x) => ({ ...x, week: w.index }))} className={`rounded-lg border px-2.5 py-1 text-left text-[12px] font-bold ${w.index === wk.index ? "border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900" : "border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300"}`}>
+                          {w.label} vs {w.prevLabel}
+                          <span className="block text-[10px] font-semibold opacity-75">{w.period}{w.running ? " · berjalan" : ""}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {wk.running && <p className="mt-1.5 text-[11px] text-amber-700">Week ini masih berjalan ({wk.days} hari): {wk.prevLabel} dihitung untuk {wk.days} hari pertama juga, supaya sebanding.</p>}
+                    {!wk.prev && <p className="mt-1.5 text-[11px] text-slate-500">Data week sebelumnya belum ada — kolom pembanding dikosongkan.</p>}
+                  </div>
+                )}
+              </Sec>
+
+              {weekly ? (
+                <Sec title="Slide" badge={<Auto />} note={`${count} dari ${WSLIDES.length} slide ikut`}>
+                  <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+                    {WSLIDES.map((s) => (
+                      <label key={s.id} className="flex items-center gap-2 py-0.5 text-[13px]">
+                        <input type="checkbox" className="size-4 accent-blue-600" checked={wOn(s.id)} disabled={s.id === "stock" && !d.stockOut} onChange={(e) => wToggle(s.id, e.target.checked)} />
+                        <span className={wOn(s.id) ? "" : "text-slate-400 line-through"}>{s.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </Sec>
+              ) : (
               <Sec title="Slide" badge={<Auto />} note={`${count} dari ${SLIDES.length} slide ikut`}>
                 <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
                   {SLIDES.map((s) => (
@@ -151,8 +194,9 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
                   ))}
                 </div>
               </Sec>
+              )}
 
-              {isOn("cover") && (
+              {show("cover") && (
                 <Sec title="Cover" badge={<Manual />}>
                   <label className="block max-w-md text-[13px]">
                     <span className="sd-label">Nama & NIK di cover</span>
@@ -161,7 +205,7 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
                 </Sec>
               )}
 
-              {isOn("productivity") && (
+              {!weekly && isOn("productivity") && (
                 <Sec title="Traffic (slide Compare Productivity)" badge={d.productivity.cur.traffic ? <Auto /> : <Manual text="ISI JIKA KOSONG" />} note="kosongkan = pakai data traffic dashboard">
                   <div className="flex flex-wrap gap-3">
                     <NumField label={d.curLabel} value={m.traffic.cur} placeholder={d.productivity.cur.traffic ? rp(d.productivity.cur.traffic) : "belum ada"} onChange={(v) => set((x) => ({ ...x, traffic: { ...x.traffic, cur: v } }))} />
@@ -170,7 +214,7 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
                 </Sec>
               )}
 
-              {isOn("npi") && (
+              {!weekly && isOn("npi") && (
                 <Sec title="NPI" badge={<Manual />} note="hapus centang slide NPI = tidak ikut">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <TextField label="Judul baris 1" value={m.npi.title1} onChange={(v) => set((x) => ({ ...x, npi: { ...x.npi, title1: v } }))} />
@@ -219,7 +263,7 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
                 </Sec>
               )}
 
-              {isOn("bnpl") && (
+              {!weekly && isOn("bnpl") && (
                 <Sec title="Kontribusi BNPL" badge={d.bnpl.value ? <><Auto /> <Manual text="+ PER TIPE OPSIONAL" /></> : <Manual text="ISI MANUAL" />} note={d.bnpl.value ? "value & kontrak dari menu BNPL (bisa dikoreksi)" : "menu BNPL bulan ini kosong — ketik di sini"}>
                   <div className="overflow-x-auto">
                     <table className="text-[13px]">
@@ -253,9 +297,22 @@ function Dialog({ month, onClose }: { month: string; onClose: () => void }) {
                 </Sec>
               )}
 
-              {isOn("stock") && d.stockOut && <StockSec d={d} f={m.stock} onChange={(f) => set((x) => ({ ...x, stock: f }))} />}
+              {show("stock") && d.stockOut && <StockSec d={d} f={m.stock} onChange={(f) => set((x) => ({ ...x, stock: f }))} />}
 
-              {isOn("issue") && (
+              {weekly && wk && wOn("issue") && (
+                <Sec title={`Issue & Feedback ${wk.label}`} badge={<><Auto text="ISSUE OTOMATIS" /> <Manual text="FEEDBACK DIKETIK" /></>} note="1 baris = 1 bullet">
+                  <div className="space-y-2">
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1.25fr]">
+                        <textarea className="sd-input min-h-24 font-sans !text-[12px]" value={m.wIssues[i] || wk.issues[i] || ""} onChange={(e) => set((x) => { x.wIssues[i] = e.target.value === wk.issues[i] ? "" : e.target.value; return x; })} />
+                        <textarea className="sd-input min-h-24 font-sans !text-[13px]" value={m.wFeedback[i]} placeholder="Analisa & feedback…" onChange={(e) => set((x) => { x.wFeedback[i] = e.target.value; return x; })} />
+                      </div>
+                    ))}
+                  </div>
+                </Sec>
+              )}
+
+              {!weekly && isOn("issue") && (
                 <Sec title="Issue & Feedback" badge={<><Auto text="ISSUE OTOMATIS" /> <Manual text="FEEDBACK DIKETIK" /></>} note="1 baris = 1 bullet">
                   <div className="space-y-2">
                     {[0, 1, 2].map((i) => (
