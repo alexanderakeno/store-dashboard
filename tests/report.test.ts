@@ -252,3 +252,32 @@ test("stock kosong filter: days, sold, top per brand, hidden brands", async () =
   assert.deepEqual(top.map((g) => [g.category, g.total, g.items.length]), [["iPhone", 3, 1]]);
   assert.equal(stockSlides(top), 1);
 });
+
+test("weekly template: week vs the week before, like-for-like while running, own deck", async () => {
+  const { deckWeek, deckFileName, buildDeck } = await import("@/lib/report/pptx");
+  const d = buildReport(input({ asOf: "2026-10-12", today: "2026-10-13" }));
+  assert.deepEqual(d.wow.map((w) => [w.label, w.prevLabel, w.period, w.running, w.days]), [
+    ["W1", "W5 Sep", "1-3 Okt", false, 3],
+    ["W2", "W1", "4-10 Okt", false, 7],
+    ["W3", "W2", "11-17 Okt", true, 2],
+  ]);
+  const [w1, w2, w3] = d.wow;
+  assert.equal(w1.cur.sales, 1370);
+  assert.equal(w1.prev?.sales, 0);
+  assert.equal(w2.prev?.sales, 1370);
+  assert.equal(w3.cur.sales, 40);
+  // the week target is the month target spread over the days of the week
+  assert.equal(Math.round(w2.target), 700);
+  assert.equal(w3.daily.length, 7);
+  assert.equal(w3.daily[0].prevDate, "2026-10-04");
+  assert.ok(w3.daily[3].future);
+  assert.equal(w2.staff.find((s) => s.name === "Adi")?.prev, 1000);
+  assert.match(w3.issues[0], /Sales W3 \(11-17 Okt\)/);
+  const m = { ...defaultManual(d, "x"), template: "weekly" as const };
+  // default week: the last finished one
+  assert.equal(deckWeek(d, m)?.label, "W2");
+  assert.equal(deckFileName(d, m), "QF10 Weekly Report W2 vs W1 Oktober 2026.pptx");
+  assert.equal(deckFileName(d, { ...m, week: 3 }), "QF10 Weekly Report W3 vs W2 Oktober 2026.pptx");
+  const p = buildDeck(PptxGenJS as unknown as new () => PptxGenJS, d, m, null) as unknown as { _slides: unknown[] };
+  assert.ok(p._slides.length >= 8);
+});
