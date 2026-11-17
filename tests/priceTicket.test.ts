@@ -56,7 +56,8 @@ test("templates: slots inside the frame, glyphs for every digit", () => {
   assert.equal(TICKET_TEMPLATES.filter((t) => t.brand === "Xiaomi").length, 21);
   assert.equal(new Set(TICKET_TEMPLATES.map((t) => t.id)).size, TICKET_TEMPLATES.length);
   for (const t of [...TICKET_TEMPLATES, ...APPLE_TEMPLATES]) {
-    assert.ok(t.slots.length > 0, t.id);
+    // a design without a price (e.g. "Coming Soon") is printed as it is and says so in its note
+    assert.ok(t.slots.length > 0 || !!t.note, t.id);
     assert.ok(Math.abs(t.frame[0] / t.frame[1] - t.size[0] / t.size[1]) < 0.03, `${t.id} aspect`);
     for (const s of t.slots) {
       assert.ok(s.erase.length > 0, `${t.id} ${s.key}`);
