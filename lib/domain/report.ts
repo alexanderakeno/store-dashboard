@@ -10,7 +10,7 @@ import { GROUPS, type Group, type ISODate, type MonthKey, type SalesLine, type S
 import { totals } from "./kpi";
 import { lobBreakdown, type QV } from "./extra";
 import { displayName, nameKey } from "./normalize";
-import { daysInMonth, eachDay, monthEnd, monthStart, prevMonth, sameMonthLastYear, weeksOfMonth } from "./period";
+import { addDays, daysInMonth, eachDay, monthEnd, monthStart, prevMonth, sameMonthLastYear, weeksOfMonth } from "./period";
 import { conversion } from "./views";
 
 export type ReportMode = "closing" | "weekly";
@@ -29,6 +29,20 @@ export const SLIDES: Array<{ id: SlideId; label: string; manual?: boolean }> = [
   { id: "bnpl", label: "Kontribusi BNPL" },
   { id: "ytd", label: "YTD Performance" },
   { id: "lob", label: "Breakdown LOB per Brand" },
+  { id: "stock", label: "Stock kosong per brand" },
+  { id: "issue", label: "Issue & Feedback" },
+  { id: "thanks", label: "Thank You" },
+];
+
+export type WSlideId = "cover" | "wtarget" | "wprod" | "wdaily" | "wstaff" | "wlob" | "stock" | "issue" | "thanks";
+/** Slides of the Weekly (week vs week) template. */
+export const WSLIDES: Array<{ id: WSlideId; label: string }> = [
+  { id: "cover", label: "Cover" },
+  { id: "wtarget", label: "Achievement Week vs Week" },
+  { id: "wprod", label: "Produktivitas Week vs Week" },
+  { id: "wdaily", label: "Sales Harian" },
+  { id: "wstaff", label: "Staff Week vs Week" },
+  { id: "wlob", label: "Breakdown LOB per Brand" },
   { id: "stock", label: "Stock kosong per brand" },
   { id: "issue", label: "Issue & Feedback" },
   { id: "thanks", label: "Thank You" },
@@ -174,8 +188,43 @@ export interface ReportData {
   ytdYears: [string, string];
   lob: LobRow[];
   issues: string[];
+  /** Week vs the week before, for every started week of the month (Weekly template). */
+  wow: WeekReport[];
   /** Devices sold in the last 30 days, empty in the latest SOH and unsold for ≥ 7 days (filled by the API; null = no SOH). */
   stockOut?: StockOut | null;
+}
+
+export interface WeekSide {
+  sales: number;
+  byGroup: Record<Group, number>;
+  invoices: number;
+  qty: number;
+  atv: number | null;
+  upt: number | null;
+  /** Apple : Android by qty. */
+  balance: [number, number] | null;
+}
+
+export interface WeekReport {
+  index: number;
+  label: string;
+  /** "15-21 Nov" */
+  period: string;
+  prevLabel: string;
+  prevPeriod: string;
+  /** The week is still running: the previous week is cut to the same number of days. */
+  running: boolean;
+  /** Days of this week with data. */
+  days: number;
+  /** Week target = monthly target / days in month x days in the week. */
+  target: number;
+  targetByGroup: Record<Group, number>;
+  cur: WeekSide;
+  prev: WeekSide | null;
+  staff: Array<{ name: string; kind: StaffLine["kind"]; target: number; cur: number; prev: number; inv: number; invPrev: number }>;
+  lob: LobRow[];
+  daily: Array<{ date: ISODate; prevDate: ISODate | null; cur: number; prev: number | null; future: boolean }>;
+  issues: string[];
 }
 
 export interface StockOut {
@@ -464,10 +513,11 @@ export function buildReport(i: ReportInput): ReportData {
     ytd.push({ label: MONTHS_SHORT[n - 1], prev: sum(p), cur: sum(cc), upTo });
   }
 
-  /* LOB per brand vs MTM */
-  const bC = lobBreakdown(cur);
-  const bP = lobBreakdown(prev ?? []);
+  /* LOB per brand vs MTM (and week vs week) */
   const z = (): QV => ({ qty: 0, value: 0 });
+  const lobOf = (cLines: SalesLine[], pLines: SalesLine[]): LobRow[] => {
+  const bC = lobBreakdown(cLines);
+  const bP = lobBreakdown(pLines);
   const lob: LobRow[] = [];
   const appleKeys = ["iPhone", "iPad", "Mac", "Apple Watch", "AirPods", ...new Set([...Object.keys(bC.apple), ...Object.keys(bP.apple)].filter((k) => !["iPhone", "iPad", "Mac", "Apple Watch", "AirPods"].includes(k)))];
   for (const k of appleKeys) lob.push({ label: LOB_LABEL[k] ?? k, kind: "apple", cur: bC.apple[k] ?? z(), prev: bP.apple[k] ?? z() });
@@ -484,6 +534,68 @@ export function buildReport(i: ReportInput): ReportData {
   };
   andRows.sort((a, b) => order(a.label) - order(b.label) || b.cur.value - a.cur.value);
   lob.push(...andRows, { label: "Total Android", kind: "totalAndroid", cur: sumQ(andRows, "cur"), prev: sumQ(andRows, "prev") });
+  return lob;
+  };
+  const lob = lobOf(cur, prev ?? []);
+
+  /* week vs week (Weekly template): Sunday–Saturday weeks cut at the month's edges; W1 compares with the last week of last month */
+  const sideOf = (ls: SalesLine[]): WeekSide => {
+    const t = totals(ls);
+    return { sales: t.sales, byGroup: t.byGroup, invoices: t.invoices, qty: t.qty, atv: t.atv, upt: t.upt, balance: balanceOf({ ...zeroG(), ...t.qtyByGroup }) };
+  };
+  const allLines = [...(i.prev?.lines ?? []), ...cur];
+  const inRange = (ls: SalesLine[], a: ISODate, b: ISODate) => ls.filter((l) => l.date >= a && l.date <= b);
+  const pmWeeks = weeksOfMonth(pm);
+  const lastPm = pmWeeks[pmWeeks.length - 1];
+  const wow: WeekReport[] = weeks.map((w, wi) => {
+    const end = w.end < asOf ? w.end : asOf;
+    const running = w.end > asOf;
+    const pw = wi > 0 ? weeks[wi - 1] : i.prev ? lastPm : null;
+    const pLabel = wi > 0 ? `W${pw!.index}` : `W${lastPm.index} ${mShort(pm)}`;
+    // like-for-like while running: the previous week up to the same number of days
+    const elapsed = eachDay(w.start, end).length;
+    const pEnd = pw ? (running ? addDays(pw.start, Math.min(elapsed, eachDay(pw.start, pw.end).length) - 1) : pw.end) : null;
+    const cL = inRange(cur, w.start, end);
+    const pL = pw && pEnd ? inRange(allLines, pw.start, pEnd) : null;
+    const share = eachDay(w.start, w.end).length / dim;
+    const tbg = zeroG();
+    for (const g of GROUPS) tbg[g] = tByGroup[g] * share;
+    const cBy = byRow(cL);
+    const pBy = pL ? byRow(pL) : new Map<string, SalesLine[]>();
+    const rows: StaffLine[] = [...staffList, ONLINE, { key: "__other", name: "Lainnya*", kind: "other" }];
+    const wStaff = rows
+      .map((r) => {
+        const st = r.kind === "staff" ? tgt?.staff.find((x) => nameKey(x.name) === r.key) : undefined;
+        const c = totals(cBy.get(r.key) ?? []);
+        const p = totals(pBy.get(r.key) ?? []);
+        return { name: r.name, kind: r.kind, target: (st?.total ?? 0) * share, cur: c.sales, prev: p.sales, inv: c.invoices, invPrev: p.invoices };
+      })
+      .filter((r) => r.kind === "staff" || r.cur || r.prev);
+    const daily = eachDay(w.start, w.end).map((dt) => {
+      const pd = addDays(dt, -7);
+      const okPrev = !!pw && pd >= pw.start && pd <= pw.end;
+      return { date: dt, prevDate: okPrev ? pd : null, cur: dt > asOf ? 0 : totals(inRange(cur, dt, dt)).sales, prev: okPrev ? totals(inRange(allLines, pd, pd)).sales : null, future: dt > asOf };
+    });
+    const wr: WeekReport = {
+      index: w.index,
+      label: `W${w.index}`,
+      period: span(w.start, w.end, month),
+      prevLabel: pLabel,
+      prevPeriod: pw ? span(pw.start, pw.end, pw.start.slice(0, 7) as MonthKey) : "",
+      running,
+      days: elapsed,
+      target: (tgt?.total ?? 0) * share,
+      targetByGroup: tbg,
+      cur: sideOf(cL),
+      prev: pL ? sideOf(pL) : null,
+      staff: wStaff,
+      lob: lobOf(cL, pL ?? []),
+      daily,
+      issues: [],
+    };
+    wr.issues = weekIssues(wr);
+    return wr;
+  });
 
   const data: ReportData = {
     storeCode: i.storeCode,
@@ -518,6 +630,7 @@ export function buildReport(i: ReportInput): ReportData {
     ytd,
     ytdYears: [prevYear, year],
     lob,
+    wow,
     issues: [],
   };
   data.issues = autoIssues(data);
@@ -566,6 +679,32 @@ export function autoIssues(d: ReportData): string[] {
     const ud = (c.upt ?? 0) - (p.upt ?? 0);
     out.push(`Produktivitas: invoice ${signed(growthPct(c.invoices, p.invoices))} (${p.invoices} ke ${c.invoices}), ATV ${signed(growthPct(c.atv ?? 0, p.atv ?? 0))} (${jt(p.atv)} ke ${jt(c.atv)}), UPT ${Math.abs(ud) < 0.05 ? "tetap" : ud > 0 ? "naik" : "turun"} ${u(p.upt)} ke ${u(c.upt)}`);
   } else out.push(`Produktivitas: invoice ${c.invoices}, ATV ${jt(c.atv)}, UPT ${u(c.upt)}`);
+  return out;
+}
+
+
+/** Automatic "Issue" cells of the Weekly (week vs week) deck. */
+export function weekIssues(w: WeekReport): string[] {
+  const c = w.cur;
+  const p = w.prev;
+  const vs = p ? `${w.running ? `${w.prevLabel} (hari yang sama)` : w.prevLabel}` : "";
+  const g1 = (n: number, b: number) => signed(growthPct(n, b));
+  const l1 = [`Sales ${w.label} (${w.period}) ${rpShort(c.sales)} = ${pc0(ratio(c.sales * 100, w.target))} dari target week (${rpShort(w.target)})${p ? `, ${c.sales >= p.sales ? "naik" : "turun"} ${Math.abs(Math.round(growthPct(c.sales, p.sales) ?? 0))}% vs ${vs} (${rpShort(p.sales)})` : ""}`];
+  if (p) l1.push(`Apple ${g1(c.byGroup.Apple, p.byGroup.Apple)} (${rpShort(c.byGroup.Apple)}), Android ${g1(c.byGroup.Android, p.byGroup.Android)} (${rpShort(c.byGroup.Android)}) vs ${w.prevLabel}`);
+  const top = w.staff.filter((s) => s.kind === "staff" && s.cur).sort((a, b) => b.cur - a.cur)[0];
+  if (top) l1.push(`Top staff ${top.name} ${rpShort(top.cur)}`);
+  const out = [l1.join("\n")];
+  const ip = w.lob.find((x) => x.label === "iPhone");
+  const ta = w.lob.find((x) => x.kind === "totalAndroid");
+  const l2: string[] = [];
+  if (p && ip) l2.push(`iPhone ${ip.cur.qty} unit (${ip.cur.qty - ip.prev.qty >= 0 ? "+" : ""}${ip.cur.qty - ip.prev.qty} unit vs ${w.prevLabel})`);
+  if (p && ta) l2.push(`Android ${ta.cur.qty} unit (${ta.cur.qty - ta.prev.qty >= 0 ? "+" : ""}${ta.cur.qty - ta.prev.qty} unit vs ${w.prevLabel})`);
+  if (p) l2.push(`ACC ${g1(c.byGroup.ACC, p.byGroup.ACC)} & VAS ${g1(c.byGroup.VAS, p.byGroup.VAS)} vs ${w.prevLabel}`);
+  else l2.push(`ACC ${rpShort(c.byGroup.ACC)} & VAS ${rpShort(c.byGroup.VAS)}`);
+  out.push(l2.join("\n"));
+  const jt = (n: number | null) => (n == null ? "–" : `Rp${(n / 1e6).toFixed(1).replace(".", ",")} jt`);
+  const u = (n: number | null) => (n == null ? "–" : n.toFixed(1));
+  out.push(p ? `Produktivitas: invoice ${g1(c.invoices, p.invoices)} (${p.invoices} ke ${c.invoices}), ATV ${jt(p.atv)} ke ${jt(c.atv)}, UPT ${u(p.upt)} ke ${u(c.upt)}` : `Produktivitas: invoice ${c.invoices}, ATV ${jt(c.atv)}, UPT ${u(c.upt)}`);
   return out;
 }
 
