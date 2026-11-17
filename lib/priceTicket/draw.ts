@@ -169,7 +169,8 @@ export function drawText(ctx: CanvasRenderingContext2D, slot: TextSlot, value: n
   const ref = widthOf(slot.canva.price);
   const k = ref > 0 ? Math.min(1.15, Math.max(0.85, slot.w / ref)) : 1;
   const w = widthOf(value) * k;
-  const room = slot.maxRight - slot.x;
+  // keep a gap before the next column (maxRight is where its ink starts)
+  const room = slot.maxRight - slot.x - slot.size * 0.4;
   ctx.save();
   ctx.translate(slot.x, slot.y);
   // a longer number than the room: a little narrower first, then smaller (same baseline)
