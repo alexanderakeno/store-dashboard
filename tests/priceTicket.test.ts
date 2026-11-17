@@ -115,7 +115,7 @@ test("apple: MacBook Neo is matched on its price list name (MBN)", () => {
 });
 
 test("paper: 8,5×6 designs print on 8,6×6,1; Oppo also as 9,5×8,5", () => {
-  const small = TICKET_TEMPLATES.filter((t) => t.size[0] === 85 && t.size[1] === 60);
+  const small = TICKET_TEMPLATES.filter((t) => t.size[0] === 85 && t.size[1] === 60 && !t.id.endsWith("-148x105"));
   assert.ok(small.length > 0);
   assert.ok(small.filter((t) => !t.id.endsWith("-95x85")).every((t) => t.paper?.join("x") === "86x61"));
   const tall = TICKET_TEMPLATES.filter((t) => t.id.endsWith("-95x85"));
@@ -148,4 +148,12 @@ test("cicilan slot (per 12): selling price / 12, never struck", () => {
   assert.equal(matchRow(tpl("amazfit-02").slots[0], [row("AMAZFIT ACTIVE MAX", 2899000, 2799000), row("AMAZFIT ACTIVE", 1499000)])?.name, "AMAZFIT ACTIVE MAX");
   assert.equal(matchRow(tpl("amazfit-01").slots[0], [row("AMAZFIT BIP 6", 1399000), row("AMAZFIT BIP MAX", 1799000)])?.name, "AMAZFIT BIP MAX");
   assert.equal(matchRow(tpl("samsung-18").slots[0], [row("GALAXY BUDS CORE", 799000), row("GALAXY BUDS 4", 2999000)])?.name, "GALAXY BUDS CORE");
+});
+
+test("every Oppo ticket also prints at the Apple size (14,8×10,5), from its 8,5×6 design when there is one", () => {
+  const oppo = TICKET_TEMPLATES.filter((t) => t.brand === "Oppo");
+  const cards = new Set(oppo.map((t) => t.variantOf ?? t.id));
+  const a6 = oppo.filter((t) => t.paper?.[0] === 148 && t.paper?.[1] === 105);
+  assert.equal(a6.length, cards.size);
+  assert.ok(a6.filter((t) => t.size[0] === 85).length >= cards.size - 1);
 });
