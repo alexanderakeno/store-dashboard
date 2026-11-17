@@ -4,7 +4,8 @@
  * table headers, green / red cells for up / down. Runs in the browser (and in Node for the audit).
  */
 import type PptxGenJS from "pptxgenjs";
-import { rpShort, type AccVasRow, type ReportData, type SlideId, type StaffRowData } from "@/lib/domain/report";
+import { GROUPS, type Group } from "@/types/domain";
+import { rpShort, type AccVasRow, type ReportData, type SlideId, type StaffRowData, type WSlideId, type WeekReport } from "@/lib/domain/report";
 
 type Pptx = PptxGenJS;
 type Slide = PptxGenJS.Slide;
@@ -26,6 +27,14 @@ export interface StockFilter {
 export const STOCK_FILTER: StockFilter = { minDays: 7, minSold: 1, perBrand: 0, hide: [] };
 
 export interface ReportManual {
+  /** "mtd" = month to date (MTM / LFL), "weekly" = week vs the week before. */
+  template: "mtd" | "weekly";
+  /** Weekly template: week index (null = last finished week). */
+  week: number | null;
+  wskip: WSlideId[];
+  /** Weekly template: typed issues / feedback (own, so the MTD deck keeps its own). */
+  wIssues: string[];
+  wFeedback: string[];
   stock: StockFilter;
   author: string;
   skip: SlideId[];
@@ -56,6 +65,11 @@ export function defaultManual(d: ReportData, author: string): ReportManual {
   if (!d.ytd.some((r) => r.prev && r.cur)) skip.push("ytd");
   if (!d.stockOut) skip.push("stock");
   return {
+    template: "mtd",
+    week: null,
+    wskip: d.stockOut ? [] : ["stock"],
+    wIssues: ["", "", ""],
+    wFeedback: ["", "", ""],
     stock: { ...STOCK_FILTER },
     author,
     skip,
@@ -95,6 +109,11 @@ export function mergeManual(base: ReportManual, saved: Partial<ReportManual> | n
     issues: [0, 1, 2].map((i) => saved.issues?.[i] ?? ""),
     feedback: [0, 1, 2].map((i) => saved.feedback?.[i] ?? ""),
     skip: Array.isArray(saved.skip) ? saved.skip : base.skip,
+    template: saved.template === "weekly" ? "weekly" : "mtd",
+    week: typeof saved.week === "number" ? saved.week : null,
+    wskip: Array.isArray(saved.wskip) ? saved.wskip : base.wskip,
+    wIssues: [0, 1, 2].map((i) => saved.wIssues?.[i] ?? ""),
+    wFeedback: [0, 1, 2].map((i) => saved.wFeedback?.[i] ?? ""),
   };
 }
 
@@ -248,6 +267,10 @@ export function buildDeck(Ctor: new () => Pptx, d: ReportData, m: ReportManual, 
     return s;
   };
 
+  if (m.template === "weekly" && deckWeek(d, m)) {
+    weeklyDeck(p, d, m, logo, add);
+    return p;
+  }
   if (on("cover")) cover(p, d, m, logo);
   if (on("target")) slideTarget(add(`Target & Achievement${d.hasPrev ? " MTM" : ""}${d.hasLy ? `${d.hasPrev ? " -" : ""} LFL` : ""}`, vs), d);
   const more = (l1: string, l2?: string) => () => add(l1, l2 ? `${l2} (lanjutan)` : "(lanjutan)");
@@ -618,7 +641,7 @@ function slideYtd(s: Slide, d: ReportData) {
   );
 }
 
-function slideLob(s: Slide, d: ReportData) {
+function slideLob(s: Slide, d: ReportData, cols: [string, string] = ["MTD", "MTM"]) {
   const rows = d.lob;
   const { rowH, fontSize } = rowsIn(rows.length + 2, BOTTOM - TOP, 0.42);
   const cell = (cur: number, prev: number, total: boolean) => {
@@ -632,7 +655,7 @@ function slideLob(s: Slide, d: ReportData) {
     s,
     [
       [H(d.storeCode || "Toko", { rowspan: 2 }), H("By Quantity", { colspan: 4 }), H("By Value", { colspan: 4 })],
-      [H("MTD"), H("MTM"), H("Difference"), H("%"), H("MTD"), H("MTM"), H("Difference"), H("%")],
+      [H(cols[0]), H(cols[1]), H("Difference"), H("%"), H(cols[0]), H(cols[1]), H("Difference"), H("%")],
       ...rows.map((r) => {
         const total = r.kind === "totalApple" || r.kind === "totalAndroid";
         return [total ? TL(r.label) : L(r.label), ...cell(r.cur.qty, r.prev.qty, total), ...cell(r.cur.value, r.prev.value, total)];
@@ -773,5 +796,139 @@ function thanks(p: Pptx) {
   s.addShape("rect", { x: 0, y: 6.55, w: W, h: 0.95, fill: { color: C.navy } });
 }
 
-/** "QF10 Closing Oktober 2026.pptx" */
-export const deckFileName = (d: ReportData) => `${d.storeCode ? d.storeCode + " " : ""}${d.title}.pptx`;
+/** "QF10 Closing Oktober 2026.pptx" · "QF10 Weekly Report W3 vs W2 November 2026.pptx" */
+export const deckFileName = (d: ReportData, m?: Pick<ReportManual, "template" | "week">) => {
+  const w = m?.template === "weekly" ? deckWeek(d, m) : null;
+  return `${d.storeCode ? d.storeCode + " " : ""}${w ? weeklyTitle(d, w) : d.title}.pptx`;
+};
+/* ---------------- weekly (week vs week) template ---------------- */
+
+/** The week the Weekly deck is about: the picked one, else the last finished week (or the running one in W1). */
+export function deckWeek(d: ReportData, m: Pick<ReportManual, "week">): WeekReport | null {
+  const w = d.wow ?? [];
+  if (!w.length) return null;
+  return w.find((x) => x.index === m.week) ?? [...w].reverse().find((x) => !x.running) ?? w[w.length - 1];
+}
+
+const DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const MON_S = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+const dShort = (x: string) => `${Number(x.slice(8, 10))} ${MON_S[Number(x.slice(5, 7)) - 1]}`;
+const dow = (x: string) => DAYS[new Date(`${x}T00:00:00Z`).getUTCDay()];
+
+function weeklyDeck(p: Pptx, d: ReportData, m: ReportManual, logo: string | null, add: (l1: string, l2?: string) => Slide) {
+  const w = deckWeek(d, m)!;
+  const on = (id: WSlideId) => !(m.wskip ?? []).includes(id);
+  const more = (l1: string, l2?: string) => () => add(l1, l2 ? `${l2} (lanjutan)` : "(lanjutan)");
+  const vs = `${w.label} (${w.period}) VS ${w.prevLabel}${w.prevPeriod ? ` (${w.prevPeriod})` : ""}${w.running ? " · hari yang sama" : ""}`;
+  if (on("cover")) cover(p, { ...d, title: weeklyTitle(d, w) }, m, logo);
+  if (on("wtarget")) slideWTarget(add("Achievement Week vs Week", vs), w);
+  if (on("wprod")) slideWProd(add("Produktivitas Week vs Week", vs), w);
+  if (on("wdaily")) slideWDaily(add("Sales Harian", vs), w, d);
+  if (on("wstaff")) slideWStaff(add("Staff Week vs Week", vs), w, more("Staff Week vs Week", vs));
+  if (on("wlob")) slideLob(add("Breakdown LOB Per Brand", vs), { ...d, lob: w.lob, hasPrev: !!w.prev }, [w.label, w.prevLabel]);
+  if (on("stock") && d.stockOut) stockSlides_(d, m, add, more);
+  if (on("issue")) slideIssue(add(`Issue & Feedback ${w.label} ${d.monthName}`), { ...d, issues: w.issues }, { ...m, issues: m.wIssues ?? ["", "", ""], feedback: m.wFeedback ?? ["", "", ""] });
+  if (on("thanks")) thanks(p);
+}
+
+export const weeklyTitle = (d: Pick<ReportData, "monthName" | "year">, w: Pick<WeekReport, "label" | "prevLabel">) => `Weekly Report ${w.label} vs ${w.prevLabel} ${d.monthName} ${d.year}`;
+
+function slideWTarget(s: Slide, w: WeekReport) {
+  const cream: CellOpts = { fill: { color: C.cream } };
+  const has = !!w.prev;
+  const row = (g: Group | "Amount") => {
+    const hi = g === "Amount";
+    const f: CellOpts = hi ? { fill: { color: C.amount }, bold: true } : {};
+    const t = hi ? w.target : w.targetByGroup[g];
+    const c = hi ? w.cur.sales : w.cur.byGroup[g];
+    const pv = w.prev ? (hi ? w.prev.sales : w.prev.byGroup[g]) : null;
+    return [L(g, f), N(nz(t), { bold: true, ...f }), N(nz(c), f), N(pc(share(c, t)), { ...cream, bold: hi }), ...(has ? [N(nz(pv), f), upDown(pv == null ? null : c - pv, pv ? pc(growth(c, pv)) : c ? "new" : "-", { bold: true, align: "center" }), N(neg(pv == null ? null : c - pv), f)] : [])];
+  };
+  const head = [G(w.label, { align: "left" }), G("Target week"), G(`Actual ${w.label}`), G("Ach"), ...(has ? [G(`Actual ${w.prevLabel}`), G("Growth"), G("Selisih")] : [])];
+  const colW = head.map((_, i) => (i === 0 ? 1.75 : i === 3 || i === 5 ? 1.15 : 2.0));
+  const tw = colW.reduce((a, b) => a + b, 0);
+  const k = Math.min(1, CW / tw);
+  table(s, [[H(`${w.days} hari${w.running ? " (berjalan)" : ""}`, { colspan: head.length, align: "left" })], head, ...(["Amount", ...GROUPS] as Array<Group | "Amount">).map(row)], { x: X + (CW - tw * k) / 2, y: TOP + 0.3, w: tw * k, colW: colW.map((c) => c * k), rowH: 0.6, fontSize: 16 });
+}
+
+function slideWProd(s: Slide, w: WeekReport) {
+  const c = w.cur;
+  const p = w.prev;
+  const bal = (b: [number, number] | null) => (b ? `${Math.round(b[0])} : ${Math.round(b[1])}` : "-");
+  const ch = (a: number | null | undefined, b: number | null | undefined) => (a != null && b ? growth(a, b) : null);
+  const r = (label: string, a: string, b: string, g: number | null) => [L(label), N(a, { align: "center" }), ...(p ? [N(b, { align: "center" }), upDown(g, pc(g), { bold: true, align: "center" })] : [])];
+  const rows = [
+    r("Sales", nz(c.sales), nz(p?.sales), ch(c.sales, p?.sales)),
+    r("Invoice", nz(c.invoices), nz(p?.invoices), ch(c.invoices, p?.invoices)),
+    r("Qty", nz(c.qty), nz(p?.qty), ch(c.qty, p?.qty)),
+    r("ATV", nz(c.atv), nz(p?.atv), ch(c.atv, p?.atv)),
+    r("UPT", dec(c.upt, 2), dec(p?.upt, 2), ch(c.upt, p?.upt)),
+    r("Daily average", nz(c.sales / Math.max(1, w.days)), nz(p ? p.sales / Math.max(1, w.days) : null), ch(c.sales, p?.sales)),
+    [L("Balance Apple : Android (qty)"), N(bal(c.balance), { align: "center" }), ...(p ? [N(bal(p.balance), { align: "center" }), N("")] : [])],
+  ];
+  const head = [H("Indikator", { align: "left" }), H(w.label), ...(p ? [H(w.prevLabel), H("Growth")] : [])];
+  const colW = p ? [3.6, 2.6, 2.6, 1.8] : [3.6, 2.6];
+  const tw = colW.reduce((a, b) => a + b, 0);
+  table(s, [head, ...rows], { x: X + (CW - tw) / 2, y: TOP + 0.2, w: tw, colW, rowH: 0.52, fontSize: 16 });
+}
+
+function slideWDaily(s: Slide, w: WeekReport, d: ReportData) {
+  const daily = (d.storeTotals.target || 0) / d.daysInMonth;
+  const has = !!w.prev;
+  const rows = w.daily.map((x) => [
+    L(dow(x.date)),
+    N(dShort(x.date), { align: "center" }),
+    N(x.future ? "-" : nz(x.cur)),
+    N(x.future ? "-" : pc(share(x.cur, daily)), { align: "center", fill: { color: C.cream } }),
+    ...(has ? [N(x.prevDate ? dShort(x.prevDate) : "-", { align: "center" }), N(x.prev == null ? "-" : nz(x.prev)), x.future || x.prev == null ? N("-", { align: "center" }) : upDown(x.cur - x.prev, x.prev ? pc(growth(x.cur, x.prev)) : x.cur ? "new" : "-", { bold: true, align: "center" })] : []),
+  ]);
+  const cTot = w.daily.reduce((a, x) => a + (x.future ? 0 : x.cur), 0);
+  const pTot = w.daily.reduce((a, x) => a + (x.prev ?? 0), 0);
+  const tot = [TL("Total"), T(""), T(nz(cTot)), T(pc(share(cTot, daily * w.days)), { align: "center" }), ...(has ? [T(""), T(nz(pTot)), T(pc(growth(cTot, pTot)), { align: "center" })] : [])];
+  const head = [H("Hari", { align: "left" }), H(`Tanggal ${w.label}`), H(`Sales ${w.label}`), H("Ach harian"), ...(has ? [H(`Tanggal ${w.prevLabel}`), H(`Sales ${w.prevLabel}`), H("Growth")] : [])];
+  const colW = has ? [1.6, 1.5, 2.2, 1.45, 1.6, 2.2, 1.35] : [1.6, 1.5, 2.2, 1.45];
+  const tw = colW.reduce((a, b) => a + b, 0);
+  const k = Math.min(1, CW / tw);
+  const { rowH, fontSize } = rowsIn(rows.length + 2, BOTTOM - TOP - 0.45, 0.55);
+  table(s, [head, ...rows, tot], { x: X + (CW - tw * k) / 2, y: TOP, w: tw * k, colW: colW.map((c) => c * k), rowH, fontSize: Math.min(16, fontSize) });
+  s.addText(`Target harian ${nz(daily)} (target bulan ÷ ${d.daysInMonth} hari)`, { x: X, y: BOTTOM - 0.35, w: CW, h: 0.3, fontFace: BODY_FONT, fontSize: 12, color: C.text, italic: true, margin: 0 });
+}
+
+function slideWStaff(s: Slide, w: WeekReport, more: () => Slide) {
+  const has = !!w.prev;
+  const rows = w.staff.map((r) => [
+    L(r.name),
+    N(r.kind === "staff" ? nz(r.target) : "-"),
+    N(nz(r.cur), { bold: true }),
+    r.kind === "staff" && r.target ? upDown(r.cur - r.target, pc(share(r.cur, r.target)), { align: "center" }) : N("-", { align: "center" }),
+    ...(has ? [N(nz(r.prev)), upDown(r.cur - r.prev, r.prev ? pc(growth(r.cur, r.prev)) : r.cur ? "new" : "-", { bold: true, align: "center" }), N(nz(r.inv), { align: "center" }), N(nz(r.invPrev), { align: "center" })] : [N(nz(r.inv), { align: "center" })]),
+  ]);
+  const sum = (f: (r: WeekReport["staff"][number]) => number) => w.staff.reduce((a, r) => a + f(r), 0);
+  const tc = sum((r) => r.cur);
+  const tp = sum((r) => r.prev);
+  const tt = sum((r) => (r.kind === "staff" ? r.target : 0));
+  const tot = [TL("Total"), T(nz(tt)), T(nz(tc)), T(pc(share(tc, tt)), { align: "center" }), ...(has ? [T(nz(tp)), T(pc(growth(tc, tp)), { align: "center" }), T(nz(sum((r) => r.inv)), { align: "center" }), T(nz(sum((r) => r.invPrev)), { align: "center" })] : [T(nz(sum((r) => r.inv)), { align: "center" })])];
+  const head = [H("Staff", { align: "left" }), H("Target week"), H(`Actual ${w.label}`), H("Ach"), ...(has ? [H(`Actual ${w.prevLabel}`), H("Growth"), H(`Inv ${w.label}`), H(`Inv ${w.prevLabel}`)] : [H("Invoice")])];
+  const colW = has ? [2.0, 1.75, 1.85, 1.0, 1.85, 1.05, 1.31, 1.32] : [2.2, 2.4, 2.4, 1.4, 1.6];
+  // many staff: split over slides so the font stays readable
+  const per = rowsIn(rows.length + 2, BOTTOM - TOP, 0.45).fontSize >= MIN_FS ? rows.length : Math.max(6, Math.floor((BOTTOM - TOP) / 0.3) - 2);
+  const pages: Cell[][][] = [];
+  for (let i = 0; i < rows.length; i += per) pages.push(rows.slice(i, i + per));
+  if (!pages.length) pages.push([]);
+  pages.forEach((pg, i) => {
+    const last = i === pages.length - 1;
+    const body = [head, ...pg, ...(last ? [tot] : [])];
+    const { rowH, fontSize } = rowsIn(Math.max(body.length, 6), BOTTOM - TOP, 0.45);
+    table(i ? more() : s, body, { x: X, y: TOP, w: CW, colW, rowH, fontSize });
+  });
+}
+
+function stockSlides_(d: ReportData, m: ReportManual, add: (l1: string, l2?: string) => Slide, more: (l1: string, l2?: string) => () => Slide) {
+  const so = d.stockOut!;
+  const f = m.stock ?? STOCK_FILTER;
+  const dm = (x: string) => `${x.slice(8, 10)}/${x.slice(5, 7)}`;
+  const t1 = f.minDays === 7 ? "Stock Kosong ≥ 1 Minggu" : f.minDays % 7 === 0 ? `Stock Kosong ≥ ${f.minDays / 7} Minggu` : `Stock Kosong ≥ ${f.minDays} Hari`;
+  const l2 = `SOH ${dm(so.sohDate)} · laku ${dm(so.from)}–${dm(so.to)}${f.minSold > 1 ? ` (min. ${f.minSold} unit)` : ""}, tidak terjual ≥ ${f.minDays} hari`;
+  slideStock(add(t1, l2), stockRows(d, f), f, more(t1, l2));
+}
+
