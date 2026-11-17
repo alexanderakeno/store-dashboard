@@ -152,10 +152,19 @@ const EXTRA_PAPERS: Record<string, Array<[number, number]>> = {
 const extras = (t: TicketTemplate): TicketTemplate[] =>
   (EXTRA_PAPERS[t.id] ?? []).map((paper) => ({ ...t, id: `${t.id}-${paper[0]}x${paper[1]}`, paper, variantOf: t.variantOf ?? t.id }));
 
+/**
+ * Oppo tickets also print at the Apple ticket size (14,8×10,5 cm, A6): from the model's 8,5×6 design (same shape, fills
+ * the paper), or its 15×12 design when the model has no 8,5×6 one (shrunk to fit, white at the sides).
+ */
+const PAPER_A6: [number, number] = [148, 105];
+const OPPO_85x60_OF = new Set(DESIGNS.filter((t) => t.brand === "Oppo" && is85x60(t)).map((t) => t.variantOf ?? t.id));
+const oppoA6 = (t: TicketTemplate): TicketTemplate[] =>
+  t.brand === "Oppo" && (is85x60(t) || (!t.variantOf && !OPPO_85x60_OF.has(t.id))) ? [{ ...t, id: `${t.id}-148x105`, paper: PAPER_A6, variantOf: t.variantOf ?? t.id }] : [];
+
 export const TICKET_TEMPLATES: TicketTemplate[] = DESIGNS.flatMap((t) => {
   if (is150x95(t)) return [{ ...t, paper: PAPER_150x95 }, ...extras(t)];
-  if (!is85x60(t)) return [t, ...extras(t)];
+  if (!is85x60(t)) return [t, ...extras(t), ...oppoA6(t)];
   const main = { ...t, paper: PAPER_85x60 };
   if (t.brand !== "Oppo") return [main];
-  return [main, { ...t, id: `${t.id}-95x85`, paper: PAPER_OPPO_TALL, variantOf: t.variantOf ?? t.id }];
+  return [main, { ...t, id: `${t.id}-95x85`, paper: PAPER_OPPO_TALL, variantOf: t.variantOf ?? t.id }, ...oppoA6(t)];
 });
