@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ScanPrice } from "@/components/modules/ScanPrice";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, Moon, RefreshCw, Sun, Upload } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, Monitor, Moon, RefreshCw, Smartphone, Sun, Upload } from "lucide-react";
 import { NAV, isGroup, titleFor, type NavLink } from "./nav";
 import { NavIcon } from "./Icon";
 import { TableFit } from "./TableFit";
@@ -160,6 +160,22 @@ function Header({ storeCode, userName, isAdmin, fixture, onMenu, collapsed, onEx
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   useEffect(() => setDark(document.documentElement.classList.contains("dark")), []);
+  // "Tampilan desktop" on phones / small tablets: the desktop layout at 1280 px, zoomed out to the screen
+  const [view, setView] = useState<"phone" | "desktop" | null>(null);
+  useEffect(() => {
+    const small = Math.min(window.screen.width, window.screen.height) < 820;
+    const desktop = document.documentElement.dataset.view === "desktop";
+    setView(small || desktop ? (desktop ? "desktop" : "phone") : null);
+  }, []);
+  const toggleView = () => {
+    const next = view === "desktop" ? "phone" : "desktop";
+    // a cookie, so the server renders the matching viewport tag (one year; cleared when switching back)
+    // with the screen width, so the page opens zoomed out to fit it
+    const w = Math.round(Math.min(window.screen.width, window.screen.height));
+    document.cookie = next === "desktop" ? `sd-view=desktop:${w}; path=/; max-age=31536000; samesite=lax` : "sd-view=; path=/; max-age=0; samesite=lax";
+    // load the page again (a new navigation, not a reload: a reload keeps the old zoom level)
+    window.location.replace(window.location.href);
+  };
 
   const toggleTheme = () => {
     const next = !document.documentElement.classList.contains("dark");
@@ -213,6 +229,11 @@ function Header({ storeCode, userName, isAdmin, fixture, onMenu, collapsed, onEx
         </div>
         <div className="flex items-center gap-2">
           {msg && <span className="text-xs font-semibold text-rose-600 max-md:hidden" role="alert">{msg}</span>}
+          {view && (
+            <button type="button" className="sd-hbtn icon" onClick={toggleView} aria-label={view === "desktop" ? "Tampilan HP" : "Tampilan desktop"} title={view === "desktop" ? "Kembali ke tampilan HP" : "Tampilan desktop"}>
+              {view === "desktop" ? <Smartphone className="size-4" /> : <Monitor className="size-4" />}
+            </button>
+          )}
           <button type="button" className="sd-hbtn icon" onClick={toggleTheme} aria-label={dark ? "Mode terang" : "Mode gelap"} title={dark ? "Mode terang" : "Mode gelap"}>
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
