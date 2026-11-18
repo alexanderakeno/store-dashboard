@@ -18,16 +18,20 @@ export const SLOW_DAYS = 60;
 export const balanceOf = (coverDays: number | null): Balance => (coverDays === null ? "unsold" : coverDays < LOW_DAYS ? "low" : coverDays > SLOW_DAYS ? "slow" : "ok");
 
 const BALANCES: Balance[] = ["unsold", "low", "ok", "slow"];
-/** SOH rows as compact tuples for the browser: [category index, article, description, qty, sold, cover days (rounded), balance index]. */
-export type PackedSohRow = [number, string, string, number, number, number | null, number];
+/** SOH rows as compact tuples for the browser: [category index, article, description, qty, sold, cover days (rounded), balance index, barcodes?]. */
+export type PackedSohRow = [number, string, string, number, number, number | null, number, string?];
 
 export function packSohRows(rows: SohRow[], categories: string[]): PackedSohRow[] {
   const at = new Map(categories.map((c, i) => [c, i]));
-  return rows.map((r) => [at.get(r.category) ?? -1, r.article, r.description, r.qty, r.sold, r.coverDays == null ? null : Math.round(r.coverDays), BALANCES.indexOf(r.balance)]);
+  return rows.map((r) => {
+    const t: PackedSohRow = [at.get(r.category) ?? -1, r.article, r.description, r.qty, r.sold, r.coverDays == null ? null : Math.round(r.coverDays), BALANCES.indexOf(r.balance)];
+    if (r.barcodes?.length) t.push(r.barcodes.join(" "));
+    return t;
+  });
 }
 
 export function unpackSohRows(rows: PackedSohRow[], categories: string[]): SohRow[] {
-  return rows.map(([c, article, description, qty, sold, coverDays, b]) => ({ category: categories[c] ?? "", article, description, qty, sold, coverDays, balance: BALANCES[b] ?? balanceOf(coverDays) }));
+  return rows.map(([c, article, description, qty, sold, coverDays, b, bc]) => ({ category: categories[c] ?? "", article, description, qty, sold, coverDays, balance: BALANCES[b] ?? balanceOf(coverDays), ...(bc ? { barcodes: bc.split(" ") } : {}) }));
 }
 
 /** Joins SOH articles with month-to-date sales (by article code) for the SOH tab. */

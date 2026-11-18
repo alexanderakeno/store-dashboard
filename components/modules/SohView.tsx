@@ -7,6 +7,7 @@ import { LOW_DAYS, SLOW_DAYS, unpackSohRows, type PackedSohRow, type SohRow } fr
 import type { SkuPrices } from "@/lib/domain/skuPrice";
 import type { AccPriceCell, AccPriceMap } from "@/lib/domain/accPrice";
 import { PromoBox, PwpBox } from "./PriceBoard";
+import { BARCODE_POPOVER, BarcodeIcon, BarcodePopup } from "./BarcodePopup";
 import { DEVICE_TYPES, SAMSUNG_SERIES, deviceType, isSamsung, samsungSeries, splitsByType, type DeviceType } from "@/lib/domain/sohGroups";
 
 const TYPE_LABEL: Record<DeviceType, string> = { Phone: "Phone", Tablet: "Tablet", Watch: "Watch & Wearable", Lainnya: "Lainnya" };
@@ -154,6 +155,12 @@ export function SohView({ categories, packed, prices, accPrices, today = "", ini
     // open after the popup has rendered this SKU
     requestAnimationFrame(() => (document.getElementById("sku-price") as (HTMLElement & { showPopover?: () => void }) | null)?.showPopover?.());
   };
+  // barcode popup: index into the rows shown when it was opened (previous / next walk that list)
+  const [bc, setBc] = useState<{ list: SohRow[]; i: number } | null>(null);
+  const openBarcode = (list: SohRow[], r: SohRow) => {
+    setBc({ list, i: Math.max(0, list.indexOf(r)) });
+    requestAnimationFrame(() => (document.getElementById(BARCODE_POPOVER) as (HTMLElement & { showPopover?: () => void }) | null)?.showPopover?.());
+  };
   const [cat, setCat] = useState(categories.includes(initialCat) ? initialCat : categories[0]);
   const [search, setSearch] = useState(initialSearch);
   const [type, setType] = useState(initialType);
@@ -276,8 +283,8 @@ export function SohView({ categories, packed, prices, accPrices, today = "", ini
               {visible.flatMap((g) => [
                 ...(g.label ? [<li key={`g|${g.label}`} className="flex justify-between bg-slate-50 px-3 py-1.5 text-[11px] font-extrabold tracking-wider text-slate-600 uppercase dark:bg-slate-800/60 dark:text-slate-300"><span>{g.label}</span><span className="tabular-nums">{num(sumQty(g.all))}</span></li>] : []),
                 ...g.rows.map((r) => (
-                <li key={`${r.category}|${r.article}`}>
-                  <button type="button" disabled={!priced(r)} onClick={() => show(r)} className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left ${priced(r) ? "active:bg-blue-50 dark:active:bg-blue-950/30" : "cursor-default"}`}>
+                <li key={`${r.category}|${r.article}`} className="flex items-center">
+                  <button type="button" disabled={!priced(r)} onClick={() => show(r)} className={`flex min-w-0 flex-1 items-center justify-between gap-3 py-2.5 pr-2 pl-3 text-left ${priced(r) ? "active:bg-blue-50 dark:active:bg-blue-950/30" : "cursor-default"}`}>
                     <span className="min-w-0 text-[13px] leading-snug font-semibold text-slate-800 dark:text-slate-100">
                       {r.description || r.article}
                       <span className="mt-0.5 block font-mono text-[11px] font-medium text-slate-400">{r.article}{searching && <> · {r.category}</>}</span>
@@ -285,6 +292,9 @@ export function SohView({ categories, packed, prices, accPrices, today = "", ini
                       {accOf(r) && <span className="mt-0.5 flex items-center gap-1 text-[11px]"><Tag className="size-3 text-slate-400" /> <AccPrice a={accOf(r)!} small /></span>}
                     </span>
                     <b className={`shrink-0 text-base tabular-nums ${r.balance === "low" ? "text-rose-600" : "text-slate-950 dark:text-white"}`}>{num(r.qty)}</b>
+                  </button>
+                  <button type="button" onClick={() => openBarcode(shown, r)} className="mr-2.5 grid h-9 w-11 shrink-0 place-items-center rounded-lg border border-slate-300 text-slate-700 active:bg-slate-100 dark:border-slate-600 dark:text-slate-200" aria-label={`Barcode ${r.article}`}>
+                    <BarcodeIcon className="h-3.5 w-5" />
                   </button>
                 </li>
                 )),
@@ -302,7 +312,12 @@ export function SohView({ categories, packed, prices, accPrices, today = "", ini
               ...(g.label ? [<tr key={`g|${g.label}`} className="bg-slate-50 dark:bg-slate-800/60"><td colSpan={2} className="text-xs font-extrabold tracking-wider text-slate-600 uppercase dark:text-slate-300">{g.label}</td><td className="n font-extrabold">{num(sumQty(g.all))}</td><td className="n font-extrabold">{num(g.all.reduce((a, r) => a + r.sold, 0))}</td><td />{hasPrice && <td />}</tr>] : []),
               ...g.rows.map((r) => (
               <tr key={`${r.category}|${r.article}`} onClick={() => show(r)} className={priced(r) ? "cursor-pointer hover:bg-blue-50/60 dark:hover:bg-blue-950/20" : undefined}>
-                <td className="font-mono text-xs">{r.article}</td>
+                <td className="font-mono text-xs whitespace-nowrap">
+                  <button type="button" onClick={(e) => { e.stopPropagation(); openBarcode(shown, r); }} className="mr-2 inline-grid h-6 w-8 place-items-center rounded-md border border-slate-300 align-middle text-slate-700 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-blue-950/40" aria-label={`Barcode ${r.article}`} title="Tampilkan barcode">
+                    <BarcodeIcon className="h-3 w-4" />
+                  </button>
+                  {r.article}
+                </td>
                 <td>{priced(r) ? <span className="font-semibold text-blue-700 dark:text-blue-300">{r.description}</span> : r.description}</td>
                 {searching && <td>{r.category}</td>}
                 <td className="n">{num(r.qty)}</td>
@@ -323,6 +338,7 @@ export function SohView({ categories, packed, prices, accPrices, today = "", ini
         {prices && prices.models.length > 0 && <p className="mt-2 text-xs text-slate-500">Ketuk SKU yang ada harganya untuk melihat price list-nya (semua pilihan storage).</p>}
       </Panel>
       {prices && <SkuPricePopup prices={prices} row={open} today={today} onClose={() => setOpen(null)} />}
+      <BarcodePopup list={bc?.list ?? []} index={bc?.i ?? 0} onIndex={(i) => setBc((x) => (x ? { ...x, i } : x))} onClose={() => setBc(null)} />
     </>
   );
 }
