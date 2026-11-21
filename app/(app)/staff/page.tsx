@@ -189,7 +189,7 @@ const teamGapTg = team.sales - (teamTarget * tg) / 100;
         <p className="mt-3 text-xs text-slate-500">Pace: On Track bila achievement ≥ time gone ({pct(tg)}). Gap = target − achievement. Jabatan staff (Cashier / Sales Assistant) butuh master staff — <b>Need Data</b>.</p>
       </Panel>
 
-      <BreakdownPanel id="tabel-grup" title="Achievement per Grup" desc="Actual vs target staff per grup (Apple · Android · ACC · VAS)." data={groupTable} tg={tg} range={range} totalLabel="Total" cards />
+      <BreakdownPanel id="tabel-grup" title="Achievement per Grup" desc="Actual vs target staff per grup (Apple · Android · ACC · VAS)." data={groupTable} tg={tg} range={range} totalLabel="Total" />
       <BreakdownPanel id="tabel-apple" title="Achievement Apple" desc={`Value & qty Apple per salesperson per LOB${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per LOB dari Target Store.`} data={appleTable} tg={tg} range={range} note="AirPods dihitung di ACC — ditampilkan, tapi tidak masuk Total Apple." totalLabel="Total Apple" />
       <BreakdownPanel id="tabel-android" title="Detail Pencapaian Android" desc={`Value & qty Android per salesperson per brand${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per brand dari Target Store.`} data={androidTable} tg={tg} range={range} totalLabel="Total Android" />
       <BreakdownPanel id="tabel-vas" title="Pencapaian VAS" desc={`Value & qty VAS per salesperson per provider${range ? ` (${from} s/d ${to}, target dipro-rata)` : ""}. Persen = achievement vs target staff per provider dari Target Store.`} data={vasTable} tg={tg} range={range} totalLabel="Total VAS" />
@@ -269,7 +269,7 @@ interface Breakdown {
 }
 
 /** Salesperson × item table: value, unit and % of the staff target for each item, plus the group total. */
-function BreakdownPanel({ id, title, desc, data, tg, range, note, totalLabel, cards }: { id: string; title: string; desc: string; data: Breakdown; tg: number; range: boolean; note?: string; totalLabel: string; cards?: boolean }) {
+function BreakdownPanel({ id, title, desc, data, tg, range, note, totalLabel }: { id: string; title: string; desc: string; data: Breakdown; tg: number; range: boolean; note?: string; totalLabel: string }) {
   const tone = (c: Cell) => ((c.value / c.target) * 100 >= tg ? "text-emerald-600" : "text-rose-600");
   const Value = ({ c, strong, foot }: { c: Cell; strong?: boolean; foot?: boolean }) => (
     <>
@@ -307,7 +307,7 @@ function BreakdownPanel({ id, title, desc, data, tg, range, note, totalLabel, ca
           </div>
         ))}
       </div>
-      {cards ? <AchCards data={data} tg={tg} range={range} totalLabel={totalLabel} /> : <div className="sd-table-wrap hidden md:block">
+      <div className="sd-table-wrap hidden md:block">
         <table className="sd-table">
           <thead>
             <tr>
@@ -333,111 +333,11 @@ function BreakdownPanel({ id, title, desc, data, tg, range, note, totalLabel, ca
             </tr>
           </tfoot>
         </table>
-      </div>}
-      {cards && (
-        <p className="mt-3 text-xs text-slate-500 max-md:hidden">
-          Tiap kotak: <b>%</b> achievement · angka tebal = <b>actual</b> · <b>sisa</b> = target − actual (belum tercapai) · <b>lebih</b> = sudah melewati target.
-        </p>
-      )}
-      <p className={`${cards ? "mt-1" : "mt-3"} text-xs text-slate-500`}>
+      </div>
+      <p className="mt-3 text-xs text-slate-500">
         Hijau bila achievement ≥ {range ? "100%" : `time gone (${pct(tg)})`}. {note ? `${note} ` : ""}
         {data.hasTarget ? "" : "Target per item belum terbaca dari tab Target Store — hanya actual yang ditampilkan."}
       </p>
     </Panel>
-  );
-}
-
-/**
- * Desktop "Achievement per Grup": one compact card per staff × group — big %, a bar with the time-gone tick,
- * actual, target and what is left (or over) — so the whole team fits on one screen for a screenshot.
- */
-function AchCards({ data, tg, range, totalLabel }: { data: Breakdown; tg: number; range: boolean; totalLabel: string }) {
-  const rows = [...data.body.map((b) => ({ key: b.r.key, name: b.r.name, cells: b.cells as Cell[], total: b.total })), { key: "__total", name: "TOTAL", cells: data.foot as Cell[], total: data.total }];
-  const cols = `minmax(6rem,0.65fr) repeat(${data.cols.length},minmax(0,1fr)) minmax(0,1.18fr)`; // Total a bit wider: it sits apart (ml-1.5)
-  return (
-    <div className="hidden md:block">
-      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] font-semibold text-slate-500">
-        <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-sm bg-emerald-500" />≥ {range ? "100%" : `time gone ${pct(tg, 0)}`}</span>
-        <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-sm bg-amber-500" />hampir (≥ {pct(tg * 0.8, 0)})</span>
-        <span className="flex items-center gap-1.5"><i className="size-2.5 rounded-sm bg-rose-500" />di bawah</span>
-        {!range && <span className="flex items-center gap-1.5"><i className="h-3 w-0.5 bg-slate-900 dark:bg-white" />garis = time gone</span>}
-      </div>
-      <div className="grid gap-x-1 gap-y-1.5" style={{ gridTemplateColumns: cols }}>
-        <span />
-        {data.cols.map((c) => <span key={c.key} className="px-1 text-[11px] font-extrabold tracking-wider text-slate-500 uppercase">{c.label}</span>)}
-        <span className="ml-1.5 self-end justify-self-start rounded-md bg-blue-600 px-2 py-0.5 text-[11px] font-extrabold tracking-wider text-white uppercase">{totalLabel}</span>
-        {rows.map((b) => {
-          const team = b.key === "__total";
-          return (
-            <div key={b.key} className="contents">
-              {team ? (
-                <div className="mt-2 flex items-center"><span className="rounded-md bg-blue-600 px-2 py-0.5 text-[12px] font-black tracking-wide text-white">TOTAL STORE</span></div>
-              ) : (
-                <div className="flex items-center pr-1 text-[13px] leading-tight font-extrabold">{b.name}</div>
-              )}
-              {b.cells.map((c, i) => <AchCard key={i} c={c} tg={tg} kind={team ? "row" : "item"} />)}
-              <AchCard c={b.total} tg={tg} kind={team ? "grand" : "col"} />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/**
- * item = staff × group · col = staff total (light blue, right column) · row = store total per group (blue, bottom row)
- * · grand = store total of everything (light blue + blue ring).
- */
-type AchKind = "item" | "col" | "row" | "grand";
-function AchCard({ c, tg, kind }: { c: Cell; tg: number; kind: AchKind }) {
-  const tot = kind === "col" || kind === "grand";
-  const box = `rounded-xl border px-2 py-1.5 ${
-    tot
-      ? `ml-1.5 border-2 border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/40 ${kind === "grand" ? "mt-2 ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-slate-900" : ""}`
-      : kind === "row"
-        ? "mt-2 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40"
-        : "border-slate-200 dark:border-slate-700"
-  }`;
-  const muted = "text-slate-500";
-  const strong = "text-slate-900 dark:text-slate-100";
-  if (!c.target) {
-    return (
-      <div className={box}>
-        <div className="flex items-baseline justify-between gap-1">
-          <span className="text-[11px] font-semibold text-slate-400">{c.value || c.qty ? "tanpa target" : "–"}</span>
-          {(c.value !== 0 || c.qty !== 0) && <b className={`text-[13px] tabular-nums ${strong}`}>{rpc(c.value)}</b>}
-        </div>
-        {(c.value !== 0 || c.qty !== 0) && <p className="text-right text-[11px] text-slate-400">{num(c.qty)} unit</p>}
-      </div>
-    );
-  }
-  const a = (c.value / c.target) * 100;
-  const t = a >= tg
-    ? { txt: "text-emerald-600 dark:text-emerald-400", bar: "bg-emerald-500" }
-    : a >= tg * 0.8
-      ? { txt: "text-amber-600 dark:text-amber-400", bar: "bg-amber-500" }
-      : { txt: "text-rose-600 dark:text-rose-400", bar: "bg-rose-500" };
-  const gap = c.value - c.target;
-  return (
-    <div className={box} title={`Actual ${rpf(c.value)} · Target ${rpf(c.target)} · ${num(c.qty)} unit`}>
-      <div className="flex items-baseline justify-between gap-1">
-        <span className="flex items-baseline gap-1 whitespace-nowrap">
-          <b className={`text-lg leading-none font-black tabular-nums ${t.txt}`}>{pct(a, 0)}</b>
-          <span className="text-[10.5px] text-slate-400">{num(c.qty)} unit</span>
-        </span>
-        <b className={`text-[13px] whitespace-nowrap tabular-nums ${strong}`}>{rpc(c.value)}</b>
-      </div>
-      <div className={`relative my-1 h-1.5 rounded-full ${tot ? "bg-blue-100 dark:bg-slate-700" : kind === "row" ? "bg-blue-100 dark:bg-slate-700" : "bg-slate-200 dark:bg-slate-700"}`}>
-        <span className={`absolute inset-y-0 left-0 rounded-full ${t.bar}`} style={{ width: `${Math.min(100, Math.max(0, a))}%` }} />
-        {tg > 0 && tg < 100 && <i className={`absolute -top-0.5 h-2.5 w-0.5 bg-slate-900 dark:bg-white`} style={{ left: `${tg}%` }} />}
-      </div>
-      <div className="flex items-baseline justify-between gap-1 text-[10.5px] leading-tight whitespace-nowrap tabular-nums">
-        <span className={muted}>target <b className="text-slate-700 dark:text-slate-200">{rpc(c.target)}</b></span>
-        <span className={gap >= 0 ? `font-bold ${t.txt}` : a >= tg * 0.8 ? muted : `font-semibold ${t.txt}`}>
-          {gap >= 0 ? "lebih" : "sisa"} <b>{rpc(Math.abs(gap)).replace("Rp", "")}</b>
-        </span>
-      </div>
-    </div>
   );
 }
