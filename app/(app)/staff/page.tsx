@@ -365,7 +365,7 @@ function AchCards({ data, tg, range, totalLabel }: { data: Breakdown; tg: number
       <div className="grid gap-1.5" style={{ gridTemplateColumns: cols }}>
         <span />
         {data.cols.map((c) => <span key={c.key} className="px-1 text-[11px] font-extrabold tracking-wider text-slate-500 uppercase">{c.label}</span>)}
-        <span className="ml-1.5 self-end justify-self-start rounded-md bg-slate-900 px-2 py-0.5 text-[11px] font-extrabold tracking-wider text-white uppercase dark:bg-blue-600">{totalLabel}</span>
+        <span className="ml-1.5 self-end justify-self-start rounded-md bg-blue-600 px-2 py-0.5 text-[11px] font-extrabold tracking-wider text-white uppercase">{totalLabel}</span>
         {rows.map((b) => {
           const team = b.key === "__total";
           return (
@@ -386,21 +386,21 @@ function AchCards({ data, tg, range, totalLabel }: { data: Breakdown; tg: number
 }
 
 /**
- * item = staff × group · col = staff total (dark, right column) · row = team total per group (blue, bottom row)
- * · grand = team total of everything (dark + blue ring).
+ * item = staff × group · col = staff total (light blue, right column) · row = team total per group (blue, bottom row)
+ * · grand = team total of everything (light blue + blue ring).
  */
 type AchKind = "item" | "col" | "row" | "grand";
 function AchCard({ c, tg, kind }: { c: Cell; tg: number; kind: AchKind }) {
-  const dark = kind === "col" || kind === "grand";
+  const tot = kind === "col" || kind === "grand";
   const box = `rounded-xl border px-2.5 py-1.5 ${
-    dark
-      ? `ml-1.5 border-slate-900 bg-slate-900 text-white dark:border-blue-800 dark:bg-blue-950 ${kind === "grand" ? "mt-2 ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-slate-900" : ""}`
+    tot
+      ? `ml-1.5 border-2 border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/40 ${kind === "grand" ? "mt-2 ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-slate-900" : ""}`
       : kind === "row"
         ? "mt-2 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40"
         : "border-slate-200 dark:border-slate-700"
   }`;
-  const muted = dark ? "text-slate-400" : "text-slate-500";
-  const strong = dark ? "text-white" : "text-slate-900 dark:text-slate-100";
+  const muted = "text-slate-500";
+  const strong = "text-slate-900 dark:text-slate-100";
   if (!c.target) {
     return (
       <div className={box}>
@@ -414,10 +414,10 @@ function AchCard({ c, tg, kind }: { c: Cell; tg: number; kind: AchKind }) {
   }
   const a = (c.value / c.target) * 100;
   const t = a >= tg
-    ? { txt: dark ? "text-emerald-400" : "text-emerald-600 dark:text-emerald-400", bar: dark ? "bg-emerald-400" : "bg-emerald-500" }
+    ? { txt: "text-emerald-600 dark:text-emerald-400", bar: "bg-emerald-500" }
     : a >= tg * 0.8
-      ? { txt: dark ? "text-amber-400" : "text-amber-600 dark:text-amber-400", bar: dark ? "bg-amber-400" : "bg-amber-500" }
-      : { txt: dark ? "text-rose-400" : "text-rose-600 dark:text-rose-400", bar: dark ? "bg-rose-400" : "bg-rose-500" };
+      ? { txt: "text-amber-600 dark:text-amber-400", bar: "bg-amber-500" }
+      : { txt: "text-rose-600 dark:text-rose-400", bar: "bg-rose-500" };
   const gap = c.value - c.target;
   return (
     <div className={box} title={`Actual ${rpf(c.value)} · Target ${rpf(c.target)} · ${num(c.qty)} unit`}>
@@ -428,12 +428,12 @@ function AchCard({ c, tg, kind }: { c: Cell; tg: number; kind: AchKind }) {
         </span>
         <b className={`text-[13px] whitespace-nowrap tabular-nums ${strong}`}>{rpc(c.value)}</b>
       </div>
-      <div className={`relative my-1 h-1.5 rounded-full ${dark ? "bg-slate-700" : kind === "row" ? "bg-blue-100 dark:bg-slate-700" : "bg-slate-200 dark:bg-slate-700"}`}>
+      <div className={`relative my-1 h-1.5 rounded-full ${tot ? "bg-blue-100 dark:bg-slate-700" : kind === "row" ? "bg-blue-100 dark:bg-slate-700" : "bg-slate-200 dark:bg-slate-700"}`}>
         <span className={`absolute inset-y-0 left-0 rounded-full ${t.bar}`} style={{ width: `${Math.min(100, Math.max(0, a))}%` }} />
-        {tg > 0 && tg < 100 && <i className={`absolute -top-0.5 h-2.5 w-0.5 ${dark ? "bg-white" : "bg-slate-900 dark:bg-white"}`} style={{ left: `${tg}%` }} />}
+        {tg > 0 && tg < 100 && <i className={`absolute -top-0.5 h-2.5 w-0.5 bg-slate-900 dark:bg-white`} style={{ left: `${tg}%` }} />}
       </div>
       <div className="flex items-baseline justify-between gap-1 text-[11px] leading-tight whitespace-nowrap tabular-nums">
-        <span className={muted}>dari <b className={dark ? "text-slate-100" : "text-slate-700 dark:text-slate-200"}>{rpc(c.target)}</b></span>
+        <span className={muted}>dari <b className="text-slate-700 dark:text-slate-200">{rpc(c.target)}</b></span>
         <span className={gap >= 0 ? `font-bold ${t.txt}` : a >= tg * 0.8 ? muted : `font-semibold ${t.txt}`}>
           {gap >= 0 ? "lebih" : "sisa"} <b>{rpc(Math.abs(gap)).replace("Rp", "")}</b>
         </span>
