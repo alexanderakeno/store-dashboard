@@ -70,16 +70,23 @@ export interface WeekRange {
   end: ISODate;
 }
 
-/** Sunday–Saturday weeks of a month, clipped to the month boundaries. */
-export function weeksOfMonth(month: MonthKey): WeekRange[] {
+/** 0 = weeks run Sunday–Saturday (the app's default), 1 = Monday–Sunday. */
+export type WeekStart = 0 | 1;
+
+/** Days from `date` to the last day of its week (Saturday, or Sunday when weeks start on Monday). */
+export function daysToWeekEnd(date: ISODate, weekStart: WeekStart = 0): number {
+  return (weekStart + 6 - dayOfWeek(date)) % 7;
+}
+
+/** Weeks of a month (Sunday–Saturday, or Monday–Sunday with `weekStart` 1), clipped to the month boundaries. */
+export function weeksOfMonth(month: MonthKey, weekStart: WeekStart = 0): WeekRange[] {
   const first = monthStart(month);
   const last = monthEnd(month);
   const weeks: WeekRange[] = [];
   let start = first;
   let index = 1;
   while (start <= last) {
-    const toSat = 6 - dayOfWeek(start);
-    let end = addDays(start, toSat);
+    let end = addDays(start, daysToWeekEnd(start, weekStart));
     if (end > last) end = last;
     weeks.push({ index, label: `Week ${index}`, start, end });
     start = addDays(end, 1);
