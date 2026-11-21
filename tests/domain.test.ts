@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_RULES } from "@/config/business";
 import { normalizeInvoice, parseDate, parseNumber, splitProduct } from "@/lib/domain/normalize";
-import { daysInMonth, weeksOfMonth } from "@/lib/domain/period";
+import { daysInMonth, daysToWeekEnd, weeksOfMonth } from "@/lib/domain/period";
 import { buildPriceBook, inferQty } from "@/lib/domain/qty";
 import { byStaff, enrichSales, estimateClosing, invoices, point, points, totals } from "@/lib/domain/kpi";
 import { reconcile } from "@/lib/domain/reconcile";
@@ -47,6 +47,22 @@ test("weeks are Sunday–Saturday, clipped to month", () => {
   assert.equal(w[1].end, "2026-09-12");
   assert.equal(w.at(-1)!.end, "2026-09-30");
   assert.equal(daysInMonth("2026-02"), 28);
+});
+
+test("weeks can run Monday–Sunday, clipped to month", () => {
+  const w = weeksOfMonth("2026-11", 1); // 1 Nov 2026 = Sunday
+  assert.deepEqual(w.map((x) => [x.start, x.end]), [
+    ["2026-11-01", "2026-11-01"],
+    ["2026-11-02", "2026-11-08"],
+    ["2026-11-09", "2026-11-15"],
+    ["2026-11-16", "2026-11-22"],
+    ["2026-11-23", "2026-11-29"],
+    ["2026-11-30", "2026-11-30"],
+  ]);
+  assert.equal(weeksOfMonth("2026-09", 1)[0].end, "2026-09-06"); // Tue 1 → Sun 6
+  assert.equal(daysToWeekEnd("2026-11-21"), 0); // Saturday ends a Sun–Sat week
+  assert.equal(daysToWeekEnd("2026-11-21", 1), 1); // … and is one day before Sunday in a Mon–Sun week
+  assert.equal(daysToWeekEnd("2026-11-22", 1), 0);
 });
 
 test("qty inference from unit prices", () => {

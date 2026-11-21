@@ -5,7 +5,7 @@
 import { GROUPS, type Group, type ISODate, type MonthKey, type SalesLine, type StoreTarget, type Totals } from "@/types/domain";
 import { byStaff, totals, type StaffRow } from "./kpi";
 import { displayName, nameKey } from "./normalize";
-import { daysInMonth, eachDay, monthStart, weeksOfMonth, type WeekRange } from "./period";
+import { daysInMonth, eachDay, monthStart, weeksOfMonth, type WeekRange, type WeekStart } from "./period";
 import { conversion, type HomeView, type MonthInput } from "./views";
 
 export const APPLE_LOBS = ["iPhone", "Mac", "iPad", "Apple Watch", "AirPods"] as const;
@@ -223,8 +223,8 @@ export function typeQty(lines: SalesLine[]): Array<{ type: string; lob: string; 
 }
 
 /** Weeks of the month that have started by asOf. */
-export function startedWeeks(month: MonthKey, asOf: ISODate): WeekRange[] {
-  return weeksOfMonth(month).filter((w) => w.start <= asOf);
+export function startedWeeks(month: MonthKey, asOf: ISODate, weekStart: WeekStart = 0): WeekRange[] {
+  return weeksOfMonth(month, weekStart).filter((w) => w.start <= asOf);
 }
 
 export function clampRange(month: MonthKey, asOf: ISODate, from?: string, to?: string): { from: ISODate; to: ISODate } {

@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { NeedData, PageIntro, Panel, Progress, Trend, achColor } from "@/components/kit";
@@ -7,9 +8,10 @@ import { appConfig } from "@/config/app";
 import { lobBreakdown, productType, rangeConversion, startedWeeks } from "@/lib/domain/extra";
 import { Grid } from "@/components/kit/FitGrid";
 import { LobCompare } from "@/components/modules/LobCompare";
+import { WeekStartToggle } from "@/components/modules/WeekStartToggle";
 import { byStaff, totals } from "@/lib/domain/kpi";
 import { displayName } from "@/lib/domain/normalize";
-import { addDays, daysInMonth, eachDay } from "@/lib/domain/period";
+import { addDays, daysInMonth, daysToWeekEnd, eachDay, type WeekStart } from "@/lib/domain/period";
 import { dayName, dec, monthLabel, num, pct, rp, rpc, rpf } from "@/lib/format";
 import { loadPage, type SearchParams } from "@/lib/page";
 import { withQuery } from "@/lib/qs";
@@ -22,7 +24,8 @@ const dm = (d: string) => `${Number(d.slice(8))} ${MON[Number(d.slice(5, 7)) - 1
 const span = (a: string, b: string) => (a === b ? dm(a) : a.slice(0, 7) === b.slice(0, 7) ? `${Number(a.slice(8))}–${dm(b)}` : `${dm(a)}–${dm(b)}`);
 
 /**
- * Weekly Performance: one week (Sunday–Saturday, cut at the month's edges like every week in the app) —
+ * Weekly Performance: one week (Sunday–Saturday like every week in the app, or Monday–Sunday when picked —
+ * remembered in the "sd-week" cookie — cut at the month's edges) —
  * sales vs the week's target (monthly target ÷ days in month × days in the week), day by day, per group,
  * per staff, top products and the month's week-by-week trend.
  */
@@ -31,7 +34,9 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
   if (p.state !== "ok") return <PageStatus title="Weekly Performance" p={p} />;
   const s = p.snap;
   const dim = daysInMonth(p.month);
-  const weeks = startedWeeks(p.month, p.asOf);
+  const ws: WeekStart = (await cookies()).get("sd-week")?.value === "mon" ? 1 : 0;
+  const wsLabel = ws ? "Senin–Minggu" : "Minggu–Sabtu";
+  const weeks = startedWeeks(p.month, p.asOf, ws);
   const cur = weeks.find((w) => String(w.index) === p.q.w) ?? weeks.find((w) => w.start <= p.asOf && p.asOf <= w.end) ?? weeks[weeks.length - 1];
   const prev = weeks.find((w) => w.index === cur.index - 1) ?? null;
 
@@ -44,7 +49,7 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
   const days = eachDay(cur.start, cur.end);
   const running = cur.end > p.asOf;
   // while the week is running, compare like-for-like: the previous week up to the same weekday (e.g. Sun–Mon vs Sun–Mon)
-  const prevCut = prev && running ? addDays(prev.end, -(6 - new Date(`${p.asOf}T00:00:00Z`).getUTCDay())) : prev?.end;
+  const prevCut = prev && running ? addDays(prev.end, -daysToWeekEnd(p.asOf, ws)) : prev?.end;
   const ta = prev && prevCut && prevCut >= prev.start ? totals(linesOf({ start: prev.start, end: prevCut })) : null;
   // week-to-week LOB comparison: same days as the KPI (like-for-like) unless "Full week lalu" is picked
   const fullPrev = p.q.lw === "full" || !running;
@@ -60,7 +65,7 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
   const conv = rangeConversion(s, cur.start, upTo(cur.end));
   const dailyTarget = (s.target?.total ?? 0) / dim;
 
-  // day by day (Sunday → Saturday); days after the data date are "belum"
+  // day by day (Sunday → Saturday, or Monday → Sunday); days after the data date are "belum"
   const byDay = new Map<string, SalesLine[]>();
   for (const l of B) byDay.set(l.date, [...(byDay.get(l.date) ?? []), l]);
   const dayRows = days.map((d) => ({ date: d, future: d > p.asOf, t: totals(byDay.get(d) ?? []) }));
@@ -96,6 +101,7 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
   const share = [
     `*${appConfig().storeName || "Store"}*`,
     `*Weekly Performance W${cur.index} — ${range} ${p.month.slice(0, 4)}*`,
+    ...(ws ? ["_Week Senin–Minggu_"] : []),
     ...(running ? [`_Week berjalan, data s/d ${dayName(p.asOf)} ${dm(p.asOf)}_`] : []),
     "",
     "*SALES WEEK*",
@@ -122,11 +128,13 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
     <div className="sd-content">
       <PageIntro
         title="Weekly Performance"
-        desc={`Pencapaian per week (Minggu–Sabtu) · ${monthLabel(p.month)} · target week = target bulanan ÷ ${dim} × hari dalam week.`}
+        desc={`Pencapaian per week (${wsLabel}) · ${monthLabel(p.month)} · target week = target bulanan ÷ ${dim} × hari dalam week.`}
         actions={<><PrintButton /><WhatsAppButton text={share} /></>}
       />
 
-      <section className="sd-panel flex flex-wrap gap-1.5 p-3 sm:p-4" aria-label="Pilih week">
+      <section className="sd-panel p-3 sm:p-4" aria-label="Pilih week">
+        <WeekStartToggle value={ws} />
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
         {weeks.map((w) => (
           <Link
             key={w.index}
@@ -139,6 +147,7 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
             <span className={`block text-[11px] font-semibold ${w.index === cur.index ? "opacity-75" : "text-slate-500"}`}>{span(w.start, w.end)}{w.end > p.asOf ? " · berjalan" : ""}</span>
           </Link>
         ))}
+        </div>
       </section>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -167,7 +176,7 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
         </article>
       </div>
 
-      <Panel title="Harian Minggu–Sabtu" desc={`Batang = sales per hari · garis = target harian (${rpc(dailyTarget)}). Biru ≥ target, merah muda < target. Ketuk hari untuk detail.`}>
+      <Panel title={`Harian ${wsLabel}`} desc={`Batang = sales per hari · garis = target harian (${rpc(dailyTarget)}). Biru ≥ target, merah muda < target. Ketuk hari untuk detail.`}>
         <div className="relative flex h-44 items-end gap-1.5 border-b border-slate-200 px-1 pt-5 sm:gap-3 dark:border-slate-700">
           {dailyTarget > 0 && (
             <div className="pointer-events-none absolute inset-x-0 border-t-2 border-dashed border-amber-500" style={{ bottom: `${(dailyTarget / peak) * 100}%` }}>
@@ -294,7 +303,7 @@ export default async function WeekPerformancePage({ searchParams }: { searchPara
               </span>
             ))}
           </div>
-          <p className="mt-3 text-xs text-slate-500">Week mengikuti kalender Minggu–Sabtu dan dipotong di awal/akhir bulan, jadi W pertama & terakhir bisa kurang dari 7 hari (targetnya ikut menyesuaikan).</p>
+          <p className="mt-3 text-xs text-slate-500">Week mengikuti kalender {wsLabel} dan dipotong di awal/akhir bulan, jadi W pertama & terakhir bisa kurang dari 7 hari (targetnya ikut menyesuaikan).</p>
         </Panel>
       </div>
     </div>
