@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, requireSession } from "@/lib/auth/session";
+import { requireOwner } from "@/lib/auth/session";
 import { invalidate } from "@/lib/cache";
 import { getDra } from "@/lib/dra";
 import { BadRequest, assertSameOrigin, handle, jsonBody } from "@/lib/http";
@@ -8,20 +8,20 @@ import { DRA_LIMITS, type DraPack } from "@/types/dra";
 
 const str = (v: unknown, max: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 
-/** Latest DRA for the DRA page (any signed-in user). */
+/** Latest DRA (owner account only, like the DRA page). */
 export async function GET() {
   return handle(async () => {
-    await requireSession();
+    await requireOwner();
     const d = await getDra();
     return NextResponse.json(d, { headers: { "Cache-Control": "private, max-age=60" } });
   });
 }
 
-/** Admin: replace the stored DRA with the pack parsed in the browser from the weekly Excel. */
+/** Owner: replace the stored DRA with the pack parsed in the browser from the weekly Excel. */
 export async function POST(req: Request) {
   return handle(async () => {
     assertSameOrigin(req);
-    const s = await requireAdmin();
+    const s = await requireOwner();
     const b = await jsonBody<Partial<DraPack>>(req);
     if (!Array.isArray(b.sites) || !Array.isArray(b.arts) || !Array.isArray(b.rows)) throw new BadRequest("Data DRA tidak valid");
     if (b.sites.length > DRA_LIMITS.sites || b.arts.length > DRA_LIMITS.arts || b.rows.length > DRA_LIMITS.lines * 4 || b.rows.length % 4) throw new BadRequest("Data DRA terlalu besar atau rusak");

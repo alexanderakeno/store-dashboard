@@ -2,13 +2,13 @@ import { EmptyBlock, PageIntro, Panel } from "@/components/kit";
 import { RetryButton } from "@/components/kit/RetryButton";
 import { DraApp } from "@/components/modules/DraApp";
 import { appConfig } from "@/config/app";
-import { requireSession } from "@/lib/auth/session";
+import { requireOwnerPage } from "@/lib/auth/session";
 import { getDra } from "@/lib/dra";
 import type { DraSnapshot } from "@/types/dra";
 
-/** DRA: weekly network stock & sales per store per article (Excel upload), searchable and filterable. */
+/** DRA: weekly network stock & sales per store per article (Excel upload), searchable and filterable. Only the owner account (ADMIN_NIK) can open it. */
 export default async function DraPage() {
-  const session = await requireSession();
+  await requireOwnerPage();
   let dra: DraSnapshot | null;
   try {
     dra = await getDra();
@@ -31,7 +31,7 @@ export default async function DraPage() {
         title="DRA Stok & Sales"
         desc={dra ? `${dra.week || "DRA"} · stok & penjualan semua toko per artikel · cari artikel, pilih toko, saring brand / sub-LOB.` : "Stok & penjualan semua toko per artikel dari file DRA mingguan."}
       />
-      <DraApp dra={dra} isAdmin={session.role === "admin"} storeCode={appConfig().storeCode} />
+      <DraApp dra={dra} isAdmin storeCode={appConfig().storeCode} />
     </div>
   );
 }

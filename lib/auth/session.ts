@@ -30,6 +30,27 @@ export async function requireAdminPage(): Promise<Session> {
   return s;
 }
 
+/** The owner account: the admin whose NIK is ADMIN_NIK in the env (not written in code). */
+export function isOwner(s: Session | null): boolean {
+  const nik = appConfig().adminNik;
+  return !!s && !!nik && s.role === "admin" && s.nik === (normalizeNik(nik) ?? nik);
+}
+
+/** Pages only the owner may open (others go back to Overview). */
+export async function requireOwnerPage(): Promise<Session> {
+  const s = await requireSession();
+  if (!isOwner(s)) redirect("/home");
+  return s;
+}
+
+/** Route handlers only the owner may call. */
+export async function requireOwner(): Promise<Session> {
+  const s = await getSession();
+  if (!s) throw new AuthError(401);
+  if (!isOwner(s)) throw new AuthError(403);
+  return s;
+}
+
 export class AuthError extends Error {
   constructor(public status: 401 | 403) {
     super(status === 401 ? "Sesi berakhir, silakan login ulang" : "Hanya admin yang dapat melakukan ini");
