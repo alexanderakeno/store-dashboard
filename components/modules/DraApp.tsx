@@ -12,6 +12,15 @@ const fmt = (n: number) => nf.format(n);
 const MON = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 const dmy = (d: string | null) => (d ? `${Number(d.slice(8))} ${MON[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}` : "–");
 const PAGE = 150;
+/**
+ * Device = what the dashboard counts as a device: Apple iPhone · iPad · Mac · Apple Watch, and Android phones,
+ * tablets and watches. Not: AirPods / EarPods (ACC), cases, bands, chargers, keyboards, pencils, AirTag,
+ * Studio Display, Apple Care, power banks, Shark / Ninja appliances, free gifts, Non MD.
+ */
+const APPLE_DEVICE = /^(i\s?phone|ipad|mba\b|mbp\b|mbn\b|mb$|imac|mac\b|apple watch|cto$)/i;
+const NOT_DEVICE = /free gift|power bank|band apple|strap|case|charger|connector/i;
+const isDevice = (sub: string, brand: string, kind: 0 | 1) =>
+  kind === 0 ? APPLE_DEVICE.test(sub.trim()) && !NOT_DEVICE.test(sub) : !!brand && !/^shark|^non md$/i.test(brand) && !NOT_DEVICE.test(sub);
 const ALL = "__all";
 
 type Kind = "all" | "apple" | "android";
@@ -29,6 +38,7 @@ interface Art {
   stores: number;
   /** per-store lines known (false = Apple accessory, network total only) */
   perStore: boolean;
+  device: boolean;
   text: string;
 }
 
@@ -43,6 +53,7 @@ export function DraApp({ dra, isAdmin, storeCode }: { dra: DraSnapshot | null; i
   const [site, setSite] = useState<number | typeof ALL>(ownSite >= 0 ? ownSite : ALL);
   const [hasStock, setHasStock] = useState(false);
   const [hasSales, setHasSales] = useState(false);
+  const [deviceOnly, setDeviceOnly] = useState(false);
   const [sort, setSort] = useState<{ k: SortKey; desc: boolean }>({ k: "sales", desc: true });
   const [limit, setLimit] = useState(PAGE);
   const [open, setOpen] = useState<number | null>(null);
@@ -50,7 +61,7 @@ export function DraApp({ dra, isAdmin, storeCode }: { dra: DraSnapshot | null; i
   // per article aggregates + per (site, article) lines
   const base = useMemo(() => {
     if (!dra) return null;
-    const arts: Art[] = dra.arts.map(([article, desc, subLob, br, k], i) => ({ i, article, desc, sub: subLob, brand: br, kind: k, netSales: 0, netStock: 0, stores: 0, perStore: false, text: `${article} ${desc} ${subLob} ${br}`.toLowerCase() }));
+    const arts: Art[] = dra.arts.map(([article, desc, subLob, br, k], i) => ({ i, article, desc, sub: subLob, brand: br, kind: k, netSales: 0, netStock: 0, stores: 0, perStore: false, device: isDevice(subLob, br, k), text: `${article} ${desc} ${subLob} ${br}`.toLowerCase() }));
     const bySite = new Map<number, Map<number, [number, number]>>();
     const byArt = new Map<number, Array<[number, number, number]>>();
     const r = dra.rows;
@@ -75,6 +86,7 @@ export function DraApp({ dra, isAdmin, storeCode }: { dra: DraSnapshot | null; i
   const one = site !== ALL ? base?.bySite.get(site) : undefined;
   const brands = useMemo(() => (base ? [...new Set(base.arts.filter((a) => kind === "all" || a.kind === (kind === "apple" ? 0 : 1)).map((a) => a.brand))].filter(Boolean).sort() : []), [base, kind]);
   const subs = useMemo(() => (base ? [...new Set(base.arts.filter((a) => (kind === "all" || a.kind === (kind === "apple" ? 0 : 1)) && (!brand || a.brand === brand)).map((a) => a.sub))].filter(Boolean).sort((a, b) => a.localeCompare(b)) : []), [base, kind, brand]);
+  const subsShown = deviceOnly && base ? subs.filter((x) => base.arts.some((a) => a.sub === x && a.device)) : subs;
 
   const list = useMemo(() => {
     if (!base) return [];
@@ -89,6 +101,7 @@ export function DraApp({ dra, isAdmin, storeCode }: { dra: DraSnapshot | null; i
         if (brand && a.brand !== brand) return false;
         if (sub && a.sub !== sub) return false;
         if (site !== ALL && !a.perStore) return false;
+        if (deviceOnly && !a.device) return false;
         if (hasStock && a.stock <= 0) return false;
         if (hasSales && a.sales <= 0) return false;
         if (site !== ALL && !a.sales && !a.stock && !words.length) return false;
@@ -97,7 +110,7 @@ export function DraApp({ dra, isAdmin, storeCode }: { dra: DraSnapshot | null; i
     const { k, desc } = sort;
     out.sort((x, y) => (k === "article" ? x.article.localeCompare(y.article) : (x[k] as number) - (y[k] as number)) * (desc ? -1 : 1) || y.netSales - x.netSales || x.article.localeCompare(y.article));
     return out;
-  }, [base, one, site, kind, brand, sub, hasStock, hasSales, dq, sort]);
+  }, [base, one, site, kind, brand, sub, deviceOnly, hasStock, hasSales, dq, sort]);
 
   const tot = useMemo(() => list.reduce((t, a) => ({ sales: t.sales + a.sales, stock: t.stock + a.stock, netSales: t.netSales + a.netSales, netStock: t.netStock + a.netStock }), { sales: 0, stock: 0, netSales: 0, netStock: 0 }), [list]);
 
@@ -118,6 +131,7 @@ export function DraApp({ dra, isAdmin, storeCode }: { dra: DraSnapshot | null; i
     setSub("");
     setHasStock(false);
     setHasSales(false);
+    setDeviceOnly(false);
     setLimit(PAGE);
   };
   const th = (k: SortKey, label: string, cls = "n") => (
@@ -135,7 +149,7 @@ export function DraApp({ dra, isAdmin, storeCode }: { dra: DraSnapshot | null; i
   );
   const sel = "h-10 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold dark:border-slate-700 dark:bg-slate-900";
   const shown = list.slice(0, limit);
-  const filtered = !!(q || kind !== "all" || brand || sub || hasStock || hasSales);
+  const filtered = !!(q || kind !== "all" || brand || sub || deviceOnly || hasStock || hasSales);
 
   return (
     <div className="space-y-4">
@@ -172,6 +186,7 @@ export function DraApp({ dra, isAdmin, storeCode }: { dra: DraSnapshot | null; i
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {(["all", "apple", "android"] as const).map((k) => chip(kind === k, k === "all" ? "Semua" : k === "apple" ? "Apple" : "Android", () => { setKind(k); setBrand(""); setSub(""); setLimit(PAGE); }))}
+          {chip(deviceOnly, "Device", () => { setDeviceOnly((v) => !v); setSub(""); setLimit(PAGE); })}
           <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
           {kind !== "apple" && (
             <select value={brand} onChange={(e) => { setBrand(e.target.value); setSub(""); setLimit(PAGE); }} className={`${sel} h-8 !w-auto text-xs`} aria-label="Brand">
@@ -181,7 +196,7 @@ export function DraApp({ dra, isAdmin, storeCode }: { dra: DraSnapshot | null; i
           )}
           <select value={sub} onChange={(e) => { setSub(e.target.value); setLimit(PAGE); }} className={`${sel} h-8 !w-auto max-w-[14rem] text-xs`} aria-label="Sub-LOB">
             <option value="">Semua sub-LOB</option>
-            {subs.map((b) => <option key={b}>{b}</option>)}
+            {subsShown.map((b) => <option key={b}>{b}</option>)}
           </select>
           {chip(hasStock, "Ada stok", () => { setHasStock((v) => !v); setLimit(PAGE); })}
           {chip(hasSales, "Ada penjualan", () => { setHasSales((v) => !v); setLimit(PAGE); })}
