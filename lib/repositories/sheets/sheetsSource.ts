@@ -16,12 +16,15 @@ import type { AccPriceItem, AccPriceList } from "@/types/accPrice";
 import type { StokanEvent, StokanItem, StokanSession } from "@/types/stokan";
 import type { SamsungPromo } from "@/types/samsungPromo";
 import type { PwpPromo } from "@/types/pwpPromo";
+import type { DraPack, DraSnapshot } from "@/types/dra";
 import type { AccessEntry, AccessEvent } from "@/types/access";
 import type { PriceChange, PriceChangeType } from "@/lib/domain/priceHistory";
 import { ACCESS_EVENTS } from "@/types/access";
 
 /** Optional tabs of the monthly sheet. */
 export const EXTRA_TABS = { tracker: "CX&GR Tracker", promo: "Rekap Promo", traffic: "Traffic", accFocus: "Data - Akeno" } as const;
+/** Characters of the DRA JSON per APP_DRA cell (Sheets allows 50,000). */
+const DRA_CHUNK = 45_000;
 /** Monthly file tab "Dashboard": the target table sits at B6:G17. */
 export const DASHBOARD_TAB = { name: "Dashboard", range: "B6:G17" } as const;
 import { SheetsError, addTab, appendRows, clearRange, getSpreadsheetMeta, readTab, readTabs, writeRange } from "./client";
@@ -37,6 +40,7 @@ export const MASTER_TABS = {
   priceHistory: { name: "APP_PriceHistory", header: ["ts", "kind", "date", "prevDate", "brand", "series", "name", "change", "oldNormal", "newNormal", "oldPromo", "newPromo", "oldCredit", "newCredit", "oldStatus", "newStatus", "by"] },
   access: { name: "APP_Access", header: ["ts", "nik", "name", "role", "event", "path", "ip", "location", "device"] },
   records: { name: "APP_Records", header: ["kind", "date", "key", "data", "updatedAt", "updatedBy"] },
+  dra: { name: "APP_DRA", header: ["part", "data", "updatedAt", "updatedBy"] },
   soh: { name: "APP_SOH", header: ["category", "article", "description", "qty", "date", "source", "updatedAt", "updatedBy", "price", "barcode"] },
   priceList: { name: "APP_PriceList", header: ["kind", "brand", "series", "name", "normal", "promo", "status", "extra", "date", "source", "updatedAt", "updatedBy"] },
   accPrice: { name: "APP_AccPrice", header: ["article", "brand", "description", "category", "srp", "current", "price", "remark", "date", "source", "updatedAt", "updatedBy"] },
@@ -268,6 +272,23 @@ export class SheetsSource implements DataSource {
     for (const x of rows) out.push([kind, date, x.key, JSON.stringify(x.data), now, by]);
     out.sort((a, b) => String(a[1]).localeCompare(String(b[1])) || String(a[0]).localeCompare(String(b[0])));
     await this.rewrite("records", out);
+  }
+
+  async getDra(): Promise<DraSnapshot | null> {
+    const rows = (await this.rows("dra")).filter((r) => normalizeText(r.data)).sort((a, b) => Number(a.part) - Number(b.part));
+    if (!rows.length) return null;
+    // every chunk starts with "~" so Sheets never turns a chunk into a number
+    const json = rows.map((r) => String(r.data).replace(/^~/, "")).join("");
+    const pack = JSON.parse(json) as DraPack;
+    return { ...pack, updatedAt: normalizeText(rows[0].updatedAt), updatedBy: normalizeText(rows[0].updatedBy) };
+  }
+
+  async saveDra(pack: DraPack, by: string): Promise<void> {
+    const json = JSON.stringify(pack);
+    const now = new Date().toISOString();
+    const out: unknown[][] = [];
+    for (let i = 0, part = 1; i < json.length; i += DRA_CHUNK, part++) out.push([part, `~${json.slice(i, i + DRA_CHUNK)}`, now, by]);
+    await this.rewrite("dra", out, true);
   }
 
   async getSoh(): Promise<SohSnapshot | null> {
