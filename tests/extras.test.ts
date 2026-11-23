@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseDashTarget, parsePromo, parseTracker, parseTrafficTab } from "@/lib/parsers/extras";
+import { isDraWorkbook, parseDraWorkbook } from "@/lib/parsers/dra";
 
 const TRACKER = [
   ["Oktober", "CX", "", "", "", "", "", "", "", "", "", "", "", "", "GR"],
@@ -70,4 +71,21 @@ test("parseDashTarget reads tab Dashboard B6:G17 (title row, header, staff, hidd
   assert.deepEqual(t.rows[0].values, [649319576, 133180000, 31356309, 36604083, 850459968]);
   assert.deepEqual(t.total, [6493195762, 1331800000, 313563088, 366040829, 8504599679]);
   assert.equal(parseDashTarget([["", "Target"], []]), null);
+});
+
+test("DRA workbook: per-store Apple & Android lines, Apple accessory totals, file name info", () => {
+  const sheets = [
+    { name: "by article", rows: [["Article", "Sales qty", "Stk OnHand", "Detailed Category (Sub-LOB)"], ["APPA", 3, 10, "IPHONE 17"], ["APPCASE", 2, 40, "CASE IPHONE 17"], ["APPZERO", null, null, "X"], ["Total", 5, 50, ""]] },
+    { name: "apple by article", rows: [["New Site", "Article", "Article Description", "Detailed Category (Sub-LOB)", "Sales qty", "Stk OnHand"], ["QF10 Digiplus Kota Kasablanka", "APPA", "IPHONE 17 256GB BLACK", "IPHONE 17", 2, 4], ["QF08 Digiplus Gandaria City", "APPA", "IPHONE 17 256GB BLACK", "IPHONE 17", null, 0], ["M118 Digimap PIM", "APPA", "IPHONE 17 256GB BLACK", "IPHONE 17", 1, 6]] },
+    { name: "android by article", rows: [["New Site", "BRAND", "Article", "Article Description", "Detailed Category (Sub-LOB)", "Sales qty", "Stk OnHand"], ["QF10 Digiplus Kota Kasablanka", "SAMSUNG", "SMS1", "GALAXY S25 256GB", "Galaxy S25", 1, 3]] },
+  ];
+  assert.equal(isDraWorkbook(sheets), true);
+  const d = parseDraWorkbook(sheets, "MZA DRA Y27Q1W8 as of minggu 22 nov 2026 V1.xlsx");
+  assert.equal(d.week, "Y27Q1W8");
+  assert.equal(d.asOf, "2026-11-22");
+  assert.deepEqual(d.sites, ["QF10 Digiplus Kota Kasablanka", "M118 Digimap PIM"]); // the all-zero Gandaria line is dropped
+  assert.deepEqual(d.arts.map((a) => [a[0], a[3], a[4]]), [["APPA", "APPLE", 0], ["SMS1", "SAMSUNG", 1], ["APPCASE", "APPLE", 0]]);
+  // QF10 APPA, PIM APPA, QF10 SMS1, network-only APPCASE (APPA is not repeated from "by article", zero rows and Total skipped)
+  assert.deepEqual(d.rows, [0, 0, 2, 4, 1, 0, 1, 6, 0, 1, 1, 3, -1, 2, 2, 40]);
+  assert.equal(isDraWorkbook([{ name: "Sheet1", rows: [["a"]] }]), false);
 });
