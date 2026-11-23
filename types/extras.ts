@@ -39,6 +39,15 @@ export interface AccFocusBoard {
   staff: Array<{ name: string; bySupplier: Record<string, AccFocusCell>; total: AccFocusCell }>;
 }
 
+/** Target table of tab `Dashboard` (B6:G17): monthly target per staff per group, as written in the sheet. */
+export interface DashTarget {
+  /** Column labels after the name, e.g. Apple · Android · Accesories · VAS · Total. */
+  cols: string[];
+  rows: Array<{ name: string; values: number[] }>;
+  /** The sheet's own "Total" row (null when missing). */
+  total: number[] | null;
+}
+
 export interface MonthExtras {
   cx: Tracker | null;
   gr: Tracker | null;
@@ -46,6 +55,8 @@ export interface MonthExtras {
   sheetTraffic: TrafficEntry[];
   /** ACC Fokus incentive from tab `Data - Akeno` (null = tab/block not found). */
   accFocus?: AccFocusBoard | null;
+  /** Target table from tab `Dashboard` B6:G17 (null = tab/table not found, undefined = read before this existed). */
+  dashTarget?: DashTarget | null;
   /** Tab names that were found and read. */
   tabs: string[];
   warnings: string[];
