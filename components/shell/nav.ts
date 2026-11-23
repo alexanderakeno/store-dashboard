@@ -30,11 +30,11 @@ export const NAV: NavEntry[] = [
     color: "text-sky-400",
     items: [
       { href: "/home", label: "Overview", icon: "dashboard", color: "text-sky-400" },
+      { href: "/target", label: "Target", icon: "gauge", color: "text-blue-400" },
       { href: "/sales", label: "Daily Sales", icon: "trending", color: "text-emerald-400" },
       { href: "/summary", label: "Daily Summary", icon: "summary", color: "text-amber-400" },
       { href: "/week-performance", label: "Weekly Performance", icon: "chart", color: "text-lime-400" },
       { href: "/staff", label: "Staff Performance", icon: "users", color: "text-violet-400" },
-      { href: "/target", label: "Target", icon: "gauge", color: "text-blue-400" },
       { href: "/qoala", label: "Qoala", icon: "shield", color: "text-emerald-400" },
       { href: "/incentive", label: "Est. Incentive", icon: "wallet", color: "text-cyan-400" },
       { href: "/soh", label: "SOH", icon: "package", color: "text-orange-400" },
