@@ -1,6 +1,6 @@
 import type { MonthKey, TrafficEntry } from "@/types/domain";
 import { isSheetError } from "./controlSheet";
-import type { AccFocusBoard, AccFocusCell, PromoBrand, Tracker, TrackerDay } from "@/types/extras";
+import type { AccFocusBoard, AccFocusCell, DashTarget, PromoBrand, Tracker, TrackerDay } from "@/types/extras";
 import { normalizeText, parseDate, parseNumber } from "@/lib/domain/normalize";
 import type { Grid } from "./controlSheet";
 
@@ -170,4 +170,34 @@ export function parseAccFocus(grid: Grid): AccFocusBoard | null {
     staff.push({ name, bySupplier, total: totalGroup ? cell(row, totalGroup.col) : sum });
   }
   return { title: t(grid[tr][tc]), suppliers: suppliers.map((g) => g.name), staff };
+}
+
+/**
+ * `Dashboard`!B6:G17 → target table. Column B holds the names; the header row is the first row with
+ * at least two labels to the right of the name column (row 7: Apple | Android | Accesories | VAS | Total —
+ * the "Target" title above it has only one). Every following row with a name is a staff row until the
+ * sheet's own "Total" row.
+ */
+export function parseDashTarget(grid: Grid): DashTarget | null {
+  const hr = grid.findIndex((row) => (row ?? []).slice(1).filter((v) => t(v)).length >= 2);
+  if (hr < 0) return null;
+  const head = grid[hr] ?? [];
+  let last = head.length - 1;
+  while (last > 0 && !t(head[last])) last--;
+  const cols = head.slice(1, last + 1).map((v) => t(v));
+  if (!cols.length) return null;
+  const rows: DashTarget["rows"] = [];
+  let total: number[] | null = null;
+  for (let r = hr + 1; r < grid.length; r++) {
+    const row = grid[r] ?? [];
+    const name = t(row[0]);
+    if (!name || isSheetError(name)) continue;
+    const values = cols.map((_, i) => parseNumber(row[i + 1]));
+    if (/^total/i.test(name)) {
+      total = values;
+      break;
+    }
+    rows.push({ name, values });
+  }
+  return rows.length ? { cols, rows, total } : null;
 }

@@ -7,7 +7,7 @@ import { parseTargetStore } from "@/lib/parsers/targetStore";
 import type { MonthKey, TrafficEntry } from "@/types/domain";
 import type { AppRecord, AppUser, AuditEntry, DataSource, HistoryInput, HistorySummary, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
 import type { MerchLine } from "@/types/domain";
-import { parseAccFocus, parsePromo, parseTracker } from "@/lib/parsers/extras";
+import { parseAccFocus, parseDashTarget, parsePromo, parseTracker } from "@/lib/parsers/extras";
 import { generateExtras, generateMonth } from "./generate";
 import type { SohSnapshot } from "@/types/soh";
 import type { SamsungPromo } from "@/types/samsungPromo";
@@ -86,9 +86,18 @@ export class FixtureSource implements DataSource {
     const last = entry.month === today.slice(0, 7) ? addDays(today, -1) : monthEnd(entry.month);
     const { control, target } = generateMonth(entry.month, last);
     const x = generateExtras(entry.month, last);
+    const tgt = parseTargetStore(target, entry.month);
+    // tab "Dashboard" B6:G17 as the real file lays it out: title row, header row, staff rows, Total
+    const groups = ["Apple", "Android", "ACC", "VAS"] as const;
+    const dash = [
+      ["", "Target"],
+      ["", "Apple", "Android", "Accesories", "VAS", "Total"],
+      ...tgt.staff.map((st) => [st.name, ...groups.map((g) => st.byGroup[g]), groups.reduce((a, g) => a + st.byGroup[g], 0)]),
+      ["Total", ...groups.map((g) => tgt.byGroup[g]), tgt.total],
+    ];
     return {
       control: parseControlSheet(control, entry.month),
-      target: parseTargetStore(target, entry.month),
+      target: tgt,
       sourceTitle: `Synthetic data ${entry.month}`,
       errors: [],
       extras: {
@@ -97,7 +106,8 @@ export class FixtureSource implements DataSource {
         promo: parsePromo(x.promo),
         sheetTraffic: [],
         accFocus: parseAccFocus(x.accFocus),
-        tabs: ["CX&GR Tracker", "Rekap Promo", "Data - Akeno"],
+        dashTarget: parseDashTarget(dash),
+        tabs: ["CX&GR Tracker", "Rekap Promo", "Data - Akeno", "Dashboard"],
         warnings: [],
       },
     };
