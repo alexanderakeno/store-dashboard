@@ -7,7 +7,7 @@ import { parseTargetStore } from "@/lib/parsers/targetStore";
 import type { MonthKey, TrafficEntry } from "@/types/domain";
 import type { AppRecord, AppUser, AuditEntry, DataSource, HistoryInput, HistorySummary, MonthEntry, MonthRaw, RecordKind, SourceCheck } from "../types";
 import type { MerchLine } from "@/types/domain";
-import { parseAccFocus, parsePromo, parseTracker, parseTrafficTab } from "@/lib/parsers/extras";
+import { parseAccFocus, parseDashTarget, parsePromo, parseTracker, parseTrafficTab } from "@/lib/parsers/extras";
 import type { MonthExtras } from "@/types/extras";
 import type { SohSnapshot } from "@/types/soh";
 import type { PriceItem, PriceKind, PriceList } from "@/types/pricelist";
@@ -22,6 +22,8 @@ import { ACCESS_EVENTS } from "@/types/access";
 
 /** Optional tabs of the monthly sheet. */
 export const EXTRA_TABS = { tracker: "CX&GR Tracker", promo: "Rekap Promo", traffic: "Traffic", accFocus: "Data - Akeno" } as const;
+/** Monthly file tab "Dashboard": the target table sits at B6:G17. */
+export const DASHBOARD_TAB = { name: "Dashboard", range: "B6:G17" } as const;
 import { SheetsError, addTab, appendRows, clearRange, getSpreadsheetMeta, readTab, readTabs, writeRange } from "./client";
 
 /** Master-sheet tabs owned by the app. Header order = column order. */
@@ -162,7 +164,11 @@ export class SheetsSource implements DataSource {
     if (!meta.hasSales) throw new Error(`Tab '${cfg.salesSheetName}' tidak ada di file "${meta.title}"`);
     const optional = Object.values(EXTRA_TABS).filter((x) => meta.sheets.includes(x));
     const tabs = [...(meta.hasTarget ? [cfg.salesSheetName, cfg.targetSheetName] : [cfg.salesSheetName]), ...optional];
-    const grids = await readTabs(entry.spreadsheetId, tabs);
+    // target table of tab "Dashboard" (B6:G17) — read alongside; a failure only adds a warning
+    const dash = meta.sheets.includes(DASHBOARD_TAB.name)
+      ? readTab(entry.spreadsheetId, DASHBOARD_TAB.name, DASHBOARD_TAB.range).then((g) => ({ g }), (e: unknown) => ({ e: e as Error }))
+      : Promise.resolve(null);
+    const [grids, dashRes] = await Promise.all([readTabs(entry.spreadsheetId, tabs), dash]);
     const errors: string[] = [];
     const control = parseControlSheet(grids[cfg.salesSheetName], entry.month);
     let target = null;
@@ -188,6 +194,15 @@ export class SheetsSource implements DataSource {
       extras.accFocus = grids[EXTRA_TABS.accFocus] ? parseAccFocus(grids[EXTRA_TABS.accFocus]) : null;
     } catch (e) {
       extras.warnings.push(`Leaderboard ACC Fokus gagal dibaca: ${(e as Error).message}`);
+    }
+    if (!dashRes) extras.dashTarget = null;
+    else if ("e" in dashRes) extras.warnings.push(`Tabel target tab Dashboard gagal dibaca: ${dashRes.e.message}`);
+    else {
+      try {
+        extras.dashTarget = parseDashTarget(dashRes.g);
+      } catch (e) {
+        extras.warnings.push(`Tabel target tab Dashboard gagal dibaca: ${(e as Error).message}`);
+      }
     }
     return { control, target, sourceTitle: meta.title, errors, extras };
   }
