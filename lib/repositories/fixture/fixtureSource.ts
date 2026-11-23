@@ -12,6 +12,7 @@ import { generateExtras, generateMonth } from "./generate";
 import type { SohSnapshot } from "@/types/soh";
 import type { SamsungPromo } from "@/types/samsungPromo";
 import type { PwpPromo } from "@/types/pwpPromo";
+import type { DraPack, DraSnapshot } from "@/types/dra";
 import type { PriceList } from "@/types/pricelist";
 import type { PriceListInput } from "../types";
 import type { AccPriceList } from "@/types/accPrice";
@@ -40,6 +41,7 @@ interface Store {
   stokanItems: Record<string, StokanItem[]>;
   stokanLog: Record<string, StokanEvent[]>;
   samsungPromo: SamsungPromo | null;
+  dra?: DraSnapshot | null;
   pwpPromo?: PwpPromo | null;
 }
 
@@ -139,6 +141,12 @@ export class FixtureSource implements DataSource {
     const s = store();
     const now = new Date().toISOString();
     s.records = [...s.records.filter((r) => !(r.kind === kind && r.date === date)), ...rows.map((x) => ({ kind, date, key: x.key, data: x.data, updatedAt: now, updatedBy: by }))];
+  }
+  async getDra() {
+    return store().dra ?? null;
+  }
+  async saveDra(pack: DraPack, by: string) {
+    store().dra = { ...pack, updatedAt: new Date().toISOString(), updatedBy: by };
   }
   async getSoh() {
     return store().soh;

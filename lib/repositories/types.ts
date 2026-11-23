@@ -10,6 +10,7 @@ import type { AccessEntry } from "@/types/access";
 import type { PriceChange } from "@/lib/domain/priceHistory";
 import type { SamsungPromo } from "@/types/samsungPromo";
 import type { PwpPromo } from "@/types/pwpPromo";
+import type { DraPack, DraSnapshot } from "@/types/dra";
 
 /** A monthly spreadsheet registered in the app (master sheet `APP_Months`). */
 export interface MonthEntry {
@@ -112,6 +113,11 @@ export interface DataSource {
   listRecords(kind: RecordKind, prefix: string): Promise<AppRecord[]>;
   /** Replace all records of `kind` on `date` with `rows`. */
   saveRecords(kind: RecordKind, date: ISODate, rows: Array<Pick<AppRecord, "key" | "data">>, by: string): Promise<void>;
+
+  /** Latest imported DRA (network stock & sales per store, weekly file; null = never imported). */
+  getDra(): Promise<DraSnapshot | null>;
+  /** Replaces the stored DRA. */
+  saveDra(pack: DraPack, by: string): Promise<void>;
 
   /** Latest imported stock on hand (null = never imported). */
   getSoh(): Promise<SohSnapshot | null>;
