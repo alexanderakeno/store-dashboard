@@ -68,7 +68,7 @@ export const NAV: NavEntry[] = [
     ],
   },
   { href: "/promo", label: "Promo Board", icon: "tag", color: "text-amber-300" },
-  { href: "/dra", label: "DRA Stok & Sales", icon: "package", color: "text-teal-300" },
+  { href: "/dra", label: "DRA Stok & Sales", icon: "package", color: "text-teal-300", adminOnly: true },
   {
     label: "Reporting",
     icon: "chart",
