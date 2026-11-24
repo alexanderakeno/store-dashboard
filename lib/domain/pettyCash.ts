@@ -1,0 +1,122 @@
+/**
+ * Petty Cash Replenishment Summary (form QF10-style): accounts, row model and formatting.
+ * Pure functions — shared by the page, the PDF builder and the AI extraction route.
+ */
+
+export const PC_ACCOUNTS = [
+  { key: "transport", label: "Transport", code: "705100" },
+  { key: "freight", label: "Freight", code: "705120" },
+  { key: "stationery", label: "Stationery", code: "704110" },
+  { key: "bank", label: "Bank Chg", code: "716100" },
+  { key: "sundries", label: "Sundries", code: "715160" },
+] as const;
+
+export type PcAccount = (typeof PC_ACCOUNTS)[number]["key"];
+
+export interface PcRow {
+  id: string;
+  date: string; // YYYY-MM-DD
+  pcv: string;
+  description: string;
+  account: PcAccount;
+  amount: number;
+  /** id of the invoice page(s) this row comes from (attached to the PDF in row order) */
+  pages: string[];
+  /** the AI was not sure — highlighted for a check */
+  uncertain?: boolean;
+}
+
+export interface PcHeader {
+  storeName: string;
+  storeCode: string;
+  location: string;
+  pcrsNo: string;
+  fund: number;
+  paymentRound: string;
+  inProcess: string;
+  preparedBy: string;
+  approvedBy: string;
+}
+
+const MONTHS_ID = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+
+export function isAccount(v: unknown): v is PcAccount {
+  return PC_ACCOUNTS.some((a) => a.key === v);
+}
+
+/** "Rp1.604.785" (format used on the form). */
+export function rpForm(n: number): string {
+  return `${n < 0 ? "-" : ""}Rp${Math.abs(Math.round(n)).toLocaleString("id-ID").replace(/,/g, ".")}`;
+}
+
+/** "500.000" */
+export function numForm(n: number): string {
+  return Math.round(n).toLocaleString("id-ID").replace(/,/g, ".");
+}
+
+/** "2026-10-02" → "02/10/2026" */
+export function dmySlash(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return y && m && d ? `${d}/${m}/${y}` : iso;
+}
+
+/** "2026-10-30" → "30-Okt" (the form's PCRS date). */
+export function shortDate(iso: string): string {
+  const [, m, d] = iso.split("-").map(Number);
+  return m && d ? `${d}-${MONTHS_SHORT[m - 1]}` : "";
+}
+
+/** "2026-10" → "Oktober" */
+export function monthNameId(ym: string): string {
+  const m = Number(ym.slice(5, 7));
+  return MONTHS_ID[m - 1] ?? "";
+}
+
+/** Rows sorted by date (stable), empty rows dropped. */
+export function cleanRows(rows: PcRow[]): PcRow[] {
+  return rows
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => r.description.trim() || r.amount)
+    .sort((a, b) => (a.r.date || "9999").localeCompare(b.r.date || "9999") || a.i - b.i)
+    .map(({ r }) => r);
+}
+
+export function totals(rows: PcRow[]): { byAccount: Record<PcAccount, number>; grand: number } {
+  const byAccount = Object.fromEntries(PC_ACCOUNTS.map((a) => [a.key, 0])) as Record<PcAccount, number>;
+  for (const r of rows) byAccount[r.account] += Math.round(r.amount) || 0;
+  return { byAccount, grand: Object.values(byAccount).reduce((s, v) => s + v, 0) };
+}
+
+/** The month most rows fall in ("2026-10"), for the file name. */
+export function mainMonth(rows: PcRow[], fallback: string): string {
+  const c: Record<string, number> = {};
+  for (const r of rows) if (/^\d{4}-\d{2}/.test(r.date)) c[r.date.slice(0, 7)] = (c[r.date.slice(0, 7)] ?? 0) + 1;
+  return Object.entries(c).sort((a, b) => b[1] - a[1] || b[0].localeCompare(a[0]))[0]?.[0] ?? fallback;
+}
+
+/** "Pettycash_QF10_Oktober_2026.pdf" */
+export function fileName(storeCode: string, ym: string): string {
+  const code = storeCode.replace(/[^A-Za-z0-9-]/g, "") || "STORE";
+  return `Pettycash_${code}_${monthNameId(ym)}_${ym.slice(0, 4)}.pdf`;
+}
+
+/** Normalizes one AI-extracted receipt into safe values (never trusts the model's types). */
+export function normalizeExtract(raw: unknown): { isReceipt: boolean; date: string; description: string; account: PcAccount; amount: number; uncertain: boolean } {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const date = typeof o.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.date) ? o.date : "";
+  const merchant = typeof o.merchant === "string" ? o.merchant.trim().slice(0, 40) : "";
+  let items = typeof o.items === "string" ? o.items.trim().replace(/\s+/g, " ").slice(0, 90) : "";
+  if (merchant && items && !items.toLowerCase().includes(`(${merchant.toLowerCase()})`)) items = `${items} (${merchant})`;
+  else if (!items && merchant) items = merchant;
+  const amt = typeof o.total === "number" ? o.total : Number(String(o.total ?? "").replace(/[^\d-]/g, ""));
+  const amount = Number.isFinite(amt) && amt > 0 && amt < 1e10 ? Math.round(amt) : 0;
+  return {
+    isReceipt: o.isReceipt !== false,
+    date,
+    description: items,
+    account: isAccount(o.account) ? o.account : "sundries",
+    amount,
+    uncertain: o.confident === false || !date || !amount,
+  };
+}

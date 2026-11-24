@@ -32,6 +32,11 @@ runs it through the **real** parsers, so every page works without credentials. A
 5. Log in as admin → **Settings** → register the month: paste the monthly sheet link → *Tes koneksi* → *Simpan*.
    Repeat each month. Enter daily traffic there for CVR. Create viewer accounts (read-only) there.
 
+**Petty Cash** (Administrasi → Petty Cash, admin only): upload receipt / invoice PDFs or photos → each page is read by a
+vision model → the Petty Cash Replenishment Summary (signature boxes left empty) + the invoice pages are merged into one PDF,
+compressed in the browser until it is under 2 MB. Automatic reading needs ONE of `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`
+(optional `PETTY_CASH_AI_MODEL`); without a key the rows are typed in by hand. Nothing is stored on the server.
+
 Data is cached per server instance for `CACHE_TTL_SECONDS` (default 300 s). Admin **↻ Refresh** re-reads now.
 
 ## Phase 1 — what's included

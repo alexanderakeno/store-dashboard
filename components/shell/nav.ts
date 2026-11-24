@@ -62,6 +62,7 @@ export const NAV: NavEntry[] = [
     items: [
       { href: "/mading", label: "Mading", icon: "sheet", color: "text-sky-400" },
       { href: "/bnpl", label: "BNPL & Trade-In", icon: "card", color: "text-emerald-400" },
+      { href: "/petty-cash", label: "Petty Cash", icon: "wallet", color: "text-amber-400", adminOnly: true },
       { href: "/checklist/spv", label: "Checklist Store - SPV", icon: "check", color: "text-teal-400" },
       { href: "/checklist/staff", label: "Checklist Store - Staff", icon: "check", color: "text-cyan-400" },
       { href: "/upload", label: "Data Upload", icon: "upload", color: "text-indigo-400" },
