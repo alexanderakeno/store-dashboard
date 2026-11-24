@@ -41,6 +41,11 @@ function parseJson(text: string): unknown {
   return JSON.parse(m[0]);
 }
 
+/** Gemini models tried in order (newest first) when PETTY_CASH_AI_MODEL is not set. */
+export const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3-flash", "gemini-2.5-flash"];
+/** The model that answered last time on this server instance — tried first. */
+let geminiOk = "";
+
 export async function extractReceipt(jpegBase64: string): Promise<Extracted> {
   const p = aiProvider();
   if (!p) throw new Error("Pembacaan otomatis belum aktif: isi ANTHROPIC_API_KEY atau GEMINI_API_KEY di Vercel");
@@ -60,19 +65,28 @@ export async function extractReceipt(jpegBase64: string): Promise<Extracted> {
     if (!res.ok) throw new Error(`AI error ${res.status}: ${j?.error?.message ?? "gagal"}`);
     text = j?.content?.find((c) => c.type === "text")?.text ?? "";
   } else {
-    const model = env("PETTY_CASH_AI_MODEL") || "gemini-2.5-flash";
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": env("GEMINI_API_KEY") },
-      body: JSON.stringify({
-        contents: [{ parts: [{ inline_data: { mime_type: "image/jpeg", data: jpegBase64 } }, { text: PROMPT }] }],
-        generationConfig: { responseMimeType: "application/json", temperature: 0 },
-      }),
-      signal: AbortSignal.timeout(55_000),
-    });
-    const j = (await res.json().catch(() => null)) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; error?: { message?: string } } | null;
-    if (!res.ok) throw new Error(`AI error ${res.status}: ${j?.error?.message ?? "gagal"}`);
-    text = j?.candidates?.[0]?.content?.parts?.map((x) => x.text ?? "").join("") ?? "";
+    // Google retires model names; try newest first and stick to the first one that answers (404 = retired / unknown)
+    const models = [...new Set([env("PETTY_CASH_AI_MODEL"), geminiOk, ...GEMINI_MODELS].filter(Boolean))];
+    type GeminiReply = { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; error?: { message?: string } };
+    let j: GeminiReply | null = null;
+    for (const model of models) {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": env("GEMINI_API_KEY") },
+        body: JSON.stringify({
+          contents: [{ parts: [{ inline_data: { mime_type: "image/jpeg", data: jpegBase64 } }, { text: PROMPT }] }],
+          generationConfig: { responseMimeType: "application/json", temperature: 0 },
+        }),
+        signal: AbortSignal.timeout(55_000),
+      });
+      j = (await res.json().catch(() => null)) as GeminiReply | null;
+      if (res.status === 404 && model !== models[models.length - 1]) continue;
+      if (!res.ok) throw new Error(`AI error ${res.status}: ${(j as GeminiReply | null)?.error?.message ?? "gagal"}`);
+      geminiOk = model;
+      break;
+    }
+    const reply = j as GeminiReply | null;
+    text = reply?.candidates?.[0]?.content?.parts?.map((x) => x.text ?? "").join("") ?? "";
   }
   return normalizeExtract(parseJson(text));
 }
