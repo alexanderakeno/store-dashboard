@@ -47,10 +47,35 @@ function parseJson(text: string): unknown {
   return JSON.parse(m[0]);
 }
 
-/** Gemini models tried in order (newest first) when PETTY_CASH_AI_MODEL is not set. */
+/** Fallback order when the model list cannot be read (newest first). */
 export const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3-flash", "gemini-2.5-flash"];
 /** The model that answered last time on this server instance — tried first. */
 let geminiOk = "";
+let listed: { at: number; models: string[] } | null = null;
+
+/** "gemini-3.6-flash" → [3, 6]; used to try the newest version first. */
+const version = (m: string) => (m.match(/gemini-(\d+)(?:\.(\d+))?/) ?? []).slice(1, 3).map((x) => Number(x ?? 0));
+
+/**
+ * The Flash models this API key can call right now (asked from Google, cached 1 hour), newest first,
+ * "lite" last. Names change every few months, so they are not hard-coded; GEMINI_MODELS is only the fallback.
+ */
+export async function geminiModels(): Promise<string[]> {
+  if (listed && Date.now() - listed.at < 3_600_000) return listed.models;
+  try {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", { headers: { "x-goog-api-key": env("GEMINI_API_KEY") }, signal: AbortSignal.timeout(10_000) });
+    const j = (await res.json()) as { models?: Array<{ name?: string; supportedGenerationMethods?: string[] }> };
+    const names = (j.models ?? [])
+      .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
+      .map((m) => String(m.name ?? "").replace(/^models\//, ""))
+      .filter((n) => /^gemini-[\d.]+-flash/.test(n) && !/image|tts|audio|live|thinking|exp/.test(n));
+    const models = names.sort((a, b) => Number(/lite/.test(a)) - Number(/lite/.test(b)) || version(b)[0] - version(a)[0] || version(b)[1] - version(a)[1] || a.length - b.length).slice(0, 6);
+    if (models.length) listed = { at: Date.now(), models };
+  } catch {
+    // listing failed: fall back to the fixed list
+  }
+  return listed?.models ?? GEMINI_MODELS;
+}
 
 export async function extractReceipt(jpegBase64: string): Promise<Extracted> {
   const p = aiProvider();
@@ -71,11 +96,16 @@ export async function extractReceipt(jpegBase64: string): Promise<Extracted> {
     if (!res.ok) throw new Error(`AI error ${res.status}: ${j?.error?.message ?? "gagal"}`);
     text = j?.content?.find((c) => c.type === "text")?.text ?? "";
   } else {
-    // Google retires model names and newer ones are sometimes overloaded; try newest first and stick to the first one that answers
-    const models = [...new Set([env("PETTY_CASH_AI_MODEL"), geminiOk, ...GEMINI_MODELS].filter(Boolean))];
+    // models change and the newest one is often busy: try what this key can use, newest first; remember what answered
+    const models = [...new Set([env("PETTY_CASH_AI_MODEL"), geminiOk, ...(await geminiModels())].filter(Boolean))].slice(0, 6);
     type GeminiReply = { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; error?: { message?: string } };
     let j: GeminiReply | null = null;
+    const tried: string[] = [];
+    let busy = false;
+    let answered = false;
+    const deadline = Date.now() + 48_000; // the route has 60 s
     for (const model of models) {
+      if (Date.now() > deadline - 8_000) break;
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-goog-api-key": env("GEMINI_API_KEY") },
@@ -83,15 +113,22 @@ export async function extractReceipt(jpegBase64: string): Promise<Extracted> {
           contents: [{ parts: [{ inline_data: { mime_type: "image/jpeg", data: jpegBase64 } }, { text: PROMPT }] }],
           generationConfig: { responseMimeType: "application/json", temperature: 0 },
         }),
-        signal: AbortSignal.timeout(55_000),
-      });
-      j = (await res.json().catch(() => null)) as GeminiReply | null;
-      // retired (404), busy (503 / 500) or out of quota for this model (429): the next model usually answers
-      if ([404, 429, 500, 503].includes(res.status) && model !== models[models.length - 1]) continue;
-      if (!res.ok) throw new Error(`AI error ${res.status}: ${(j as GeminiReply | null)?.error?.message ?? "gagal"}`);
-      geminiOk = model;
-      break;
+        signal: AbortSignal.timeout(Math.max(8_000, Math.min(25_000, deadline - Date.now()))),
+      }).catch(() => null);
+      j = res ? ((await res.json().catch(() => null)) as GeminiReply | null) : null;
+      if (res?.ok) {
+        geminiOk = model;
+        answered = true;
+        break;
+      }
+      const status = res?.status ?? 0;
+      tried.push(`${model}: ${status === 404 ? "tidak tersedia" : status === 429 ? "kuota habis" : status === 503 || status === 500 || status === 0 ? "sibuk" : `${status}`}`);
+      if (status === 429 || status === 503 || status === 500 || status === 0) busy = true;
+      // retired (404), busy (503 / 500 / timeout) or out of quota (429): the next model usually answers
+      if ([0, 404, 429, 500, 503].includes(status)) continue;
+      throw new Error(`AI error ${status}: ${j?.error?.message ?? "gagal"}`);
     }
+    if (!answered) throw new Error(`${busy ? "AI sedang sibuk / kuota habis — dicoba lagi otomatis" : "Model AI tidak tersedia"} (${tried.join("; ")})`);
     const reply = j as GeminiReply | null;
     text = reply?.candidates?.[0]?.content?.parts?.map((x) => x.text ?? "").join("") ?? "";
   }

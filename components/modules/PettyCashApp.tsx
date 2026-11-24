@@ -204,7 +204,7 @@ export function PettyCashApp({ defaults, today, ai }: { defaults: { storeName: s
       return;
     }
     setBusy("ai");
-    // read every page with AI (3 at a time); a page that is not a receipt is attached to the previous row
+    // read every page with AI, one at a time; a page that is not a receipt is attached to the previous row
     const results: Array<{ p: SrcPage; r: Awaited<ReturnType<typeof readOne>> }> = new Array(added.length);
     let next = 0;
     async function readOne(p: SrcPage) {
@@ -212,8 +212,9 @@ export function PettyCashApp({ defaults, today, ai }: { defaults: { storeName: s
       const image = await base64(new Blob([(await encode(p, 1_300_000, 0.7, false)).bytes as BlobPart], { type: "image/jpeg" }));
       // the AI service is sometimes busy: try a page 3 times before giving up (a failed page must never vanish silently)
       let last = "";
-      for (let attempt = 0; attempt < 3; attempt++) {
-        if (attempt) await new Promise((r) => setTimeout(r, attempt * 5000));
+      for (let attempt = 0; attempt < 4; attempt++) {
+        // free AI keys allow only a few requests a minute: wait longer each time (10 s, 20 s, 30 s)
+        if (attempt) await new Promise((r) => setTimeout(r, attempt * 10_000));
         try {
           const res = await postJson("/api/petty-cash/extract", { image });
           const j = (await res.json().catch(() => ({}))) as { error?: string; isReceipt?: boolean; date?: string; description?: string; amount?: number; uncertain?: boolean };
@@ -227,7 +228,8 @@ export function PettyCashApp({ defaults, today, ai }: { defaults: { storeName: s
       setPage(p.id, { state: "error", msg: last });
       return { error: last || "gagal dibaca" };
     }
-    await Promise.all(Array.from({ length: Math.min(3, added.length) }, async () => {
+    // one page at a time: parallel requests run into the AI's per-minute limit and fail together
+    await Promise.all(Array.from({ length: Math.min(1, added.length) }, async () => {
       while (next < added.length) {
         const i = next++;
         results[i] = { p: added[i], r: await readOne(added[i]) };
