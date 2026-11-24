@@ -24,6 +24,8 @@ export interface PcRow {
   pages: string[];
   /** the AI was not sure — highlighted for a check */
   uncertain?: boolean;
+  /** why the row is highlighted (e.g. "beda bulan"), shown under the description; not printed */
+  note?: string;
 }
 
 export interface PcHeader {
@@ -101,6 +103,57 @@ export function fileName(storeCode: string, ym: string): string {
   return `Pettycash_${code}_${monthNameId(ym)}_${ym.slice(0, 4)}.pdf`;
 }
 
+/** What the extraction route returns for one page (or an error). */
+export type PageRead = { error: string } | { isReceipt: boolean; date: string; description: string; amount: number; uncertain: boolean };
+
+/**
+ * Pages read in order → claim rows, like the QF10 form: one row per invoice, every row Sundries (715160)
+ * — the store books all petty cash there; the account can still be changed by hand.
+ * - a page that is not a receipt (blank / continuation without total) is attached to the previous row;
+ * - a page with the same date and total as the previous row is another page of the same invoice
+ *   (Shopee / Tokopedia invoices, a receipt photographed twice) and is attached, not counted twice.
+ */
+export function rowsFromPages(pages: Array<{ pageId: string; read: PageRead }>, newId: () => string): PcRow[] {
+  const out: PcRow[] = [];
+  for (const { pageId, read } of pages) {
+    const prev = out[out.length - 1];
+    if ("error" in read) {
+      out.push({ id: newId(), date: "", pcv: "", description: "", account: "sundries", amount: 0, pages: [pageId], uncertain: true, note: "gagal dibaca" });
+      continue;
+    }
+    if (prev && (!read.isReceipt || (read.amount > 0 && read.amount === prev.amount && read.date === prev.date))) {
+      prev.pages.push(pageId);
+      if (!prev.description && read.description) prev.description = read.description;
+      continue;
+    }
+    // last page of a multi-page invoice: only the total, no date — completes the row started on the page before
+    if (prev && !read.date && read.amount > 0 && !prev.amount && prev.date) {
+      prev.pages.push(pageId);
+      prev.amount = read.amount;
+      if (!prev.description && read.description) prev.description = read.description;
+      prev.uncertain = prev.uncertain || read.uncertain || undefined;
+      continue;
+    }
+    out.push({ id: newId(), date: read.date, pcv: "", description: read.description, account: "sundries", amount: read.amount, pages: [pageId], uncertain: read.uncertain || undefined });
+  }
+  return out;
+}
+
+/**
+ * Dates against the month most rows fall in:
+ * - same month but another year (the AI misread "30-10-2026" as 2024) → the year is corrected;
+ * - another month (an old receipt, e.g. September in the October claim) → highlighted "beda bulan", not dropped.
+ */
+export function flagOtherMonth(rows: PcRow[]): PcRow[] {
+  const ym = mainMonth(rows, "");
+  if (!ym) return rows;
+  return rows.map((r) => {
+    if (!r.date || r.date.slice(0, 7) === ym) return r;
+    if (r.date.slice(5, 7) === ym.slice(5, 7)) return { ...r, date: `${ym.slice(0, 4)}${r.date.slice(4)}`, note: `tahun dikoreksi (terbaca ${r.date.slice(0, 4)})` };
+    return { ...r, uncertain: true, note: `beda bulan (${dmySlash(r.date)})` };
+  });
+}
+
 /** Normalizes one AI-extracted receipt into safe values (never trusts the model's types). */
 export function normalizeExtract(raw: unknown): { isReceipt: boolean; date: string; description: string; account: PcAccount; amount: number; uncertain: boolean } {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
@@ -115,7 +168,8 @@ export function normalizeExtract(raw: unknown): { isReceipt: boolean; date: stri
     isReceipt: o.isReceipt !== false,
     date,
     description: items,
-    account: isAccount(o.account) ? o.account : "sundries",
+    // the store books every petty cash line under Sundries (see the QF10 form); changeable by hand
+    account: "sundries",
     amount,
     uncertain: o.confident === false || !date || !amount,
   };
