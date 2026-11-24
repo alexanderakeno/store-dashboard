@@ -15,16 +15,22 @@ export function aiProvider(): "anthropic" | "gemini" | null {
 
 const PROMPT = `Kamu membaca SATU foto struk / invoice / nota pesanan untuk klaim petty cash toko di Indonesia.
 Balas HANYA JSON (tanpa teks lain) dengan bentuk:
-{"isReceipt": true, "date": "YYYY-MM-DD", "merchant": "nama toko singkat", "items": "ringkasan barang", "total": 12345, "account": "sundries", "confident": true}
+{"isReceipt": true, "date": "YYYY-MM-DD", "merchant": "nama toko singkat", "items": "ringkasan barang", "total": 12345, "confident": true}
 
 Aturan:
-- isReceipt=false jika halaman bukan struk/invoice (mis. halaman kosong / lanjutan tanpa total).
-- date = tanggal transaksi pada struk. Format Indonesia DD/MM/YYYY atau DD-MM-YYYY (hari dulu, lalu bulan).
+- isReceipt=false HANYA jika halaman tidak berisi transaksi sama sekali (kosong, syarat & ketentuan, iklan).
+- Invoice / nota marketplace (Shopee, Tokopedia) bisa 2 halaman: isi apa yang ada di halaman ini saja — halaman 1 biasanya tanggal + barang (total boleh 0), halaman terakhir biasanya hanya Total Pembayaran (date boleh "").
+- date = tanggal transaksi pada struk. Format Indonesia DD/MM/YYYY atau DD-MM-YYYY (hari dulu, lalu bulan); "Wed, 28-Oct-2026" = 2026-10-28. Baca TAHUN dengan teliti (struk tahun ini biasanya 2026); tahun 2 digit "26" = 2026.
 - merchant: nama singkat toko/platform, mis. "Snapy", "Shopee", "Tokopedia", "Transmart", "Paperclip", "Indomaret".
-- items: ringkas dalam bahasa Indonesia, maksimal ±8 kata, gabungkan barang dengan koma / "+", tanpa qty dan harga. Contoh: "Sticker A3 matte + print color A3", "Tisu, pengharum, pembersih kaca & lantai", "Tas spunbond goodie bag".
+- items: ringkas dalam bahasa Indonesia, maksimal ±8 kata, gabungkan barang dengan koma / "+", tanpa qty, ukuran, gramasi dan harga. Tulis nama barang yang umum, bukan singkatan di struk ("TAPE D FOAM 3M" = "Double tape foam 3M", "WPL KBL LEMON" = pembersih lantai). Merek boleh ditulis kalau jelas (Baygon, Vela, Kenko, HP 682).
+- Struk jasa print (Snapy dll.): tulis jasa print + bahan non-kertas saja ("Plastik laminating + print color A4", "Print color A3"); kertas (HVS, AC 260, art paper) tidak perlu ditulis.
 - total = jumlah yang benar-benar dibayar (Grand Total / Total Pembayaran / Total Tagihan, termasuk ongkir, biaya layanan dan potongan voucher). Angka bulat Rupiah tanpa titik/koma. "47,152" atau "47.152" = 47152.
-- account: "transport" (ojek/taksi/parkir/tol/bensin), "freight" (biaya kirim barang/ekspedisi saja), "stationery" (hanya jika jelas ATK murni), "bank" (biaya admin bank/transfer), selain itu "sundries" (perlengkapan toko, print, kebersihan, goodie bag, ATK campuran).
-- confident=false jika tanggal atau total tidak terbaca jelas.`;
+- confident=false jika tanggal atau total tidak terbaca jelas.
+Contoh hasil yang benar dari form petty cash toko (items + merchant):
+- "Sticker A3 matte + print color A3" (Snapy) · "Plastik laminating + print color A4" (Snapy) · "Print color A3" (Snapy)
+- "Tas spunbond goodie bag" (Shopee) · "Amplop coklat + spidol whiteboard" (Shopee) · "Tisu gantung Vela" (Tokopedia)
+- "Tisu, pengharum, Baygon, pembersih kaca & lantai" (Transmart)
+- "Tape dispenser Kenko" (Paperclip) · "Tinta printer HP 682" (Paperclip) · "Double tape foam 3M" (Paperclip)`;
 
 export interface Extracted {
   isReceipt: boolean;
