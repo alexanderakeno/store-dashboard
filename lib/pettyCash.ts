@@ -65,7 +65,7 @@ export async function extractReceipt(jpegBase64: string): Promise<Extracted> {
     if (!res.ok) throw new Error(`AI error ${res.status}: ${j?.error?.message ?? "gagal"}`);
     text = j?.content?.find((c) => c.type === "text")?.text ?? "";
   } else {
-    // Google retires model names; try newest first and stick to the first one that answers (404 = retired / unknown)
+    // Google retires model names and newer ones are sometimes overloaded; try newest first and stick to the first one that answers
     const models = [...new Set([env("PETTY_CASH_AI_MODEL"), geminiOk, ...GEMINI_MODELS].filter(Boolean))];
     type GeminiReply = { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; error?: { message?: string } };
     let j: GeminiReply | null = null;
@@ -80,7 +80,8 @@ export async function extractReceipt(jpegBase64: string): Promise<Extracted> {
         signal: AbortSignal.timeout(55_000),
       });
       j = (await res.json().catch(() => null)) as GeminiReply | null;
-      if (res.status === 404 && model !== models[models.length - 1]) continue;
+      // retired (404), busy (503 / 500) or out of quota for this model (429): the next model usually answers
+      if ([404, 429, 500, 503].includes(res.status) && model !== models[models.length - 1]) continue;
       if (!res.ok) throw new Error(`AI error ${res.status}: ${(j as GeminiReply | null)?.error?.message ?? "gagal"}`);
       geminiOk = model;
       break;
