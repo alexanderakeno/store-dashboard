@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Download, FileText, Loader2, Plus, Sparkles, Trash2, Upload, X } from "lucide-react";
-import { PC_ACCOUNTS, cleanRows, fileName, mainMonth, rpForm, totals, type PcHeader, type PcRow } from "@/lib/domain/pettyCash";
+import { PC_ACCOUNTS, cleanRows, fileName, flagOtherMonth, mainMonth, rowsFromPages, rpForm, totals, type PageRead, type PcHeader, type PcRow } from "@/lib/domain/pettyCash";
 import { loadPdfJs } from "./pdfText";
 import { postJson } from "./postJson";
 import { buildPettyCashPdf, type PcImage } from "./pettyCashPdf";
@@ -99,9 +99,9 @@ async function base64(b: Blob): Promise<string> {
   return u.slice(u.indexOf(",") + 1);
 }
 
-export function PettyCashApp({ defaults, today, ai }: { defaults: { storeName: string; storeCode: string; location: string }; today: string; ai: boolean }) {
+export function PettyCashApp({ defaults, today, ai }: { defaults: { storeName: string; storeCode: string; location: string; preparedBy?: string }; today: string; ai: boolean }) {
   const input = useRef<HTMLInputElement>(null);
-  const [header, setHeader] = useState<PcHeader>({ storeName: defaults.storeName, storeCode: defaults.storeCode, location: defaults.location, pcrsNo: "", fund: 500_000, paymentRound: "-", inProcess: "-", preparedBy: "", approvedBy: "" });
+  const [header, setHeader] = useState<PcHeader>({ storeName: defaults.storeName, storeCode: defaults.storeCode, location: defaults.location, pcrsNo: "", fund: 500_000, paymentRound: "-", inProcess: "-", preparedBy: defaults.preparedBy ?? "", approvedBy: "" });
   const [pages, setPages] = useState<SrcPage[]>([]);
   const [rows, setRows] = useState<PcRow[]>([]);
   const [gray, setGray] = useState(true);
@@ -114,7 +114,13 @@ export function PettyCashApp({ defaults, today, ai }: { defaults: { storeName: s
   useEffect(() => {
     try {
       const s = localStorage.getItem(HEADER_KEY);
-      if (s) setHeader((h) => ({ ...h, ...(JSON.parse(s) as Partial<PcHeader>) }));
+      if (s) {
+        const saved = JSON.parse(s) as Partial<PcHeader>;
+        // older saves kept the full store name ("Digiplus Kota Kasablanka") and empty names: keep the better default
+        if (saved.storeName && saved.storeName === `${defaults.storeName} ${defaults.location}`.trim()) delete saved.storeName;
+        if (!saved.preparedBy) delete saved.preparedBy;
+        setHeader((h) => ({ ...h, ...saved }));
+      }
     } catch {}
   }, []);
   const setH = (patch: Partial<PcHeader>) =>
@@ -137,10 +143,16 @@ export function PettyCashApp({ defaults, today, ai }: { defaults: { storeName: s
   const name = fileName(header.storeCode, ym);
   const pageById = useMemo(() => new Map(pages.map((p) => [p.id, p])), [pages]);
 
-  const patchRow = (id: string, patch: Partial<PcRow>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch, uncertain: false } : r)));
+  const patchRow = (id: string, patch: Partial<PcRow>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch, uncertain: false, note: undefined } : r)));
   const setPage = (id: string, patch: Partial<SrcPage>) => setPages((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
   async function buildPdf(rs: PcRow[], allPages: SrcPage[], h: PcHeader) {
+    // a receipt page that never became a complete row would silently disappear from the claim
+    const open = rs.filter((r) => r.pages.length && (!r.amount || !r.date)).length;
+    if (open) {
+      setErr(`Masih ada ${open} struk yang belum lengkap (baris kuning tanpa tanggal / nominal). Isi atau hapus barisnya dulu.`);
+      return;
+    }
     setBusy("pdf");
     setErr("");
     try {
@@ -197,17 +209,23 @@ export function PettyCashApp({ defaults, today, ai }: { defaults: { storeName: s
     let next = 0;
     async function readOne(p: SrcPage) {
       setPage(p.id, { state: "read" });
-      try {
-        const small = await encode(p, 1_300_000, 0.7, false);
-        const res = await postJson("/api/petty-cash/extract", { image: await base64(new Blob([small.bytes as BlobPart], { type: "image/jpeg" })) });
-        const j = (await res.json().catch(() => ({}))) as { error?: string; isReceipt?: boolean; date?: string; description?: string; account?: PcRow["account"]; amount?: number; uncertain?: boolean };
-        if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
-        setPage(p.id, { state: j.isReceipt === false ? "skip" : "ok" });
-        return j;
-      } catch (e) {
-        setPage(p.id, { state: "error", msg: (e as Error).message });
-        return { error: (e as Error).message };
+      const image = await base64(new Blob([(await encode(p, 1_300_000, 0.7, false)).bytes as BlobPart], { type: "image/jpeg" }));
+      // the AI service is sometimes busy: try a page 3 times before giving up (a failed page must never vanish silently)
+      let last = "";
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt) await new Promise((r) => setTimeout(r, attempt * 5000));
+        try {
+          const res = await postJson("/api/petty-cash/extract", { image });
+          const j = (await res.json().catch(() => ({}))) as { error?: string; isReceipt?: boolean; date?: string; description?: string; amount?: number; uncertain?: boolean };
+          if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+          setPage(p.id, { state: j.isReceipt === false ? "skip" : "ok" });
+          return j;
+        } catch (e) {
+          last = (e as Error).message;
+        }
       }
+      setPage(p.id, { state: "error", msg: last });
+      return { error: last || "gagal dibaca" };
     }
     await Promise.all(Array.from({ length: Math.min(3, added.length) }, async () => {
       while (next < added.length) {
@@ -215,21 +233,15 @@ export function PettyCashApp({ defaults, today, ai }: { defaults: { storeName: s
         results[i] = { p: added[i], r: await readOne(added[i]) };
       }
     }));
-    const nr: PcRow[] = [];
-    for (const { p, r } of results) {
-      const prev = nr[nr.length - 1];
-      if ("isReceipt" in r && r.isReceipt === false && prev) {
-        prev.pages.push(p.id);
-        continue;
-      }
-      const ok = !("error" in r);
-      const x = r as { date?: string; description?: string; account?: PcRow["account"]; amount?: number; uncertain?: boolean };
-      nr.push({ id: uid(), date: ok ? x.date ?? "" : "", pcv: "", description: ok ? x.description ?? "" : "", account: (ok && x.account) || "sundries", amount: ok ? x.amount ?? 0 : 0, pages: [p.id], uncertain: !ok || !!x.uncertain });
-    }
-    const allRows = [...rows, ...nr];
+    const reads = results.map(({ p, r }): { pageId: string; read: PageRead } => ({
+      pageId: p.id,
+      read: "error" in r && r.error ? { error: r.error } : { isReceipt: r.isReceipt !== false, date: r.date ?? "", description: r.description ?? "", amount: r.amount ?? 0, uncertain: !!r.uncertain },
+    }));
+    const allRows = flagOtherMonth([...rows, ...rowsFromPages(reads, uid)]);
     setRows(allRows);
     setBusy("");
-    if (allRows.length && allRows.every((r) => r.amount && r.date)) await buildPdf(allRows, allPages, header);
+    // ready straight away only when nothing needs a check
+    if (allRows.length && allRows.every((r) => r.amount && r.date && !r.uncertain)) await buildPdf(allRows, allPages, header);
   }
 
   function removePage(id: string) {
@@ -296,7 +308,7 @@ export function PettyCashApp({ defaults, today, ai }: { defaults: { storeName: s
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-black sm:text-lg">2. Cek daftar klaim</h3>
-            <p className="mt-1 text-sm text-slate-500">Baris kuning = AI kurang yakin, mohon dicek dengan gambar struknya. Urutan di PDF mengikuti tanggal.</p>
+            <p className="mt-1 text-sm text-slate-500">Baris kuning = perlu dicek dengan gambar struknya (AI kurang yakin, atau tanggalnya beda bulan). Semua baris masuk Sundries 715160 seperti form toko; akun bisa diganti. Urutan di PDF mengikuti tanggal.</p>
           </div>
           <button type="button" className="sd-btn" onClick={() => setRows((rs) => [...rs, { id: uid(), date: "", pcv: "", description: "", account: "sundries", amount: 0, pages: [] }])}><Plus className="size-4" aria-hidden /> Tambah baris</button>
         </div>
@@ -308,7 +320,7 @@ export function PettyCashApp({ defaults, today, ai }: { defaults: { storeName: s
               {rows.map((r) => (
                 <tr key={r.id} className={r.uncertain ? "bg-amber-50" : ""}>
                   <td className="min-w-36"><input type="date" className={field} value={r.date} onChange={(e) => patchRow(r.id, { date: e.target.value })} /></td>
-                  <td className="min-w-72"><input className={field} value={r.description} maxLength={120} placeholder="mis. Tisu, pembersih lantai (Transmart)" onChange={(e) => patchRow(r.id, { description: e.target.value })} /></td>
+                  <td className="min-w-72"><input className={field} value={r.description} maxLength={120} placeholder="mis. Tisu, pembersih lantai (Transmart)" onChange={(e) => patchRow(r.id, { description: e.target.value })} />{r.note && <p className="mt-0.5 text-[11px] font-semibold text-amber-700">Cek: {r.note}</p>}</td>
                   <td className="min-w-32">
                     <select className="sd-select w-full" value={r.account} onChange={(e) => patchRow(r.id, { account: e.target.value as PcRow["account"] })}>
                       {PC_ACCOUNTS.map((a) => <option key={a.key} value={a.key}>{a.label} {a.code}</option>)}
